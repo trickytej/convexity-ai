@@ -52,7 +52,12 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("ASSEMBLYAI_API_KEY", "DIGEST_ASSEMBLYAI_API_KEY"),
     )
 
+    # High-volume / mechanical work: extraction, correction, speaker-id, sectors.
     anthropic_model: str = "claude-sonnet-4-6"
+    # Low-volume / high-value synthesis: weekly report + per-episode digest.
+    synthesis_model: str = "claude-opus-4-8"
+    synthesis_thinking: bool = True       # adaptive (max) reasoning for synthesis
+    synthesis_context_1m: bool = True     # enable the 1M-context beta on synthesis
     # Comma-separated AssemblyAI model fallback chain (best accuracy first).
     assemblyai_speech_models: str = "universal-3-pro,universal-2"
     user_agent: str = "research-digest/0.1 (+https://localhost)"

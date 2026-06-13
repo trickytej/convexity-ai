@@ -28,15 +28,37 @@ def complete(
     user: str,
     model: str,
     max_tokens: int = 4096,
-    temperature: float = 0.0,
+    temperature: float | None = 0.0,
+    thinking: bool = False,
+    betas: list[str] | None = None,
+    stream: bool = False,
 ) -> str:
-    message = client.messages.create(
-        model=model,
-        max_tokens=max_tokens,
-        temperature=temperature,
-        system=system,
-        messages=[{"role": "user", "content": user}],
-    )
+    """One-shot completion.
+
+    Set ``thinking=True`` for adaptive ("max") reasoning models like Opus 4.8 (which
+    also reject ``temperature``); pass ``betas`` (e.g. ["context-1m-2025-08-07"]) to
+    enable beta features such as the 1M context window. Use ``stream=True`` for large
+    ``max_tokens`` requests (the SDK requires streaming for ones that may exceed 10
+    minutes).
+    """
+    kwargs: dict = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "system": system,
+        "messages": [{"role": "user", "content": user}],
+    }
+    if thinking:
+        kwargs["thinking"] = {"type": "adaptive"}  # adaptive thinking models reject temperature
+    elif temperature is not None:
+        kwargs["temperature"] = temperature
+    if betas:
+        kwargs["extra_headers"] = {"anthropic-beta": ",".join(betas)}
+
+    if stream:
+        with client.messages.stream(**kwargs) as s:
+            message = s.get_final_message()
+    else:
+        message = client.messages.create(**kwargs)
     return "".join(
         block.text for block in message.content if getattr(block, "type", None) == "text"
     )

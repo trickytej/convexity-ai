@@ -16,26 +16,42 @@ from .report import ReportNugget, ReportSection, build_weekly_report
 from .store import repo
 from .transcribe import llm
 
-_MAX_NUGGETS_PER_SECTION = 40
+# Opus 4.8 + 1M context can take far more context than Sonnet, so feed generously.
+_MAX_NUGGETS_PER_SECTION = 150
+CONTEXT_1M_BETA = "context-1m-2025-08-07"
 
-_SECTION_SYSTEM = """\
-You write ONE section of a weekly investment research digest, synthesized from \
-extracted podcast insights ("nuggets"). Produce a TIGHT section: a short headline \
-and 3-5 synthesized bullets. Merge repetitive points, lead with the most important, \
-weave in specific numbers and named companies/people, attribute to speakers/shows \
-where useful, and explicitly flag disagreements or contrarian takes. Use ONLY the \
-provided nuggets - do not invent facts. For each bullet, cite the nugget id(s) it \
-draws from.
+
+def _synth_complete(client, settings: Settings, system: str, user: str, max_tokens: int) -> str:
+    """Run a synthesis completion on the configured synthesis model (Opus 4.8 by
+    default) with adaptive ("max") thinking + the 1M-context beta when enabled."""
+    return llm.complete(
+        client,
+        system=system,
+        user=user,
+        model=settings.synthesis_model,
+        max_tokens=max_tokens,
+        thinking=settings.synthesis_thinking,
+        betas=[CONTEXT_1M_BETA] if settings.synthesis_context_1m else None,
+        stream=True,
+    )
+
+
+_REPORT_SYSTEM = """\
+You write a weekly investment research digest from extracted podcast insights \
+("nuggets"), already grouped by sector. In a SINGLE pass over the whole week, produce:
+1. "exec_summary": 2-4 specific, high-signal sentences on what mattered most this \
+week ACROSS sectors (draw cross-sector connections).
+2. "sections": for EACH sector provided, an object with a short "headline", 3-6 \
+synthesized "bullets", and optional "watch_items".
+
+Merge repetition, lead with the most important, weave in specific numbers and named \
+companies/people, attribute to speakers, and flag disagreements/contrarian takes. \
+Use ONLY the provided nuggets - do not invent facts. For each bullet, cite the nugget \
+id(s) it draws from. Cover every sector you are given.
 
 Output STRICT JSON only:
-{"headline": "...", "bullets": [{"text": "...", "nugget_ids": [1, 2]}], "watch_items": ["..."]}
+{"exec_summary": "...", "sections": [{"sector": "<exact sector name>", "headline": "...", "bullets": [{"text": "...", "nugget_ids": [1, 2]}], "watch_items": ["..."]}]}
 No prose outside the JSON."""
-
-_EXEC_SYSTEM = """\
-You write the executive summary of a weekly investment research digest for AI, \
-semiconductors, technology, and markets. Given the section headlines and the \
-most-discussed companies, write 2-4 specific, high-signal sentences on what mattered \
-most this week. Output STRICT JSON only: {"exec_summary": "..."}"""
 
 
 def _week_key(until_iso: str) -> str:
@@ -79,66 +95,72 @@ def _sources_for(nugget_ids: list, lookup: dict[int, ReportNugget]) -> list[dict
     return sources
 
 
-def _synthesize_section(client, model: str, section: ReportSection) -> dict:
-    nuggets = section.nuggets[:_MAX_NUGGETS_PER_SECTION]
-    lookup = {n.id: n for n in nuggets}
-    user = (
-        f"Sector: {section.sector}\n\nNuggets:\n"
-        + "\n".join(_nugget_line(n) for n in nuggets)
-    )
+def _synthesize_report(client, settings: Settings, agg) -> tuple[str, list[dict]]:
+    """Single whole-week pass: feed every sector's nuggets in one Opus-1M call and
+    return (exec_summary, sections). Globally coherent + far fewer calls than per-sector.
+    """
+    lookup: dict[int, ReportNugget] = {}
+    counts: dict[str, int] = {}
+    blocks: list[str] = []
+    for sec in agg.sections:
+        if not sec.nuggets:
+            continue
+        counts[sec.sector] = sec.count
+        blocks.append(f"### {sec.sector} ({sec.count} insights)")
+        for n in sec.nuggets[:_MAX_NUGGETS_PER_SECTION]:
+            lookup[n.id] = n
+            blocks.append(_nugget_line(n))
+    if not blocks:
+        return "", []
+
+    user = "Sectors and their insights:\n\n" + "\n".join(blocks)
     try:
-        raw = llm.complete(
-            client, system=_SECTION_SYSTEM, user=user, model=model, max_tokens=2048
-        )
+        raw = _synth_complete(client, settings, _REPORT_SYSTEM, user, max_tokens=32000)
         data = llm.extract_json(raw)
     except llm.LLMError:
-        data = {}
+        return "", []
+    if not isinstance(data, dict):
+        return "", []
 
-    headline = (data.get("headline") if isinstance(data, dict) else None) or section.sector
-    bullets_out: list[dict] = []
-    raw_bullets = data.get("bullets") if isinstance(data, dict) else None
-    for b in raw_bullets or []:
-        if not isinstance(b, dict):
+    exec_summary = (data.get("exec_summary") or "").strip()
+    sections_out: list[dict] = []
+    for s in data.get("sections") or []:
+        if not isinstance(s, dict):
             continue
-        text = (b.get("text") or "").strip()
-        if not text:
+        sector = (s.get("sector") or "").strip()
+        headline = (s.get("headline") or "").strip()
+        if not sector or not headline:
             continue
-        bullets_out.append({"text": text, "sources": _sources_for(b.get("nugget_ids", []), lookup)})
-
-    watch_items = []
-    if isinstance(data, dict) and isinstance(data.get("watch_items"), list):
-        watch_items = [str(w).strip() for w in data["watch_items"] if str(w).strip()]
-
-    return {
-        "sector": section.sector,
-        "count": section.count,
-        "headline": headline,
-        "bullets": bullets_out,
-        "watch_items": watch_items,
-    }
-
-
-def _synthesize_exec(client, model: str, sections: list[dict], top_entities: list) -> str:
-    headlines = "\n".join(f"- {s['sector']}: {s['headline']}" for s in sections)
-    entities = ", ".join(f"{e.name} ({len(e.shows)} shows)" for e in top_entities[:10])
-    user = f"Section headlines:\n{headlines}\n\nMost-discussed companies: {entities}"
-    try:
-        raw = llm.complete(
-            client, system=_EXEC_SYSTEM, user=user, model=model, max_tokens=512
+        bullets = []
+        for b in s.get("bullets") or []:
+            if not isinstance(b, dict):
+                continue
+            text = (b.get("text") or "").strip()
+            if not text:
+                continue
+            bullets.append({"text": text, "sources": _sources_for(b.get("nugget_ids", []), lookup)})
+        watch_items = (
+            [str(w).strip() for w in s["watch_items"] if str(w).strip()]
+            if isinstance(s.get("watch_items"), list)
+            else []
         )
-        data = llm.extract_json(raw)
-        if isinstance(data, dict) and isinstance(data.get("exec_summary"), str):
-            return data["exec_summary"].strip()
-    except llm.LLMError:
-        pass
-    return ""
+        sections_out.append(
+            {
+                "sector": sector,
+                "count": counts.get(sector, len(bullets)),
+                "headline": headline,
+                "bullets": bullets,
+                "watch_items": watch_items,
+            }
+        )
+    return exec_summary, sections_out
 
 
 def generate_report(
     conn: sqlite3.Connection,
     days: int = 7,
     *,
-    per_section_limit: int = 15,
+    per_section_limit: int = 60,
     settings: Settings | None = None,
 ) -> dict:
     """Generate, store, and return the synthesized weekly report.
@@ -148,8 +170,6 @@ def generate_report(
     """
     settings = settings or get_settings()
     client = llm.get_client(settings)  # raises LLMError if no key
-    model = settings.anthropic_model
-
     base = build_weekly_report(conn, days=days)
     relevant_n = int((base.stats.get("triage") or {}).get("relevant", 0) or 0)
     if relevant_n > 0:
@@ -159,10 +179,7 @@ def generate_report(
         agg = build_weekly_report(conn, days=days, per_section_limit=per_section_limit)
         source_mode = "top_signal"
 
-    sections_out = [
-        _synthesize_section(client, model, sec) for sec in agg.sections if sec.nuggets
-    ]
-    exec_summary = _synthesize_exec(client, model, sections_out, agg.top_entities)
+    exec_summary, sections_out = _synthesize_report(client, settings, agg)
 
     payload = {
         "exec_summary": exec_summary,
@@ -175,7 +192,9 @@ def generate_report(
         "source_mode": source_mode,
     }
     week_key = _week_key(agg.until)
-    repo.upsert_report(conn, week_key, agg.since, agg.until, days, source_mode, model, payload)
+    repo.upsert_report(
+        conn, week_key, agg.since, agg.until, days, source_mode, settings.synthesis_model, payload
+    )
 
     return {
         "week_key": week_key,
@@ -251,14 +270,12 @@ def _resolve_ep_sources(nugget_ids, lookup, fuller) -> tuple[list[dict], str | N
     return sources, primary_quote
 
 
-def _synthesize_themes(client, model, episode, nuggets, lookup, fuller) -> list[dict]:
+def _synthesize_themes(client, settings: Settings, episode, nuggets, lookup, fuller) -> list[dict]:
     user = f"Episode: {episode.title}\n\nNuggets:\n" + "\n".join(
         _ep_nugget_line(n) for n in nuggets
     )
     try:
-        raw = llm.complete(
-            client, system=_EPISODE_THEME_SYSTEM, user=user, model=model, max_tokens=4096
-        )
+        raw = _synth_complete(client, settings, _EPISODE_THEME_SYSTEM, user, max_tokens=24000)
         data = llm.extract_json(raw)
     except llm.LLMError:
         data = {}
@@ -285,7 +302,7 @@ def _synthesize_themes(client, model, episode, nuggets, lookup, fuller) -> list[
     return themes_out
 
 
-def _synthesize_stocks(client, model, episode, nuggets, lookup, fuller) -> list[dict]:
+def _synthesize_stocks(client, settings: Settings, episode, nuggets, lookup, fuller) -> list[dict]:
     by_company: dict[str, list] = defaultdict(list)
     for n in nuggets:
         for co in (n.entities or {}).get("companies", []) or []:
@@ -306,9 +323,7 @@ def _synthesize_stocks(client, model, episode, nuggets, lookup, fuller) -> list[
     user = f"Episode: {episode.title}\n\nCompanies and related insights:\n" + "\n".join(lines)
 
     try:
-        raw = llm.complete(
-            client, system=_EPISODE_STOCKS_SYSTEM, user=user, model=model, max_tokens=3072
-        )
+        raw = _synth_complete(client, settings, _EPISODE_STOCKS_SYSTEM, user, max_tokens=16000)
         data = llm.extract_json(raw)
     except llm.LLMError:
         data = {}
@@ -336,7 +351,6 @@ def generate_episode_digest(
     """Generate, store, and return a TMTB-style per-episode digest."""
     settings = settings or get_settings()
     client = llm.get_client(settings)  # raises LLMError if no key
-    model = settings.anthropic_model
 
     episode = repo.get_episode(conn, episode_id)
     if episode is None:
@@ -359,8 +373,8 @@ def generate_episode_digest(
         return n.quote
 
     lookup = {n.id: n for n in nuggets}
-    themes = _synthesize_themes(client, model, episode, nuggets[:60], lookup, fuller)
-    stocks = _synthesize_stocks(client, model, episode, nuggets, lookup, fuller)
+    themes = _synthesize_themes(client, settings, episode, nuggets[:200], lookup, fuller)
+    stocks = _synthesize_stocks(client, settings, episode, nuggets, lookup, fuller)
 
     payload = {
         "episode_id": episode_id,
@@ -370,5 +384,5 @@ def generate_episode_digest(
         "themes": themes,
         "stocks": stocks,
     }
-    repo.upsert_episode_digest(conn, episode_id, model, payload)
+    repo.upsert_episode_digest(conn, episode_id, settings.synthesis_model, payload)
     return {"generated_at": datetime.now(timezone.utc).isoformat(), **payload}
