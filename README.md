@@ -2,6 +2,8 @@
 
 Turn a curated set of podcasts into a weekly sector-research digest.
 
+> Collaboration test — edit made via Claude Code on 2026-06-13.
+
 This repo currently implements **Step 1–2** of the pipeline: discover episodes
 from podcast feeds and produce one clean, **diarized, speaker-attributed,
 proper-noun-corrected transcript per episode**. Insight generation, aggregation,
