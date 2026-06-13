@@ -181,6 +181,10 @@ class StockMentionOut(BaseModel):
     tickers: list[str]
     mention_count: int
     nugget_ids: list[int]
+    stance: str = "mentioned"
+    summary: str = ""
+    source_episode_id: int | None = None
+    source_start_ms: int | None = None
 
 
 class NewsletterOut(BaseModel):

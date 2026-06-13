@@ -629,6 +629,36 @@ def get_episode_digest(conn: sqlite3.Connection, episode_id: int) -> sqlite3.Row
     ).fetchone()
 
 
+def list_digest_stocks_for_episodes(
+    conn: sqlite3.Connection, episode_ids: list[int]
+) -> list[dict]:
+    """Return the LLM-generated stock entries from episode digests for the given episode IDs."""
+    if not episode_ids:
+        return []
+    placeholders = ",".join("?" * len(episode_ids))
+    rows = conn.execute(
+        f"SELECT episode_id, payload FROM episode_digests WHERE episode_id IN ({placeholders})",
+        episode_ids,
+    ).fetchall()
+    result: list[dict] = []
+    for row in rows:
+        try:
+            payload = json.loads(row["payload"])
+            for stock in payload.get("stocks", []):
+                result.append(
+                    {
+                        "episode_id": row["episode_id"],
+                        "company": stock.get("company", ""),
+                        "stance": stock.get("stance", "mentioned"),
+                        "summary": stock.get("summary", ""),
+                        "sources": stock.get("sources", []),
+                    }
+                )
+        except (json.JSONDecodeError, KeyError):
+            continue
+    return result
+
+
 # --- curation ------------------------------------------------------------
 
 

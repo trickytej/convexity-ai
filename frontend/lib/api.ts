@@ -339,6 +339,10 @@ export interface StockMention {
   tickers: string[];
   mention_count: number;
   nugget_ids: number[];
+  stance: string;
+  summary: string;
+  source_episode_id: number | null;
+  source_start_ms: number | null;
 }
 
 export interface Newsletter {

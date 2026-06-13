@@ -16,12 +16,14 @@ from ..schemas import NewsletterNuggetOut, NewsletterOut, StockMentionOut
 router = APIRouter(tags=["newsletter"])
 
 
-def _parse_date(value: str, param: str) -> str:
+def _parse_date(value: str, param: str, *, end_of_day: bool = False) -> str:
     """Validate YYYY-MM-DD and return as ISO string with time component."""
     try:
         d = date.fromisoformat(value)
     except ValueError:
         raise HTTPException(status_code=422, detail=f"{param} must be YYYY-MM-DD")
+    if end_of_day:
+        return datetime(d.year, d.month, d.day, 23, 59, 59, tzinfo=timezone.utc).isoformat()
     return datetime(d.year, d.month, d.day, tzinfo=timezone.utc).isoformat()
 
 
@@ -49,16 +51,67 @@ def _nugget_out(row: sqlite3.Row) -> NewsletterNuggetOut:
     )
 
 
-def _build_stock_readthrough(rows: list[sqlite3.Row]) -> list[StockMentionOut]:
-    """Group kept nuggets by company and collect tickers — no LLM required."""
-    company_data: dict[str, dict] = defaultdict(lambda: {"tickers": set(), "ids": []})
+_STANCE_PRIORITY = {"bearish": 0, "bullish": 1, "owned": 2, "mentioned": 3}
+_STANCE_SORT = {"bearish": 0, "bullish": 0, "owned": 1, "mentioned": 2}
+
+
+def _build_stock_readthrough_from_digests(digest_stocks: list[dict]) -> list[StockMentionOut]:
+    """Aggregate LLM-generated stock entries from episode digests."""
+    company_data: dict[str, dict] = defaultdict(
+        lambda: {"stance": "mentioned", "summaries": [], "source_episode_id": None, "source_start_ms": None, "count": 0}
+    )
+    for s in digest_stocks:
+        company = (s.get("company") or "").strip()
+        if not company:
+            continue
+        d = company_data[company]
+        d["count"] += 1
+        if _STANCE_PRIORITY.get(s.get("stance", "mentioned"), 3) < _STANCE_PRIORITY.get(d["stance"], 3):
+            d["stance"] = s.get("stance", "mentioned")
+        summary = (s.get("summary") or "").strip()
+        if summary and summary not in d["summaries"]:
+            d["summaries"].append(summary)
+        if d["source_episode_id"] is None:
+            sources = s.get("sources") or []
+            if sources:
+                d["source_episode_id"] = sources[0].get("episode_id")
+                d["source_start_ms"] = sources[0].get("start_ms")
+    return sorted(
+        [
+            StockMentionOut(
+                company=company,
+                tickers=[],
+                mention_count=data["count"],
+                nugget_ids=[],
+                stance=data["stance"],
+                summary=" · ".join(data["summaries"]),
+                source_episode_id=data["source_episode_id"],
+                source_start_ms=data["source_start_ms"],
+            )
+            for company, data in company_data.items()
+        ],
+        key=lambda s: (_STANCE_SORT.get(s.stance, 2), -s.mention_count, s.company),
+    )
+
+
+def _build_stock_readthrough_from_nuggets(rows: list[sqlite3.Row]) -> list[StockMentionOut]:
+    """Fallback: group kept nuggets by company when no episode digest exists."""
+    company_data: dict[str, dict] = defaultdict(
+        lambda: {"tickers": set(), "ids": [], "summary": "", "episode_id": None, "start_ms": None}
+    )
     for row in rows:
         entities = json.loads(row["entities"]) if row["entities"] else {}
         companies = entities.get("companies") or []
         tickers = entities.get("tickers") or []
         for company in companies:
-            company_data[company]["tickers"].update(tickers)
-            company_data[company]["ids"].append(row["id"])
+            d = company_data[company]
+            d["tickers"].update(tickers)
+            d["ids"].append(row["id"])
+            if not d["summary"]:
+                raw = (row["curation_note"] or "").strip() or (row["claim"] or "").strip()
+                d["summary"] = raw[:150] + ("…" if len(raw) > 150 else "")
+                d["episode_id"] = row["episode_id"]
+                d["start_ms"] = row["start_ms"]
     return sorted(
         [
             StockMentionOut(
@@ -66,6 +119,10 @@ def _build_stock_readthrough(rows: list[sqlite3.Row]) -> list[StockMentionOut]:
                 tickers=sorted(data["tickers"]),
                 mention_count=len(data["ids"]),
                 nugget_ids=data["ids"],
+                stance="mentioned",
+                summary=data["summary"],
+                source_episode_id=data["episode_id"],
+                source_start_ms=data["start_ms"],
             )
             for company, data in company_data.items()
         ],
@@ -123,13 +180,14 @@ def _render_markdown(
         lines += ["---", ""]
 
     if stocks:
-        lines += ["## 📈 Stock Read-Through", ""]
-        lines.append("| Company | Tickers | Mentions |")
-        lines.append("|---------|---------|----------|")
+        lines += ["## Stock Read-Through", ""]
         for s in stocks:
-            ticker_str = ", ".join(f"`{t}`" for t in s.tickers) if s.tickers else "—"
-            lines.append(f"| {s.company} | {ticker_str} | {s.mention_count} |")
-        lines += ["", "---", ""]
+            stance_label = s.stance.capitalize()
+            lines.append(f"**{s.company}** · _{stance_label}_")
+            if s.summary:
+                lines.append(s.summary)
+            lines.append("")
+        lines += ["---", ""]
 
     lines.append(f"_Generated by research-digest · {datetime.now(timezone.utc).date()}_")
     return "\n".join(lines)
@@ -143,7 +201,7 @@ def get_newsletter(
     db: sqlite3.Connection = Depends(get_db),
 ) -> NewsletterOut:
     from_iso = _parse_date(from_date, "from")
-    to_iso = _parse_date(to_date, "to")
+    to_iso = _parse_date(to_date, "to", end_of_day=True)
     if from_iso > to_iso:
         raise HTTPException(status_code=422, detail="'from' must be before 'to'")
 
@@ -153,8 +211,16 @@ def get_newsletter(
 
     lead = [_nugget_out(r) for r in rows if r["curator_rank"] == 1]
     good_to_know = [_nugget_out(r) for r in rows if r["curator_rank"] != 1]
-    stocks = _build_stock_readthrough(rows)
-    episode_count = len({r["episode_id"] for r in rows})
+
+    ep_ids = list({r["episode_id"] for r in rows})
+    digest_stocks = repo.list_digest_stocks_for_episodes(db, ep_ids)
+    stocks = (
+        _build_stock_readthrough_from_digests(digest_stocks)
+        if digest_stocks
+        else _build_stock_readthrough_from_nuggets(rows)
+    )
+
+    episode_count = len(ep_ids)
     kept_count = len(rows)
 
     markdown = _render_markdown(
