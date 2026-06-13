@@ -1,0 +1,152 @@
+# Domain glossary. Two jobs:
+#   1. ASR custom vocabulary (word boosting) so the transcriber stops mangling
+#      proper nouns / jargon ("Groq" -> "Grok", "CoWoS" -> "co-os", etc.).
+#   2. Context for the LLM proper-noun correction pass.
+#
+# Keep entries to the terms most likely to be misheard. The `aliases` map records
+# common mistranscriptions -> the correct term for the correction pass.
+
+companies:
+  - Nvidia
+  - AMD
+  - TSMC
+  - Intel
+  - Broadcom
+  - Groq
+  - Cerebras
+  - SambaNova
+  - Tenstorrent
+  - Etched
+  - Arm
+  - Qualcomm
+  - Micron
+  - SK Hynix
+  - ASML
+  - Applied Materials
+  - Marvell
+  - OpenAI
+  - Anthropic
+  - Google DeepMind
+  - Meta
+  - Mistral
+  - xAI
+  - Hugging Face
+  - Databricks
+  - Snowflake
+  - Palantir
+  - CoreWeave
+  - Lambda Labs
+  - Together AI
+  - Fireworks AI
+  - Perplexity
+  - Scale AI
+  - Stripe
+  - SpaceX
+  - Tesla
+  - Microsoft
+  - Amazon Web Services
+  - Oracle
+
+people:
+  - Jensen Huang
+  - Dylan Patel
+  - Sam Altman
+  - Dario Amodei
+  - Satya Nadella
+  - Sundar Pichai
+  - Mark Zuckerberg
+  - Elon Musk
+  - Patrick O'Shaughnessy
+  - Ted Seides
+  - Dwarkesh Patel
+  - John Collison
+  - Patrick Collison
+  - Chamath Palihapitiya
+  - Jason Calacanis
+  - David Sacks
+  - David Friedberg
+  - Brad Gerstner
+  - Bill Gurley
+  - Sarah Guo
+  - Elad Gil
+  - Doug O'Laughlin
+  - Jordan Nanos
+
+technical_terms:
+  - HBM
+  - HBM3E
+  - CoWoS
+  - chip-on-wafer-on-substrate
+  - SerDes
+  - NVLink
+  - InfiniBand
+  - RDMA
+  - GPU
+  - TPU
+  - ASIC
+  - FLOPs
+  - petaFLOPs
+  - inference
+  - pretraining
+  - post-training
+  - fine-tuning
+  - reinforcement learning
+  - RLHF
+  - mixture of experts
+  - MoE
+  - transformer
+  - attention
+  - context window
+  - tokens per second
+  - KV cache
+  - quantization
+  - CUDA
+  - vLLM
+  - PyTorch
+  - foundation model
+  - frontier model
+  - test-time compute
+  - chain of thought
+  - agentic
+  - tokenizer
+  - embeddings
+  - retrieval-augmented generation
+  - RAG
+
+finance_terms:
+  - capex
+  - opex
+  - gross margin
+  - free cash flow
+  - DPI
+  - TVPI
+  - IRR
+  - carry
+  - SPV
+  - LP
+  - GP
+  - ARR
+  - net revenue retention
+  - TAM
+  - moat
+  - unit economics
+  - take rate
+
+# Common mistranscriptions -> correct term. Used as hints for the correction pass
+# (the LLM applies them in context, not as blind find/replace).
+# Note: "Groq" (chip co.) vs "Grok" (xAI model) is intentionally left to the LLM
+# to disambiguate from context rather than a hard alias.
+aliases:
+  "co-os": CoWoS
+  "co-wos": CoWoS
+  "H BM": HBM
+  "in video": Nvidia
+  "and video": Nvidia
+  "T S M C": TSMC
+  "cerebrus": Cerebras
+  "samba nova": SambaNova
+  "core weave": CoreWeave
+  "v LLM": vLLM
+  "mo E": MoE
+  "D P I": DPI
+  "T V P I": TVPI

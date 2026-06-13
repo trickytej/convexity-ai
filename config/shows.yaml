@@ -1,0 +1,128 @@
+# Curated podcast registry. Only 9-ish shows, so a hand-maintained file beats a
+# discovery API. Feed URLs verified against Apple's podcast directory.
+#
+# tier:
+#   A = show publishes its own (human-grade) transcript -> fetch + parse, no ASR cost
+#   B = no official transcript -> download audio, transcribe with AssemblyAI
+#
+# transcript_source: parser key for tier A; "asr" for tier B.
+
+shows:
+  - slug: invest-like-the-best
+    name: "Invest Like the Best with Patrick O'Shaughnessy"
+    network: Colossus
+    rss_url: https://feeds.megaphone.fm/CLS2859450455
+    homepage: https://joincolossus.com/episodes
+    tier: A
+    transcript_source: colossus
+    hosts:
+      - Patrick O'Shaughnessy
+    format: interview            # one host + one guest
+    active: true
+
+  - slug: capital-allocators
+    name: "Capital Allocators - Inside the Institutional Investment Industry"
+    network: Capital Allocators
+    rss_url: https://rss.libsyn.com/shows/94820/destinations/482814.xml
+    homepage: https://capitalallocators.com/podcast/
+    # Transcripts on capitalallocators.com are gated as "Premium Content", so
+    # there is no free official transcript -> transcribe from audio (ASR).
+    tier: B
+    transcript_source: asr
+    hosts:
+      - Ted Seides
+    format: interview
+    active: true
+
+  - slug: dwarkesh
+    name: Dwarkesh Podcast
+    network: Dwarkesh Patel
+    rss_url: https://apple.dwarkesh-podcast.workers.dev/feed.rss
+    homepage: https://www.dwarkesh.com/
+    tier: A
+    transcript_source: dwarkesh
+    hosts:
+      - Dwarkesh Patel
+    format: interview
+    active: true
+
+  - slug: semianalysis
+    name: SemiAnalysis Weekly
+    network: SemiAnalysis
+    rss_url: https://anchor.fm/s/10fbee758/podcast/rss
+    homepage: https://semianalysis.com/
+    tier: B
+    transcript_source: asr
+    hosts:
+      - Doug O'Laughlin
+      - Jordan Nanos
+    format: panel                # rotating hosts + technical guests
+    active: true
+
+  - slug: cheeky-pint
+    name: Cheeky Pint
+    network: Stripe
+    rss_url: https://feeds.transistor.fm/cheeky-pint-with-john-collison
+    homepage: https://cheekypint.substack.com/
+    tier: B
+    transcript_source: asr
+    hosts:
+      - John Collison
+    format: interview
+    active: true
+
+  - slug: all-in
+    name: "All-In with Chamath, Jason, Sacks & Friedberg"
+    network: All-In Podcast, LLC
+    rss_url: https://rss.libsyn.com/shows/254861/destinations/1928300.xml
+    homepage: https://www.allinpodcast.co/
+    tier: B
+    transcript_source: asr
+    hosts:
+      - Chamath Palihapitiya
+      - Jason Calacanis
+      - David Sacks
+      - David Friedberg
+    format: panel
+    active: true
+
+  - slug: bg2
+    name: BG2Pod with Brad Gerstner and Bill Gurley
+    network: BG2Pod
+    rss_url: https://anchor.fm/s/f06c2370/podcast/rss
+    homepage: https://www.bg2pod.com/
+    tier: B
+    transcript_source: asr
+    hosts:
+      - Brad Gerstner
+      - Bill Gurley
+    format: panel
+    active: true
+
+  - slug: no-priors
+    name: "No Priors: Artificial Intelligence | Technology | Startups"
+    network: Conviction
+    rss_url: https://feeds.megaphone.fm/nopriors
+    homepage: https://www.no-priors.com/
+    tier: B
+    transcript_source: asr
+    hosts:
+      - Sarah Guo
+      - Elad Gil
+    format: interview            # two hosts + guest
+    active: true
+
+  # Deferred: near-daily, multi-hour live show. High transcription volume.
+  # Re-enable once the weekly pipeline is proven.
+  - slug: tbpn
+    name: TBPN (Technology Brothers Podcast Network)
+    network: TBPN
+    rss_url: ""                  # to be filled when enabled
+    homepage: https://www.tbpn.com/
+    tier: B
+    transcript_source: asr
+    hosts:
+      - John Coogan
+      - Jordi Hays
+    format: panel
+    active: false

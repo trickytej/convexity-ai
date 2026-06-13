@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Data (audio + transcripts + db are local artifacts)
+data/audio/
+data/transcripts/
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
+# Tooling
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.DS_Store
