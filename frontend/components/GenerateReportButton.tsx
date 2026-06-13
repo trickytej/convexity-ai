@@ -1,0 +1,44 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { generateReport } from "@/lib/api";
+
+export function GenerateReportButton({
+  days = 7,
+  label = "Generate report",
+}: {
+  days?: number;
+  label?: string;
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function run() {
+    setBusy(true);
+    setError(null);
+    try {
+      await generateReport(days);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "generation failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={run}
+        disabled={busy}
+        className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
+      >
+        {busy ? "Generating… (a minute or two)" : label}
+      </button>
+      {error && <span className="text-sm text-rose-600">{error}</span>}
+    </div>
+  );
+}

@@ -423,6 +423,19 @@ def _row_to_nugget(row: sqlite3.Row) -> Nugget:
     )
 
 
+def get_nugget(conn: sqlite3.Connection, nugget_id: int) -> Nugget | None:
+    row = conn.execute("SELECT * FROM nuggets WHERE id = ?", (nugget_id,)).fetchone()
+    return _row_to_nugget(row) if row else None
+
+
+def set_triage(conn: sqlite3.Connection, nugget_id: int, triage: str) -> bool:
+    cur = conn.execute(
+        "UPDATE nuggets SET triage = ? WHERE id = ?", (triage, nugget_id)
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
 def has_nuggets(conn: sqlite3.Connection, episode_id: int) -> bool:
     row = conn.execute(
         "SELECT 1 FROM nuggets WHERE episode_id = ? LIMIT 1", (episode_id,)
@@ -525,6 +538,52 @@ def nuggets_in_window(
         """,
         params,
     ).fetchall()
+
+
+def upsert_report(
+    conn: sqlite3.Connection,
+    week_key: str,
+    since: str | None,
+    until: str | None,
+    days: int,
+    source_mode: str,
+    model: str,
+    payload: dict,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO reports (week_key, since, until, days, source_mode, model,
+                             payload, generated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(week_key) DO UPDATE SET
+            since=excluded.since, until=excluded.until, days=excluded.days,
+            source_mode=excluded.source_mode, model=excluded.model,
+            payload=excluded.payload, generated_at=excluded.generated_at
+        """,
+        (
+            week_key,
+            since,
+            until,
+            days,
+            source_mode,
+            model,
+            json.dumps(payload),
+            _now_iso(),
+        ),
+    )
+    conn.commit()
+
+
+def get_latest_report(conn: sqlite3.Connection) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT * FROM reports ORDER BY generated_at DESC LIMIT 1"
+    ).fetchone()
+
+
+def get_report_by_week(conn: sqlite3.Connection, week_key: str) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT * FROM reports WHERE week_key = ?", (week_key,)
+    ).fetchone()
 
 
 def nugget_type_counts(conn: sqlite3.Connection, episode_id: int) -> dict[str, int]:

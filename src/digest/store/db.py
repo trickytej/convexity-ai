@@ -94,6 +94,19 @@ CREATE INDEX IF NOT EXISTS idx_nuggets_episode ON nuggets(episode_id);
 CREATE INDEX IF NOT EXISTS idx_nuggets_signal ON nuggets(signal_score);
 CREATE INDEX IF NOT EXISTS idx_nuggets_type ON nuggets(type);
 CREATE INDEX IF NOT EXISTS idx_nuggets_triage ON nuggets(triage);
+
+CREATE TABLE IF NOT EXISTS reports (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    week_key     TEXT NOT NULL UNIQUE,   -- e.g. 2026-W24
+    since        TEXT,
+    until        TEXT,
+    days         INTEGER,
+    source_mode  TEXT,                   -- relevant | top_signal
+    model        TEXT,
+    payload      TEXT NOT NULL,          -- json: exec_summary, sections, top_entities, stats
+    generated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_reports_week ON reports(week_key);
 """
 
 

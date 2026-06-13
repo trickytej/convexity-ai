@@ -78,6 +78,7 @@ class ReportNuggetOut(BaseModel):
     start_ms: int | None = None
     signal_score: float
     quote_verified: bool
+    triage: str = "pending"
     sectors: list[str] = []
     companies: list[str] = []
     corroboration_shows: int = 1

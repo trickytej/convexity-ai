@@ -1,90 +1,113 @@
 import Link from "next/link";
-import { getReport } from "@/lib/api";
+import type { ReportSource } from "@/lib/api";
+import { getLatestReport } from "@/lib/api";
 import { fmtDate } from "@/lib/format";
-import { Badge } from "@/components/ui";
-import { NuggetCard } from "@/components/NuggetCard";
+import { GenerateReportButton } from "@/components/GenerateReportButton";
+import { ReportActions } from "@/components/ReportActions";
 
 export const dynamic = "force-dynamic";
 
-const PER_SECTION = 15;
-
-function anchorId(sector: string): string {
-  return "sec-" + sector.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+function srcHref(s: ReportSource): string {
+  return `/episode/${s.episode_id}${s.start_ms != null ? `#t-${s.start_ms}` : ""}`;
 }
 
-export default async function ReportPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ days?: string }>;
-}) {
-  const { days } = await searchParams;
-  const window = days ? Math.max(1, parseInt(days, 10) || 7) : 7;
-  const report = await getReport(window, PER_SECTION);
-  const { stats } = report;
+export default async function ReportPage() {
+  const report = await getLatestReport();
+
+  if (!report) {
+    return (
+      <div className="space-y-5">
+        <h1 className="text-2xl font-semibold tracking-tight">Weekly report</h1>
+        <p className="max-w-2xl text-zinc-600">
+          A synthesized, sector-by-sector digest generated from this week&apos;s insights —
+          condensed, with every point linking back to its source quote.
+        </p>
+        <GenerateReportButton />
+        <p className="text-xs text-zinc-400">
+          Tip: mark insights “Relevant” on the{" "}
+          <Link href="/insights" className="text-indigo-600 hover:text-indigo-800">
+            Weekly insights
+          </Link>{" "}
+          page first to curate what the report covers (otherwise it uses the top insights by
+          signal).
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Weekly report</h1>
-        <p className="mt-1 text-zinc-600">
-          {fmtDate(report.since)} – {fmtDate(report.until)} · {stats.nuggets} insights from{" "}
-          {stats.episodes} episodes across {stats.shows} shows
-        </p>
-        <p className="mt-1 text-xs text-zinc-400">
-          {stats.verified} quote-verified · ranked by signal · every insight links to its source
+      <header className="space-y-2">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Weekly report</h1>
+            <p className="mt-1 text-zinc-600">
+              {fmtDate(report.since)} – {fmtDate(report.until)} · {report.week_key}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <ReportActions report={report} />
+            <GenerateReportButton label="Regenerate" />
+          </div>
+        </div>
+        <p className="text-xs text-zinc-400">
+          Synthesized from{" "}
+          {report.source_mode === "relevant"
+            ? "your triaged-relevant insights"
+            : "the top insights by signal"}{" "}
+          · generated {fmtDate(report.generated_at)} · every point links to its source
         </p>
       </header>
 
-      {report.top_entities.length > 0 && (
-        <section className="rounded-xl border border-zinc-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">
-            Most-discussed companies (across shows)
+      {report.exec_summary && (
+        <section className="break-inside-avoid rounded-xl border border-indigo-100 bg-indigo-50/60 p-5">
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-indigo-700">
+            Executive summary
           </h2>
-          <div className="flex flex-wrap gap-2">
-            {report.top_entities.map((e) => (
-              <span
-                key={e.name}
-                className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1 text-sm ring-1 ring-inset ring-zinc-200"
-                title={e.shows.join(", ")}
-              >
-                <span className="font-medium text-zinc-900">{e.name}</span>
-                <span className="text-zinc-500">{e.shows.length} shows</span>
-              </span>
-            ))}
-          </div>
+          <p className="leading-relaxed text-zinc-800">{report.exec_summary}</p>
         </section>
       )}
 
-      <nav className="flex flex-wrap gap-2 border-y border-zinc-200 py-3 text-sm">
-        {report.sections.map((s) => (
-          <a key={s.sector} href={`#${anchorId(s.sector)}`} className="text-indigo-600 hover:text-indigo-800">
-            {s.sector} <span className="text-zinc-400">{s.count}</span>
-          </a>
-        ))}
-      </nav>
+      {report.sections.map((s) => (
+        <section key={s.sector} className="break-inside-avoid rounded-xl border border-zinc-200 bg-white p-5">
+          <h2 className="text-lg font-semibold tracking-tight">{s.sector}</h2>
+          <p className="mt-0.5 text-sm font-medium text-zinc-500">{s.headline}</p>
 
-      {report.sections.map((section) => (
-        <section key={section.sector} id={anchorId(section.sector)} className="scroll-mt-20">
-          <div className="mb-3 flex items-baseline justify-between">
-            <h2 className="text-lg font-semibold tracking-tight">{section.sector}</h2>
-            <span className="text-sm text-zinc-500">
-              top {section.nuggets.length}
-              {section.count > section.nuggets.length ? ` of ${section.count}` : ""}
-            </span>
-          </div>
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {section.nuggets.map((n) => (
-              <NuggetCard key={n.id} n={n} />
+          <ul className="mt-4 space-y-3">
+            {s.bullets.map((b, i) => (
+              <li key={i} className="text-[15px] leading-relaxed text-zinc-800">
+                <span className="mr-1.5 text-indigo-400">•</span>
+                {b.text}
+                {b.sources.length > 0 && (
+                  <span className="ml-1.5 inline-flex flex-wrap gap-1 align-baseline">
+                    {b.sources.map((src) => (
+                      <Link
+                        key={src.nugget_id}
+                        href={srcHref(src)}
+                        title={`${src.speaker_name ?? ""} · ${src.show_slug}`}
+                        className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 ring-1 ring-inset ring-zinc-200 hover:bg-zinc-200 hover:text-zinc-700"
+                      >
+                        {src.show_slug}
+                      </Link>
+                    ))}
+                  </span>
+                )}
+              </li>
             ))}
-          </div>
+          </ul>
+
+          {s.watch_items.length > 0 && (
+            <div className="mt-4 border-t border-zinc-100 pt-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Watch</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-zinc-600">
+                {s.watch_items.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </section>
       ))}
-
-      {report.sections.length === 0 && (
-        <p className="rounded-xl border border-zinc-200 bg-white px-4 py-8 text-center text-zinc-500">
-          No insights in this window yet. Run <code>digest insights</code> first.
-        </p>
-      )}
     </div>
   );
 }

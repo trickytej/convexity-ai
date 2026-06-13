@@ -8,3 +8,18 @@ html {
 [id^="t-"] {
   scroll-margin-top: 5rem;
 }
+
+/* Print / Save-as-PDF: clean page, no UI chrome, no mid-section breaks. */
+@page {
+  margin: 16mm;
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+}

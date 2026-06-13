@@ -1,28 +1,44 @@
-"""Layer 2 endpoint: the aggregated, classified weekly report."""
+"""Step 6: the synthesized weekly report (generate + fetch latest)."""
 
 from __future__ import annotations
 
+import json
 import sqlite3
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
-from ...report import build_weekly_report
+from ...store import repo
+from ...synthesis import generate_report
+from ...transcribe.llm import LLMError
 from ..deps import get_db
-from ..schemas import WeeklyReportOut
 
 router = APIRouter(tags=["report"])
 
 
-@router.get("/report", response_model=WeeklyReportOut)
-def weekly_report(
+def _row_to_report(row: sqlite3.Row) -> dict:
+    payload = json.loads(row["payload"])
+    return {
+        "week_key": row["week_key"],
+        "since": row["since"],
+        "until": row["until"],
+        "days": row["days"],
+        "generated_at": row["generated_at"],
+        **payload,
+    }
+
+
+@router.post("/report/generate")
+def generate(
     days: int = Query(7, ge=1, le=90),
-    min_signal: float = Query(0.0, ge=0.0, le=1.0),
-    per_section_limit: int | None = Query(None, ge=1, le=200),
     db: sqlite3.Connection = Depends(get_db),
-) -> WeeklyReportOut:
-    return build_weekly_report(
-        db,
-        days=days,
-        min_signal=min_signal,
-        per_section_limit=per_section_limit,
-    )  # type: ignore[return-value]
+) -> dict:
+    try:
+        return generate_report(db, days=days)
+    except LLMError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.get("/report/latest")
+def latest(db: sqlite3.Connection = Depends(get_db)) -> dict | None:
+    row = repo.get_latest_report(db)
+    return _row_to_report(row) if row else None

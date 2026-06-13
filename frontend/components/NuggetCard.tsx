@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReportNugget } from "@/lib/api";
 import { fmtDate } from "@/lib/format";
 import { Badge } from "@/components/ui";
+import { TriageControls } from "@/components/TriageControls";
 
 const TYPE_TONE: Record<string, "zinc" | "green" | "blue" | "amber" | "indigo"> = {
   thesis: "indigo",
@@ -21,14 +22,17 @@ export function NuggetCard({ n }: { n: ReportNugget }) {
   const href = `/episode/${n.episode_id}${n.start_ms != null ? `#t-${n.start_ms}` : ""}`;
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-4">
-      <div className="mb-2 flex items-center gap-2">
-        <Badge tone={TYPE_TONE[n.type] ?? "zinc"}>{typeLabel(n.type)}</Badge>
-        <span className="font-mono text-xs text-zinc-400" title="signal score">
-          {n.signal_score.toFixed(2)}
-        </span>
-        {n.corroboration_shows > 1 && (
-          <Badge tone="amber">{n.corroboration_shows} shows</Badge>
-        )}
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Badge tone={TYPE_TONE[n.type] ?? "zinc"}>{typeLabel(n.type)}</Badge>
+          <span className="font-mono text-xs text-zinc-400" title="signal score">
+            {n.signal_score.toFixed(2)}
+          </span>
+          {n.corroboration_shows > 1 && (
+            <Badge tone="amber">{n.corroboration_shows} shows</Badge>
+          )}
+        </div>
+        <TriageControls id={n.id} initial={n.triage} />
       </div>
 
       <p className="font-medium leading-snug text-zinc-900">{n.claim}</p>

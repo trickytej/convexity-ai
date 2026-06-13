@@ -94,10 +94,13 @@ export interface ReportNugget {
   start_ms?: number | null;
   signal_score: number;
   quote_verified: boolean;
+  triage: string;
   sectors: string[];
   companies: string[];
   corroboration_shows: number;
 }
+
+export type TriageValue = "pending" | "relevant" | "not_relevant";
 
 export interface ReportSection {
   sector: string;
@@ -117,17 +120,83 @@ export interface WeeklyReport {
   days: number;
   stats: {
     nuggets: number;
+    window_nuggets?: number;
     episodes: number;
     shows: number;
     verified: number;
     by_type: Record<string, number>;
+    triage?: Record<string, number>;
   };
   sections: ReportSection[];
   top_entities: EntityBuzz[];
 }
 
-export function getReport(days = 7, perSectionLimit?: number): Promise<WeeklyReport> {
+export function getInsights(
+  days = 7,
+  perSectionLimit?: number,
+  triage?: string,
+): Promise<WeeklyReport> {
   const q = new URLSearchParams({ days: String(days) });
   if (perSectionLimit) q.set("per_section_limit", String(perSectionLimit));
-  return getJSON<WeeklyReport>(`/api/report?${q.toString()}`);
+  if (triage) q.set("triage", triage);
+  return getJSON<WeeklyReport>(`/api/insights?${q.toString()}`);
+}
+
+// --- Step 6: the synthesized weekly report ---
+
+export interface ReportSource {
+  nugget_id: number;
+  episode_id: number;
+  show_slug: string;
+  start_ms?: number | null;
+  speaker_name?: string | null;
+}
+
+export interface ReportBullet {
+  text: string;
+  sources: ReportSource[];
+}
+
+export interface GeneratedSection {
+  sector: string;
+  count: number;
+  headline: string;
+  bullets: ReportBullet[];
+  watch_items: string[];
+}
+
+export interface GeneratedReport {
+  week_key: string;
+  since?: string | null;
+  until: string;
+  days: number;
+  generated_at: string;
+  source_mode: string;
+  exec_summary: string;
+  sections: GeneratedSection[];
+  top_entities: EntityBuzz[];
+  stats: Record<string, unknown>;
+}
+
+export function getLatestReport(): Promise<GeneratedReport | null> {
+  return getJSON<GeneratedReport | null>("/api/report/latest");
+}
+
+export async function generateReport(days = 7): Promise<GeneratedReport> {
+  const res = await fetch(`${API_BASE}/api/report/generate?days=${days}`, { method: "POST" });
+  if (!res.ok) {
+    throw new Error(`report generation failed: ${res.status}`);
+  }
+  return (await res.json()) as GeneratedReport;
+}
+
+export async function setTriage(id: number, triage: TriageValue): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/nuggets/${id}/triage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ triage }),
+  });
+  if (!res.ok) {
+    throw new Error(`triage failed: ${res.status}`);
+  }
 }

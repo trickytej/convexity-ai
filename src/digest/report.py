@@ -138,7 +138,7 @@ def build_weekly_report(
     *,
     min_signal: float = 0.0,
     per_section_limit: int | None = None,
-    include_triaged_out: bool = True,
+    triage: str | None = None,
 ) -> WeeklyReport:
     until = datetime.now(timezone.utc)
     since = until - timedelta(days=days) if days else None
@@ -150,8 +150,6 @@ def build_weekly_report(
     company_count: dict[str, int] = defaultdict(int)
 
     for r in rows:
-        if not include_triaged_out and r["triage"] == "not_relevant":
-            continue
         entities = _parse_json(r["entities"], {})
         raw_sectors = _parse_json(r["sectors"], [])
         sectors: list[str] = []
@@ -193,17 +191,23 @@ def build_weekly_report(
             best = max(best, len(company_shows[company.lower()]))
         n.corroboration_shows = best
 
+    # Triage counts over the whole window; sections over the (optionally) filtered set.
+    triage_counts: dict[str, int] = defaultdict(int)
+    for n in nuggets:
+        triage_counts[n.triage] += 1
+    visible = [n for n in nuggets if triage is None or n.triage == triage]
+
     # Group by primary (first) sector.
     by_sector: dict[str, list[ReportNugget]] = defaultdict(list)
-    for n in nuggets:
+    for n in visible:
         primary = n.sectors[0] if n.sectors else "Other"
         by_sector[primary].append(n)
 
     sections: list[ReportSection] = []
     for sector, items in by_sector.items():
         items.sort(key=lambda x: (-x.signal_score, -x.corroboration_shows))
-        shown = items[:per_section_limit] if per_section_limit else items
-        sections.append(ReportSection(sector=sector, count=len(items), nuggets=shown))
+        capped = items[:per_section_limit] if per_section_limit else items
+        sections.append(ReportSection(sector=sector, count=len(items), nuggets=capped))
     sections.sort(key=lambda s: -s.count)
 
     top_entities = [
@@ -214,15 +218,17 @@ def build_weekly_report(
     top_entities = [e for e in top_entities if len(e.shows) >= 2][:20]
 
     type_counts: dict[str, int] = defaultdict(int)
-    for n in nuggets:
+    for n in visible:
         type_counts[n.type] += 1
 
     stats = {
-        "nuggets": len(nuggets),
-        "episodes": len({n.episode_id for n in nuggets}),
-        "shows": len({n.show_slug for n in nuggets}),
-        "verified": sum(1 for n in nuggets if n.quote_verified),
+        "nuggets": len(visible),
+        "window_nuggets": len(nuggets),
+        "episodes": len({n.episode_id for n in visible}),
+        "shows": len({n.show_slug for n in visible}),
+        "verified": sum(1 for n in visible if n.quote_verified),
         "by_type": dict(type_counts),
+        "triage": dict(triage_counts),
     }
 
     return WeeklyReport(
