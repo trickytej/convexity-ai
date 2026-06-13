@@ -15,10 +15,10 @@ function weekAgoStr() {
 }
 
 const STANCE: Record<string, { label: string; cls: string }> = {
-  owned:    { label: "Owned",     cls: "bg-emerald-600 text-white" },
-  bullish:  { label: "Bullish",   cls: "bg-blue-600 text-white" },
-  bearish:  { label: "Bearish",   cls: "bg-rose-600 text-white" },
-  mentioned:{ label: "Mentioned", cls: "bg-zinc-200 text-zinc-700" },
+  owned:     { label: "Owned",     cls: "bg-emerald-600 text-white" },
+  bullish:   { label: "Bullish",   cls: "bg-blue-600 text-white" },
+  bearish:   { label: "Bearish",   cls: "bg-rose-600 text-white" },
+  mentioned: { label: "Mentioned", cls: "bg-zinc-200 text-zinc-700" },
 };
 
 function StockRow({ s }: { s: StockMention }) {
@@ -27,7 +27,7 @@ function StockRow({ s }: { s: StockMention }) {
     ? `/episode/${s.source_episode_id}${s.source_start_ms != null ? `#t-${s.source_start_ms}` : ""}`
     : null;
   return (
-    <div className="flex flex-wrap items-start gap-x-3 gap-y-1 px-4 py-3">
+    <div className="flex flex-wrap items-start gap-x-3 gap-y-1 px-4 py-3 break-inside-avoid">
       <span className="w-36 shrink-0 font-medium text-zinc-900">{s.company}</span>
       <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${stance.cls}`}>
         {stance.label}
@@ -35,7 +35,7 @@ function StockRow({ s }: { s: StockMention }) {
       <span className="flex-1 text-sm text-zinc-600">
         {s.summary}
         {href && (
-          <Link href={href} className="ml-1 text-indigo-500 hover:text-indigo-700">
+          <Link href={href} className="ml-1 text-indigo-500 hover:text-indigo-700 print:hidden">
             ↗
           </Link>
         )}
@@ -46,7 +46,7 @@ function StockRow({ s }: { s: StockMention }) {
 
 function NuggetItem({ n }: { n: NewsletterNugget }) {
   return (
-    <div className="space-y-2 py-4 border-b border-zinc-100 last:border-0">
+    <div className="space-y-2 py-4 border-b border-zinc-100 last:border-0 break-inside-avoid">
       <p className="text-sm font-medium text-zinc-900">{n.claim}</p>
       {n.quote && (
         <blockquote className="border-l-2 border-indigo-300 pl-3 text-sm text-zinc-600 italic">
@@ -87,15 +87,16 @@ export default function NewsletterPage() {
 
   return (
     <div className="space-y-6">
-      <div>
+      {/* Page title — hidden when printing (browser adds its own header) */}
+      <div className="print:hidden">
         <h1 className="text-2xl font-semibold tracking-tight">Newsletter</h1>
         <p className="text-sm text-zinc-500 mt-1">
           Renders kept insights as a distributable digest.
         </p>
       </div>
 
-      {/* Date range picker */}
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-zinc-200 bg-white p-4">
+      {/* Date range picker — hidden when printing */}
+      <div className="print:hidden flex flex-wrap items-end gap-3 rounded-xl border border-zinc-200 bg-white p-4">
         <div className="space-y-1">
           <label className="text-xs font-medium text-zinc-600">From</label>
           <input
@@ -125,7 +126,7 @@ export default function NewsletterPage() {
       </div>
 
       {error && (
-        <p className="text-sm text-rose-600 rounded-lg border border-rose-200 bg-rose-50 p-3">
+        <p className="print:hidden text-sm text-rose-600 rounded-lg border border-rose-200 bg-rose-50 p-3">
           {error}
         </p>
       )}
@@ -143,15 +144,13 @@ export default function NewsletterPage() {
             <span>{newsletter.lead.length} relevant, {newsletter.good_to_know.length} good to know</span>
           </div>
 
-          {/* Toggle: preview vs markdown */}
-          <div className="flex gap-2">
+          {/* Tab bar + Export PDF — hidden when printing */}
+          <div className="print:hidden flex items-center gap-2">
             <button
               type="button"
               onClick={() => setShowMarkdown(false)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                !showMarkdown
-                  ? "bg-zinc-900 text-white"
-                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                !showMarkdown ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
               }`}
             >
               Preview
@@ -160,32 +159,41 @@ export default function NewsletterPage() {
               type="button"
               onClick={() => setShowMarkdown(true)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                showMarkdown
-                  ? "bg-zinc-900 text-white"
-                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                showMarkdown ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
               }`}
             >
               Markdown
             </button>
-          </div>
-
-          {showMarkdown ? (
-            <div className="relative">
+            <div className="ml-auto">
               <button
                 type="button"
-                onClick={() => navigator.clipboard.writeText(newsletter.markdown)}
-                className="absolute top-3 right-3 rounded-md bg-zinc-800 px-2 py-1 text-xs text-white hover:bg-zinc-700"
+                onClick={() => window.print()}
+                className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
               >
-                Copy
+                Export PDF
               </button>
-              <textarea
-                readOnly
-                value={newsletter.markdown}
-                rows={40}
-                className="w-full rounded-xl border border-zinc-200 bg-zinc-950 px-4 py-4 font-mono text-xs text-zinc-100 focus:outline-none"
-              />
             </div>
-          ) : (
+          </div>
+
+          {/* Markdown view — always hidden when printing */}
+          <div className={`${showMarkdown ? "" : "hidden"} print:hidden relative`}>
+            <button
+              type="button"
+              onClick={() => navigator.clipboard.writeText(newsletter.markdown)}
+              className="absolute top-3 right-3 rounded-md bg-zinc-800 px-2 py-1 text-xs text-white hover:bg-zinc-700"
+            >
+              Copy
+            </button>
+            <textarea
+              readOnly
+              value={newsletter.markdown}
+              rows={40}
+              className="w-full rounded-xl border border-zinc-200 bg-zinc-950 px-4 py-4 font-mono text-xs text-zinc-100 focus:outline-none"
+            />
+          </div>
+
+          {/* Preview — always rendered so print captures it regardless of active tab */}
+          <div className={showMarkdown ? "hidden print:block" : ""}>
             <div className="space-y-10">
               {/* Nuggets card */}
               <div className="rounded-xl border border-zinc-200 bg-white divide-y divide-zinc-100">
@@ -210,16 +218,16 @@ export default function NewsletterPage() {
                 {newsletter.kept_count === 0 && (
                   <div className="p-10 text-center text-sm text-zinc-500">
                     No kept nuggets in this date range.{" "}
-                    <Link href="/episodes" className="text-indigo-600 hover:underline">
+                    <Link href="/episodes" className="text-indigo-600 hover:underline print:hidden">
                       Review an episode →
                     </Link>
                   </div>
                 )}
               </div>
 
-              {/* Stock Read-Through — same structure as DigestView */}
+              {/* Stock Read-Through */}
               {newsletter.stock_readthrough.length > 0 && (
-                <div>
+                <div className="break-before-avoid">
                   <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">
                     Stock read-through
                   </h3>
@@ -231,7 +239,7 @@ export default function NewsletterPage() {
                 </div>
               )}
             </div>
-          )}
+          </div>
         </div>
       )}
     </div>
