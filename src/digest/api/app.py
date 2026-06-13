@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .. import __version__
-from .routers import digests, insights, library, nuggets, report
+from .routers import curation, digests, insights, library, newsletter, nuggets, report
 
 
 def create_app() -> FastAPI:
@@ -30,6 +30,8 @@ def create_app() -> FastAPI:
     app.include_router(report.router, prefix="/api")
     app.include_router(nuggets.router, prefix="/api")
     app.include_router(digests.router, prefix="/api")
+    app.include_router(curation.router, prefix="/api")
+    app.include_router(newsletter.router, prefix="/api")
 
     @app.get("/api/health")
     def health() -> dict[str, str]:

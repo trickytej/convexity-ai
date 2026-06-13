@@ -1,24 +1,29 @@
 "use client";
 
 import { useState } from "react";
-import type { EpisodeDigest, Segment } from "@/lib/api";
+import type { EpisodeDigest, NuggetWithCuration, Segment } from "@/lib/api";
 import { fmtDate } from "@/lib/format";
 import TranscriptView from "@/components/TranscriptView";
 import { DigestView } from "@/components/DigestView";
 import { GenerateEpisodeDigestButton } from "@/components/GenerateEpisodeDigestButton";
+import { ReviewTab } from "@/components/ReviewTab";
 
 export function EpisodeTabs({
   episodeId,
   segments,
   speakers,
   digest,
+  nuggets,
 }: {
   episodeId: number;
   segments: Segment[];
   speakers: string[];
   digest: EpisodeDigest | null;
+  nuggets: NuggetWithCuration[];
 }) {
-  const [tab, setTab] = useState<"digest" | "transcript">(digest ? "digest" : "transcript");
+  const [tab, setTab] = useState<"digest" | "transcript" | "review">(
+    digest ? "digest" : "transcript",
+  );
 
   const tabCls = (active: boolean) =>
     `-mb-px border-b-2 pb-2 ${
@@ -38,9 +43,18 @@ export function EpisodeTabs({
         >
           Transcript
         </button>
+        <button
+          type="button"
+          onClick={() => setTab("review")}
+          className={tabCls(tab === "review")}
+        >
+          Review {nuggets.length > 0 && <span className="ml-1 text-xs text-zinc-400">({nuggets.length})</span>}
+        </button>
       </div>
 
       {tab === "transcript" && <TranscriptView segments={segments} speakers={speakers} />}
+
+      {tab === "review" && <ReviewTab episodeId={episodeId} nuggets={nuggets} />}
 
       {tab === "digest" &&
         (digest ? (

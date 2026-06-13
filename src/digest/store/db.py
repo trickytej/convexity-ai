@@ -116,6 +116,19 @@ CREATE TABLE IF NOT EXISTS episode_digests (
     payload      TEXT NOT NULL,          -- json: themes, stocks
     generated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS nugget_curation (
+    nugget_id             INTEGER PRIMARY KEY,
+    -- Intentionally NO "REFERENCES nuggets(id) ON DELETE CASCADE": curator decisions
+    -- must survive nugget re-extraction (which deletes + reinserts with new ids).
+    -- Rows whose nugget_id no longer exists in nuggets are orphans; queries exclude
+    -- them via INNER JOIN.  See replace_nuggets() in repo.py.
+    decision              TEXT NOT NULL DEFAULT 'unreviewed',  -- unreviewed | kept | killed
+    curator_rank          INTEGER,                             -- 1 | 2 | 3
+    contradicts_consensus INTEGER NOT NULL DEFAULT 0,
+    note                  TEXT,
+    updated_at            TEXT NOT NULL
+);
 """
 
 

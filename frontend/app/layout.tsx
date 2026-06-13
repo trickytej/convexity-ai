@@ -29,12 +29,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/episodes" className="hover:text-zinc-900">
                 Episodes
               </Link>
+              <Link href="/newsletter" className="hover:text-zinc-900">
+                Newsletter
+              </Link>
             </nav>
           </div>
         </header>
         <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
         <footer className="mx-auto max-w-5xl px-4 py-10 text-xs text-zinc-400 print:hidden">
-          research-digest · Layer 1: transcript library
+          research-digest · Layer 1–2: transcripts + triage
         </footer>
       </body>
     </html>

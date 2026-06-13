@@ -147,6 +147,47 @@ search, per-segment anchors that Layer 2's "in context" links will target).
 API endpoints (see `/docs`): `GET /api/shows`, `/api/episodes`,
 `/api/episodes/{id}`, `/api/episodes/{id}/transcript`.
 
+## Layer 2: triage & newsletter
+
+After running `digest insights`, curate each episode's nuggets and render a
+distributable newsletter from the ones you keep.
+
+### Triage (Review tab)
+
+Open an episode page and click the **Review** tab. For each nugget:
+
+- **Keep / Kill** — toggle the curation decision.
+- **Rank** (1 / 2 / 3) — 1 = lead item, 2–3 = good-to-know.  The model's
+  suggested rank (derived from signal score) is shown next to each card.
+- **Contradicts consensus** — checkbox flag for contrarian takes.
+- **Note** — your "why it matters" framing line, used verbatim in the newsletter.
+
+All changes autosave via `PATCH /api/nuggets/{id}/curation`.  Curator decisions
+survive nugget re-extraction: if you re-run `digest insights --force`, orphaned
+curation rows are retained and excluded from queries via JOIN (not deleted).
+
+### Newsletter
+
+```bash
+# CLI — write markdown to a file
+.venv/bin/digest newsletter --days 7 --output digest-2026-W24.md
+
+# or stream to stdout
+.venv/bin/digest newsletter --from 2026-06-01 --to 2026-06-13
+
+# API — returns JSON including pre-rendered markdown
+GET /api/newsletter?from=2026-06-01&to=2026-06-13
+```
+
+The `/newsletter` page in the frontend lets you pick a date range and shows:
+
+- **🔥 Lead** — rank-1 kept insights with quotes, speaker attribution, curator
+  note, and "In context" link back to the transcript segment.
+- **📌 Good to Know** — rank 2–3 terse list.
+- **📈 Stock Read-Through** — companies / tickers mentioned across kept insights,
+  grouped by frequency.
+- A **Markdown** tab with a one-click copy button for distribution.
+
 ## Configuration
 
 - `config/shows.yaml` — the curated feed registry (RSS URL, tier, host roster per

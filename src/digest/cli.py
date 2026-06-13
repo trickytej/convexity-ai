@@ -577,6 +577,72 @@ def reclassify(
 
 
 @app.command()
+def newsletter(
+    from_date: str = typer.Option(
+        None, "--from", help="Start date YYYY-MM-DD (default: 7 days ago)."
+    ),
+    to_date: str = typer.Option(
+        None, "--to", help="End date YYYY-MM-DD (default: today)."
+    ),
+    days: int = typer.Option(
+        None, "--days", "-d", help="Shorthand: last N days (overrides --from/--to)."
+    ),
+    output: str = typer.Option(
+        None, "--output", "-o", help="Write rendered markdown to this path. Defaults to stdout."
+    ),
+) -> None:
+    """Render a newsletter from kept insights in a date window.
+
+    Outputs markdown (stdout or --output path).  Requires curator decisions to
+    have been set via the Review tab or PATCH /api/nuggets/{id}/curation first.
+    """
+    from datetime import date, timedelta
+
+    from .api.routers.newsletter import (
+        _build_stock_readthrough,
+        _nugget_out,
+        _render_markdown,
+    )
+
+    today = date.today()
+    if days is not None:
+        resolved_from = (today - timedelta(days=days)).isoformat()
+        resolved_to = today.isoformat()
+    else:
+        resolved_from = from_date or (today - timedelta(days=7)).isoformat()
+        resolved_to = to_date or today.isoformat()
+
+    from_iso = f"{resolved_from}T00:00:00+00:00"
+    to_iso = f"{resolved_to}T23:59:59+00:00"
+
+    settings = get_settings()
+    with get_conn(settings.resolved_db_path) as conn:
+        init_db(conn)
+        rows = repo.list_kept_nuggets_for_newsletter(conn, from_iso, to_iso)
+
+    nuggets_out = [_nugget_out(r) for r in rows]
+    lead = [n for n in nuggets_out if n.curator_rank == 1]
+    good_to_know = [n for n in nuggets_out if n.curator_rank != 1]
+    stocks = _build_stock_readthrough(rows)
+    episode_count = len({r["episode_id"] for r in rows})
+
+    md = _render_markdown(
+        resolved_from, resolved_to, lead, good_to_know, stocks, episode_count, len(rows)
+    )
+
+    if output:
+        from pathlib import Path
+        Path(output).write_text(md, encoding="utf-8")
+        console.print(f"[green]Wrote newsletter to[/green] [cyan]{output}[/cyan]")
+        console.print(
+            f"  {episode_count} episode(s) · [bold]{len(rows)}[/bold] kept · "
+            f"{len(lead)} lead · {len(good_to_know)} good-to-know"
+        )
+    else:
+        console.print(md)
+
+
+@app.command()
 def serve(
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(8000, "--port", help="API port (avoid 8080)."),

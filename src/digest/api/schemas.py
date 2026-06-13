@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ShowOut(BaseModel):
@@ -106,3 +107,88 @@ class WeeklyReportOut(BaseModel):
     stats: dict
     sections: list[ReportSectionOut]
     top_entities: list[EntityBuzzOut]
+
+
+# --- Layer 2: curation ---------------------------------------------------
+
+
+class CurationOut(BaseModel):
+    decision: str = "unreviewed"
+    curator_rank: int | None = None
+    contradicts_consensus: bool = False
+    note: str | None = None
+    updated_at: str | None = None
+
+
+class NuggetWithCurationOut(BaseModel):
+    id: int
+    episode_id: int
+    type: str
+    claim: str
+    quote: str | None = None
+    speaker_name: str | None = None
+    start_ms: int | None = None
+    end_ms: int | None = None
+    entities: dict | None = None
+    sectors: list[str] = []
+    primary_sector: str | None = None
+    scores: dict | None = None
+    signal_score: float
+    quote_verified: bool
+    triage: str
+    suggested_rank: int  # 1/2/3 derived from signal_score at read time
+    curation: CurationOut
+
+
+class CurationPatch(BaseModel):
+    decision: Literal["unreviewed", "kept", "killed"] | None = None
+    curator_rank: int | None = Field(None, ge=1, le=3)
+    contradicts_consensus: bool | None = None
+    note: str | None = None
+
+
+class CurationStatsOut(BaseModel):
+    total: int
+    reviewed: int
+    kept: int
+    killed: int
+
+
+# --- Layer 2: newsletter -------------------------------------------------
+
+
+class NewsletterNuggetOut(BaseModel):
+    id: int
+    episode_id: int
+    show_slug: str
+    episode_title: str
+    episode_published_at: str | None = None
+    type: str
+    claim: str
+    quote: str | None = None
+    speaker_name: str | None = None
+    start_ms: int | None = None
+    sectors: list[str] = []
+    primary_sector: str | None = None
+    tickers: list[str] = []
+    curator_rank: int | None = None
+    contradicts_consensus: bool = False
+    curation_note: str | None = None
+
+
+class StockMentionOut(BaseModel):
+    company: str
+    tickers: list[str]
+    mention_count: int
+    nugget_ids: list[int]
+
+
+class NewsletterOut(BaseModel):
+    from_date: str
+    to_date: str
+    episode_count: int
+    kept_count: int
+    lead: list[NewsletterNuggetOut]         # curator_rank == 1
+    good_to_know: list[NewsletterNuggetOut] # curator_rank 2-3 or unranked
+    stock_readthrough: list[StockMentionOut]
+    markdown: str

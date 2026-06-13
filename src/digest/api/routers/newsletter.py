@@ -1,0 +1,173 @@
+"""Layer 2: newsletter — kept nuggets rendered for distribution."""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+from collections import defaultdict
+from datetime import date, datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from ...store import repo
+from ..deps import get_db
+from ..schemas import NewsletterNuggetOut, NewsletterOut, StockMentionOut
+
+router = APIRouter(tags=["newsletter"])
+
+
+def _parse_date(value: str, param: str) -> str:
+    """Validate YYYY-MM-DD and return as ISO string with time component."""
+    try:
+        d = date.fromisoformat(value)
+    except ValueError:
+        raise HTTPException(status_code=422, detail=f"{param} must be YYYY-MM-DD")
+    return datetime(d.year, d.month, d.day, tzinfo=timezone.utc).isoformat()
+
+
+def _nugget_out(row: sqlite3.Row) -> NewsletterNuggetOut:
+    entities = json.loads(row["entities"]) if row["entities"] else {}
+    sectors = json.loads(row["sectors"]) if row["sectors"] else []
+    tickers = entities.get("tickers", []) or []
+    return NewsletterNuggetOut(
+        id=row["id"],
+        episode_id=row["episode_id"],
+        show_slug=row["show_slug"],
+        episode_title=row["episode_title"],
+        episode_published_at=row["episode_published_at"],
+        type=row["type"],
+        claim=row["claim"],
+        quote=row["quote"],
+        speaker_name=row["speaker_name"],
+        start_ms=row["start_ms"],
+        sectors=sectors if isinstance(sectors, list) else [],
+        primary_sector=row["primary_sector"] if "primary_sector" in row.keys() else None,
+        tickers=tickers if isinstance(tickers, list) else [],
+        curator_rank=row["curator_rank"],
+        contradicts_consensus=bool(row["contradicts_consensus"] or 0),
+        curation_note=row["curation_note"],
+    )
+
+
+def _build_stock_readthrough(rows: list[sqlite3.Row]) -> list[StockMentionOut]:
+    """Group kept nuggets by company and collect tickers — no LLM required."""
+    company_data: dict[str, dict] = defaultdict(lambda: {"tickers": set(), "ids": []})
+    for row in rows:
+        entities = json.loads(row["entities"]) if row["entities"] else {}
+        companies = entities.get("companies") or []
+        tickers = entities.get("tickers") or []
+        for company in companies:
+            company_data[company]["tickers"].update(tickers)
+            company_data[company]["ids"].append(row["id"])
+    return sorted(
+        [
+            StockMentionOut(
+                company=company,
+                tickers=sorted(data["tickers"]),
+                mention_count=len(data["ids"]),
+                nugget_ids=data["ids"],
+            )
+            for company, data in company_data.items()
+        ],
+        key=lambda s: (-s.mention_count, s.company),
+    )
+
+
+def _render_markdown(
+    from_date: str,
+    to_date: str,
+    lead: list[NewsletterNuggetOut],
+    good_to_know: list[NewsletterNuggetOut],
+    stocks: list[StockMentionOut],
+    episode_count: int,
+    kept_count: int,
+) -> str:
+    from_label = from_date[:10]
+    to_label = to_date[:10]
+    lines: list[str] = [
+        f"# Research Digest · {from_label} – {to_label}",
+        "",
+        f"_{episode_count} episode{'s' if episode_count != 1 else ''} · "
+        f"{kept_count} kept insight{'s' if kept_count != 1 else ''}_",
+        "",
+        "---",
+        "",
+    ]
+
+    if lead:
+        lines += ["## 🔥 Lead", ""]
+        for n in lead:
+            lines.append(f"**{n.speaker_name or 'Unknown'}** · {n.show_slug}")
+            if n.quote:
+                lines.append(f"> {n.quote}")
+            if n.curation_note:
+                lines.append(f"_{n.curation_note}_")
+            if n.start_ms is not None:
+                lines.append(
+                    f"[In context →](http://localhost:3000/episode/{n.episode_id}?t={n.start_ms})"
+                )
+            lines.append("")
+        lines += ["---", ""]
+
+    if good_to_know:
+        lines += ["## 📌 Good to Know", ""]
+        for n in good_to_know:
+            speaker = f"**{n.speaker_name}**" if n.speaker_name else ""
+            rank_label = f" _(rank {n.curator_rank})_" if n.curator_rank else ""
+            lines.append(f"- {speaker} · {n.show_slug}{rank_label}")
+            if n.quote:
+                lines.append(f"  > {n.quote}")
+            if n.curation_note:
+                lines.append(f"  _{n.curation_note}_")
+            lines.append("")
+        lines += ["---", ""]
+
+    if stocks:
+        lines += ["## 📈 Stock Read-Through", ""]
+        lines.append("| Company | Tickers | Mentions |")
+        lines.append("|---------|---------|----------|")
+        for s in stocks:
+            ticker_str = ", ".join(f"`{t}`" for t in s.tickers) if s.tickers else "—"
+            lines.append(f"| {s.company} | {ticker_str} | {s.mention_count} |")
+        lines += ["", "---", ""]
+
+    lines.append(f"_Generated by research-digest · {datetime.now(timezone.utc).date()}_")
+    return "\n".join(lines)
+
+
+@router.get("/newsletter", response_model=NewsletterOut)
+def get_newsletter(
+    from_date: str = Query(..., alias="from", description="YYYY-MM-DD"),
+    to_date: str = Query(..., alias="to", description="YYYY-MM-DD"),
+    episode_ids: list[int] = Query(default=[], description="Restrict to specific episode ids"),
+    db: sqlite3.Connection = Depends(get_db),
+) -> NewsletterOut:
+    from_iso = _parse_date(from_date, "from")
+    to_iso = _parse_date(to_date, "to")
+    if from_iso > to_iso:
+        raise HTTPException(status_code=422, detail="'from' must be before 'to'")
+
+    rows = repo.list_kept_nuggets_for_newsletter(
+        db, from_iso, to_iso, episode_ids or None
+    )
+
+    lead = [_nugget_out(r) for r in rows if r["curator_rank"] == 1]
+    good_to_know = [_nugget_out(r) for r in rows if r["curator_rank"] != 1]
+    stocks = _build_stock_readthrough(rows)
+    episode_count = len({r["episode_id"] for r in rows})
+    kept_count = len(rows)
+
+    markdown = _render_markdown(
+        from_date, to_date, lead, good_to_know, stocks, episode_count, kept_count
+    )
+
+    return NewsletterOut(
+        from_date=from_date,
+        to_date=to_date,
+        episode_count=episode_count,
+        kept_count=kept_count,
+        lead=lead,
+        good_to_know=good_to_know,
+        stock_readthrough=stocks,
+        markdown=markdown,
+    )

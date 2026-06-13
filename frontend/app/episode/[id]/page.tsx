@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { EpisodeDigest, Transcript } from "@/lib/api";
-import { getEpisodeDigest, getTranscript } from "@/lib/api";
+import type { EpisodeDigest, NuggetWithCuration, Transcript } from "@/lib/api";
+import { getEpisodeDigest, getEpisodeNuggets, getTranscript } from "@/lib/api";
 import { fmtDate, fmtDuration } from "@/lib/format";
 import { Badge, SourceBadge } from "@/components/ui";
 import { EpisodeTabs } from "@/components/EpisodeTabs";
@@ -24,6 +24,13 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
     digest = await getEpisodeDigest(id);
   } catch {
     digest = null;
+  }
+
+  let nuggets: NuggetWithCuration[] = [];
+  try {
+    nuggets = await getEpisodeNuggets(id);
+  } catch {
+    nuggets = [];
   }
 
   const e = data.episode;
@@ -74,6 +81,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
           segments={data.segments}
           speakers={data.speakers}
           digest={digest}
+          nuggets={nuggets}
         />
       </div>
     </div>

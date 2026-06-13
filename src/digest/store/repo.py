@@ -447,7 +447,12 @@ def has_nuggets(conn: sqlite3.Connection, episode_id: int) -> bool:
 def replace_nuggets(
     conn: sqlite3.Connection, episode_id: int, nuggets: list[Nugget]
 ) -> int:
-    """Replace all nuggets for an episode (idempotent re-extraction)."""
+    """Replace all nuggets for an episode (idempotent re-extraction).
+
+    nugget_curation rows are NOT deleted here — they have no ON DELETE CASCADE
+    and are intentionally orphaned so curator decisions survive re-extraction.
+    Orphaned curation rows are excluded from live queries via INNER JOIN.
+    """
     now = _now_iso()
     conn.execute("DELETE FROM nuggets WHERE episode_id = ?", (episode_id,))
     conn.executemany(
@@ -622,6 +627,150 @@ def get_episode_digest(conn: sqlite3.Connection, episode_id: int) -> sqlite3.Row
     return conn.execute(
         "SELECT * FROM episode_digests WHERE episode_id = ?", (episode_id,)
     ).fetchone()
+
+
+# --- curation ------------------------------------------------------------
+
+
+def get_curation(conn: sqlite3.Connection, nugget_id: int) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT * FROM nugget_curation WHERE nugget_id = ?", (nugget_id,)
+    ).fetchone()
+
+
+def upsert_curation(
+    conn: sqlite3.Connection,
+    nugget_id: int,
+    *,
+    decision: str | None = None,
+    curator_rank: int | None = None,
+    contradicts_consensus: bool | None = None,
+    note: str | None = None,
+) -> sqlite3.Row:
+    """Create or partial-update a curation record. Only supplied fields are written."""
+    now = _now_iso()
+    existing = get_curation(conn, nugget_id)
+    if existing is None:
+        conn.execute(
+            """
+            INSERT INTO nugget_curation
+                (nugget_id, decision, curator_rank, contradicts_consensus, note, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                nugget_id,
+                decision or "unreviewed",
+                curator_rank,
+                1 if contradicts_consensus else 0,
+                note,
+                now,
+            ),
+        )
+    else:
+        updates: dict[str, object] = {"updated_at": now}
+        if decision is not None:
+            updates["decision"] = decision
+        if curator_rank is not None:
+            updates["curator_rank"] = curator_rank
+        if contradicts_consensus is not None:
+            updates["contradicts_consensus"] = 1 if contradicts_consensus else 0
+        if note is not None:
+            updates["note"] = note
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        conn.execute(
+            f"UPDATE nugget_curation SET {set_clause} WHERE nugget_id = ?",
+            [*updates.values(), nugget_id],
+        )
+    conn.commit()
+    row = conn.execute(
+        "SELECT * FROM nugget_curation WHERE nugget_id = ?", (nugget_id,)
+    ).fetchone()
+    assert row is not None
+    return row
+
+
+def list_nuggets_with_curation(
+    conn: sqlite3.Connection, episode_id: int
+) -> list[sqlite3.Row]:
+    """All nuggets for an episode with their curation record LEFT-JOINed in."""
+    return conn.execute(
+        """
+        SELECT n.*,
+               nc.decision,
+               nc.curator_rank,
+               nc.contradicts_consensus,
+               nc.note         AS curation_note,
+               nc.updated_at   AS curation_updated_at
+        FROM nuggets n
+        LEFT JOIN nugget_curation nc ON nc.nugget_id = n.id
+        WHERE n.episode_id = ?
+        ORDER BY n.signal_score DESC, n.id ASC
+        """,
+        (episode_id,),
+    ).fetchall()
+
+
+def nugget_curation_stats(conn: sqlite3.Connection, episode_id: int) -> dict[str, int]:
+    """Return counts: total, reviewed (not unreviewed), kept, killed."""
+    rows = conn.execute(
+        """
+        SELECT
+            COUNT(*)                                                   AS total,
+            COUNT(nc.nugget_id)                                        AS has_curation,
+            SUM(CASE WHEN nc.decision != 'unreviewed' THEN 1 ELSE 0 END) AS reviewed,
+            SUM(CASE WHEN nc.decision = 'kept'        THEN 1 ELSE 0 END) AS kept,
+            SUM(CASE WHEN nc.decision = 'killed'      THEN 1 ELSE 0 END) AS killed
+        FROM nuggets n
+        LEFT JOIN nugget_curation nc ON nc.nugget_id = n.id
+        WHERE n.episode_id = ?
+        """,
+        (episode_id,),
+    ).fetchone()
+    return {
+        "total": rows["total"] or 0,
+        "reviewed": rows["reviewed"] or 0,
+        "kept": rows["kept"] or 0,
+        "killed": rows["killed"] or 0,
+    }
+
+
+# --- newsletter ----------------------------------------------------------
+
+
+def list_kept_nuggets_for_newsletter(
+    conn: sqlite3.Connection,
+    from_iso: str,
+    to_iso: str,
+    episode_ids: list[int] | None = None,
+) -> list[sqlite3.Row]:
+    """Kept nuggets in a date window, ordered rank ASC then signal DESC."""
+    clauses = [
+        "nc.decision = 'kept'",
+        "e.published_at >= ?",
+        "e.published_at <= ?",
+    ]
+    params: list[object] = [from_iso, to_iso]
+    if episode_ids:
+        placeholders = ",".join("?" * len(episode_ids))
+        clauses.append(f"n.episode_id IN ({placeholders})")
+        params.extend(episode_ids)
+    where = " AND ".join(clauses)
+    return conn.execute(
+        f"""
+        SELECT n.*,
+               nc.decision, nc.curator_rank, nc.contradicts_consensus,
+               nc.note         AS curation_note,
+               e.show_slug     AS show_slug,
+               e.title         AS episode_title,
+               e.published_at  AS episode_published_at
+        FROM nuggets n
+        JOIN nugget_curation nc ON nc.nugget_id = n.id
+        JOIN episodes e ON e.id = n.episode_id
+        WHERE {where}
+        ORDER BY nc.curator_rank ASC, n.signal_score DESC, n.id ASC
+        """,
+        params,
+    ).fetchall()
 
 
 def nugget_type_counts(conn: sqlite3.Connection, episode_id: int) -> dict[str, int]:

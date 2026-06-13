@@ -250,3 +250,114 @@ export async function setTriage(id: number, triage: TriageValue): Promise<void> 
     throw new Error(`triage failed: ${res.status}`);
   }
 }
+
+// --- Layer 2: curation ---------------------------------------------------
+
+export interface Curation {
+  decision: "unreviewed" | "kept" | "killed";
+  curator_rank: 1 | 2 | 3 | null;
+  contradicts_consensus: boolean;
+  note: string | null;
+  updated_at: string | null;
+}
+
+export interface NuggetWithCuration {
+  id: number;
+  episode_id: number;
+  type: string;
+  claim: string;
+  quote: string | null;
+  speaker_name: string | null;
+  start_ms: number | null;
+  end_ms: number | null;
+  entities: { companies?: string[]; people?: string[]; tickers?: string[] } | null;
+  sectors: string[];
+  primary_sector: string | null;
+  scores: Record<string, number> | null;
+  signal_score: number;
+  quote_verified: boolean;
+  triage: string;
+  suggested_rank: 1 | 2 | 3;
+  curation: Curation;
+}
+
+export interface CurationStats {
+  total: number;
+  reviewed: number;
+  kept: number;
+  killed: number;
+}
+
+export interface CurationPatch {
+  decision?: "unreviewed" | "kept" | "killed";
+  curator_rank?: 1 | 2 | 3 | null;
+  contradicts_consensus?: boolean;
+  note?: string;
+}
+
+export function getEpisodeNuggets(id: number | string): Promise<NuggetWithCuration[]> {
+  return getJSON<NuggetWithCuration[]>(`/api/episodes/${id}/nuggets`);
+}
+
+export function getNuggetCurationStats(id: number | string): Promise<CurationStats> {
+  return getJSON<CurationStats>(`/api/episodes/${id}/nuggets/stats`);
+}
+
+export async function patchCuration(nuggetId: number, patch: CurationPatch): Promise<Curation> {
+  const res = await fetch(`${API_BASE}/api/nuggets/${nuggetId}/curation`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`curation patch failed: ${res.status}`);
+  return (await res.json()) as Curation;
+}
+
+// --- Layer 2: newsletter -------------------------------------------------
+
+export interface NewsletterNugget {
+  id: number;
+  episode_id: number;
+  show_slug: string;
+  episode_title: string;
+  episode_published_at: string | null;
+  type: string;
+  claim: string;
+  quote: string | null;
+  speaker_name: string | null;
+  start_ms: number | null;
+  sectors: string[];
+  primary_sector: string | null;
+  tickers: string[];
+  curator_rank: 1 | 2 | 3 | null;
+  contradicts_consensus: boolean;
+  curation_note: string | null;
+}
+
+export interface StockMention {
+  company: string;
+  tickers: string[];
+  mention_count: number;
+  nugget_ids: number[];
+}
+
+export interface Newsletter {
+  from_date: string;
+  to_date: string;
+  episode_count: number;
+  kept_count: number;
+  lead: NewsletterNugget[];
+  good_to_know: NewsletterNugget[];
+  stock_readthrough: StockMention[];
+  markdown: string;
+}
+
+export function getNewsletter(params: {
+  from: string;
+  to: string;
+  episode_ids?: number[];
+}): Promise<Newsletter> {
+  const q = new URLSearchParams({ from: params.from, to: params.to });
+  (params.episode_ids ?? []).forEach((id) => q.append("episode_ids", String(id)));
+  return getJSON<Newsletter>(`/api/newsletter?${q.toString()}`);
+}
