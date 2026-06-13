@@ -71,12 +71,37 @@ CREATE TABLE IF NOT EXISTS segments (
     text          TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_segments_transcript ON segments(transcript_id);
+
+CREATE TABLE IF NOT EXISTS nuggets (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    episode_id    INTEGER NOT NULL REFERENCES episodes(id) ON DELETE CASCADE,
+    type          TEXT NOT NULL,
+    claim         TEXT NOT NULL,
+    quote         TEXT,
+    speaker_name  TEXT,
+    start_ms      INTEGER,
+    end_ms        INTEGER,
+    entities      TEXT,                  -- json {companies, people, tickers}
+    sectors       TEXT,                  -- json array of tags
+    scores        TEXT,                  -- json {specificity, novelty, ...}
+    signal_score  REAL NOT NULL DEFAULT 0,
+    quote_verified INTEGER NOT NULL DEFAULT 0,
+    triage        TEXT NOT NULL DEFAULT 'pending',  -- pending | relevant | not_relevant
+    model         TEXT,
+    created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_nuggets_episode ON nuggets(episode_id);
+CREATE INDEX IF NOT EXISTS idx_nuggets_signal ON nuggets(signal_score);
+CREATE INDEX IF NOT EXISTS idx_nuggets_type ON nuggets(type);
+CREATE INDEX IF NOT EXISTS idx_nuggets_triage ON nuggets(triage);
 """
 
 
 def connect(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path))
+    # check_same_thread=False: the web API hands one connection per request across
+    # FastAPI's threadpool (used sequentially, never shared concurrently).
+    conn = sqlite3.connect(str(db_path), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
     conn.execute("PRAGMA journal_mode = WAL;")

@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Anchored transcript segments shouldn't hide under the sticky header. */
+[id^="t-"] {
+  scroll-margin-top: 5rem;
+}

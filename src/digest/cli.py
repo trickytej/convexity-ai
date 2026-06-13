@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 
 import typer
 from rich.console import Console
@@ -13,6 +14,7 @@ from .config import get_settings
 from .pipeline import (
     acquire_episode,
     discover_show,
+    generate_insights,
     ingest_window,
     remap_speakers,
     transcribe_episode,
@@ -385,6 +387,105 @@ def remap_speakers_cmd(
 
 
 @app.command()
+def insights(
+    show: list[str] = typer.Option(None, "--show", "-s", help="Limit to show slug(s)."),
+    days: int = typer.Option(None, "--days", "-d", help="Only episodes published in the last N days."),
+    limit: int = typer.Option(None, "--limit", "-n", help="Max episodes to process."),
+    force: bool = typer.Option(False, "--force", help="Re-extract even if nuggets exist (drops triage)."),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Step 3: extract investment nuggets from transcribed episodes. Requires
+    ANTHROPIC_API_KEY. Skips episodes already processed unless --force.
+    """
+    _setup_logging(verbose)
+    settings = get_settings()
+    settings.ensure_dirs()
+    registry = load_registry(settings)
+    show_by_slug = {s.slug: s for s in registry.shows}
+
+    if not settings.anthropic_api_key:
+        console.print("[red]ANTHROPIC_API_KEY is not set.[/red] Add it to .env.")
+        raise typer.Exit(code=1)
+
+    since = datetime.now(timezone.utc) - timedelta(days=days) if days else None
+    wanted = set(show) if show else None
+
+    table = Table(title="Insights (nuggets)", header_style="bold")
+    table.add_column("ep", justify="right")
+    table.add_column("show")
+    table.add_column("nuggets", justify="right")
+    table.add_column("result")
+
+    total = 0
+    with get_conn(settings.resolved_db_path) as conn:
+        init_db(conn)
+        repo.sync_shows(conn, registry.shows)
+        episodes_list = repo.list_episodes(
+            conn, status=EpisodeStatus.TRANSCRIBED, published_since=since
+        )
+        if wanted:
+            episodes_list = [e for e in episodes_list if e.show_slug in wanted]
+        if limit:
+            episodes_list = episodes_list[:limit]
+
+        with console.status("[bold]Extracting nuggets...[/bold]") as widget:
+            for ep in episodes_list:
+                widget.update(f"[bold]Insights[/bold] {ep.show_slug} ep {ep.id}...")
+                res = generate_insights(conn, ep, show_by_slug[ep.show_slug], settings, force=force)
+                if res.ok and not res.skipped:
+                    total += res.count
+                style = "dim" if res.skipped else ("green" if res.ok else "red")
+                table.add_row(
+                    str(ep.id), ep.show_slug, str(res.count), f"[{style}]{res.error or res.detail}[/{style}]"
+                )
+    console.print(table)
+    console.print(f"Extracted [bold green]{total}[/bold green] nugget(s).")
+
+
+@app.command()
+def nuggets(
+    episode: int = typer.Option(None, "--episode", "-e", help="Filter by episode id."),
+    show: str = typer.Option(None, "--show", "-s", help="Filter by show slug."),
+    type_: str = typer.Option(None, "--type", "-t", help="Filter by nugget type."),
+    min_signal: float = typer.Option(0.0, "--min-signal", help="Minimum signal score (0-1)."),
+    limit: int = typer.Option(20, "--limit", "-n"),
+) -> None:
+    """List extracted nuggets (highest signal first)."""
+    settings = get_settings()
+    with get_conn(settings.resolved_db_path) as conn:
+        ep_filter: set[int] | None = None
+        if show:
+            ep_filter = {e.id for e in repo.list_episodes(conn, show_slug=show) if e.id is not None}
+        rows = repo.list_nuggets(
+            conn,
+            episode_id=episode,
+            nugget_type=type_,
+            min_signal=min_signal,
+            limit=None if ep_filter is not None else limit,
+        )
+        if ep_filter is not None:
+            rows = [n for n in rows if n.episode_id in ep_filter][:limit]
+
+    table = Table(title=f"Nuggets (showing {len(rows)})", header_style="bold")
+    table.add_column("ep", justify="right")
+    table.add_column("score", justify="right")
+    table.add_column("type")
+    table.add_column("speaker")
+    table.add_column("claim")
+    for n in rows:
+        mark = "" if n.quote_verified else " [dim](unverified)[/dim]"
+        claim = (n.claim[:88] + "…") if len(n.claim) > 90 else n.claim
+        table.add_row(
+            str(n.episode_id),
+            f"{n.signal_score:.2f}",
+            n.type,
+            n.speaker_name or "-",
+            claim + mark,
+        )
+    console.print(table)
+
+
+@app.command()
 def episodes(
     show: str = typer.Option(None, "--show", "-s", help="Filter by show slug."),
     status: str = typer.Option(None, "--status", help="Filter by status."),
@@ -442,6 +543,19 @@ def status() -> None:
             str(r["failed"] or 0),
         )
     console.print(table)
+
+
+@app.command()
+def serve(
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(8000, "--port", help="API port (avoid 8080)."),
+    reload: bool = typer.Option(False, "--reload", help="Auto-reload on code changes (dev)."),
+) -> None:
+    """Run the web API (FastAPI) that backs the frontend."""
+    import uvicorn
+
+    console.print(f"[green]Serving API[/green] at http://{host}:{port}  (docs at /docs)")
+    uvicorn.run("digest.api.app:app", host=host, port=port, reload=reload)
 
 
 if __name__ == "__main__":

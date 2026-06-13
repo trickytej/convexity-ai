@@ -361,6 +361,60 @@ def ingest_window(
 
 
 @dataclass
+class InsightResult:
+    episode_id: int
+    ok: bool
+    count: int = 0
+    detail: str = ""
+    error: str | None = None
+    skipped: bool = False
+
+
+def generate_insights(
+    conn: sqlite3.Connection,
+    episode: Episode,
+    show: Show,
+    settings: Settings | None = None,
+    *,
+    force: bool = False,
+) -> InsightResult:
+    """Extract nuggets from an episode's transcript and store them.
+
+    Skips episodes that already have nuggets unless ``force`` (so Step 5 triage
+    labels are preserved across re-runs).
+    """
+    settings = settings or get_settings()
+    assert episode.id is not None
+
+    transcript = repo.get_transcript_for_episode(conn, episode.id)
+    if transcript is None or not transcript["normalized_path"]:
+        return InsightResult(episode.id, False, error="no transcript", skipped=True)
+    if repo.has_nuggets(conn, episode.id) and not force:
+        return InsightResult(
+            episode.id, True, detail="already extracted (use --force to redo)", skipped=True
+        )
+
+    from .insights.extract import extract_nuggets
+    from .transcribe.llm import LLMError
+
+    try:
+        nuggets = extract_nuggets(episode, show, transcript["normalized_path"], settings)
+    except LLMError as exc:
+        return InsightResult(episode.id, False, error=f"{type(exc).__name__}: {exc}")
+    except (FileNotFoundError, OSError) as exc:
+        return InsightResult(episode.id, False, error=f"transcript unavailable: {exc}")
+
+    repo.replace_nuggets(conn, episode.id, nuggets)
+    verified = sum(1 for n in nuggets if n.quote_verified)
+    return InsightResult(
+        episode.id,
+        True,
+        count=len(nuggets),
+        detail=f"{len(nuggets)} nuggets ({verified} quote-verified)",
+    )
+
+
+@dataclass
 class RemapOutcome:
     episode_id: int
     show_slug: str

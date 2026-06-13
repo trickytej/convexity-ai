@@ -125,6 +125,28 @@ cp .env.example .env   # then add ASSEMBLYAI_API_KEY and ANTHROPIC_API_KEY
 .venv/bin/digest status                            # per-show counts by stage
 ```
 
+## Web app (Layer 1: transcript library)
+
+A FastAPI backend + Next.js frontend, both reading the same SQLite — browse shows
+and episodes and read formatted, speaker-attributed transcripts.
+
+```bash
+# Terminal 1 — API (http://127.0.0.1:8000, docs at /docs)
+.venv/bin/digest serve
+
+# Terminal 2 — frontend (http://localhost:3000)
+cd frontend
+npm install        # first time only
+npm run dev
+```
+
+Pages: `/` (library overview), `/episodes` (browse + filter by show), and
+`/episode/{id}` (the transcript — color-coded speakers, timestamps, in-page
+search, per-segment anchors that Layer 2's "in context" links will target).
+
+API endpoints (see `/docs`): `GET /api/shows`, `/api/episodes`,
+`/api/episodes/{id}`, `/api/episodes/{id}/transcript`.
+
 ## Configuration
 
 - `config/shows.yaml` — the curated feed registry (RSS URL, tier, host roster per
@@ -146,7 +168,10 @@ src/digest/
   acquire/            audio downloader + official-transcript fetchers
   transcribe/         AssemblyAI client, speaker mapping, correction, LLM wrapper
   store/              SQLite schema, models, repository
-  pipeline.py         orchestration (discover / acquire / transcribe)
-  cli.py              `digest` command
+  insights/           Step 3: nugget taxonomy + extraction
+  api/                FastAPI web API (routers, schemas) over the same DB
+  pipeline.py         orchestration (discover / acquire / transcribe / insights)
+  cli.py              `digest` command (incl. `serve`)
+frontend/      Next.js + Tailwind app (transcript library UI)
 data/          audio/, transcripts/, digest.db   (git-ignored)
 ```

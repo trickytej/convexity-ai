@@ -7,7 +7,7 @@ import sqlite3
 from datetime import datetime, timezone
 
 from ..registry import Show
-from .models import Episode, EpisodeStatus, Segment, Transcript
+from .models import Episode, EpisodeStatus, Nugget, Segment, Transcript
 
 
 def _now_iso() -> str:
@@ -304,7 +304,206 @@ def get_transcript_for_episode(
     ).fetchone()
 
 
+def get_segments(conn: sqlite3.Connection, transcript_id: int) -> list[Segment]:
+    rows = conn.execute(
+        "SELECT * FROM segments WHERE transcript_id = ? ORDER BY idx ASC",
+        (transcript_id,),
+    ).fetchall()
+    return [
+        Segment(
+            id=r["id"],
+            transcript_id=r["transcript_id"],
+            idx=r["idx"],
+            speaker_label=r["speaker_label"],
+            speaker_name=r["speaker_name"],
+            start_ms=r["start_ms"],
+            end_ms=r["end_ms"],
+            text=r["text"],
+        )
+        for r in rows
+    ]
+
+
+# --- read helpers for the web API ----------------------------------------
+
+
+def list_shows_with_counts(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute(
+        """
+        SELECT s.slug, s.name, s.network, s.homepage, s.hosts, s.tier, s.active,
+               COUNT(e.id) AS total,
+               SUM(CASE WHEN e.status = 'transcribed' THEN 1 ELSE 0 END) AS transcribed
+        FROM shows s
+        LEFT JOIN episodes e ON e.show_slug = s.slug
+        GROUP BY s.slug
+        ORDER BY s.active DESC, transcribed DESC, s.slug
+        """
+    ).fetchall()
+
+
+def _browse_where(
+    show_slug: str | None,
+    published_since: datetime | None,
+    with_transcript_only: bool,
+) -> tuple[str, list[object]]:
+    clauses: list[str] = []
+    params: list[object] = []
+    if show_slug:
+        clauses.append("e.show_slug = ?")
+        params.append(show_slug)
+    if published_since is not None:
+        clauses.append("e.published_at >= ?")
+        params.append(_dt_to_iso(published_since))
+    if with_transcript_only:
+        clauses.append("EXISTS (SELECT 1 FROM transcripts t WHERE t.episode_id = e.id)")
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    return where, params
+
+
+def browse_episodes(
+    conn: sqlite3.Connection,
+    show_slug: str | None = None,
+    published_since: datetime | None = None,
+    with_transcript_only: bool = True,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[sqlite3.Row]:
+    where, params = _browse_where(show_slug, published_since, with_transcript_only)
+    sql = f"""
+        SELECT e.*,
+            (SELECT source FROM transcripts t WHERE t.episode_id = e.id
+                ORDER BY id DESC LIMIT 1) AS transcript_source,
+            (SELECT provider FROM transcripts t WHERE t.episode_id = e.id
+                ORDER BY id DESC LIMIT 1) AS transcript_provider,
+            (SELECT word_count FROM transcripts t WHERE t.episode_id = e.id
+                ORDER BY id DESC LIMIT 1) AS word_count,
+            (SELECT COUNT(*) FROM nuggets n WHERE n.episode_id = e.id) AS nugget_count
+        FROM episodes e
+        {where}
+        ORDER BY e.published_at DESC, e.id DESC
+        LIMIT ? OFFSET ?
+    """
+    return conn.execute(sql, [*params, limit, offset]).fetchall()
+
+
+def count_episodes(
+    conn: sqlite3.Connection,
+    show_slug: str | None = None,
+    published_since: datetime | None = None,
+    with_transcript_only: bool = True,
+) -> int:
+    where, params = _browse_where(show_slug, published_since, with_transcript_only)
+    row = conn.execute(f"SELECT COUNT(*) AS n FROM episodes e {where}", params).fetchone()
+    return int(row["n"]) if row else 0
+
+
 # --- reporting -----------------------------------------------------------
+
+
+# --- nuggets -------------------------------------------------------------
+
+
+def _row_to_nugget(row: sqlite3.Row) -> Nugget:
+    return Nugget(
+        id=row["id"],
+        episode_id=row["episode_id"],
+        type=row["type"],
+        claim=row["claim"],
+        quote=row["quote"],
+        speaker_name=row["speaker_name"],
+        start_ms=row["start_ms"],
+        end_ms=row["end_ms"],
+        entities=json.loads(row["entities"]) if row["entities"] else None,
+        sectors=json.loads(row["sectors"]) if row["sectors"] else None,
+        scores=json.loads(row["scores"]) if row["scores"] else None,
+        signal_score=row["signal_score"],
+        quote_verified=bool(row["quote_verified"]),
+        triage=row["triage"],
+        model=row["model"],
+    )
+
+
+def has_nuggets(conn: sqlite3.Connection, episode_id: int) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM nuggets WHERE episode_id = ? LIMIT 1", (episode_id,)
+    ).fetchone()
+    return row is not None
+
+
+def replace_nuggets(
+    conn: sqlite3.Connection, episode_id: int, nuggets: list[Nugget]
+) -> int:
+    """Replace all nuggets for an episode (idempotent re-extraction)."""
+    now = _now_iso()
+    conn.execute("DELETE FROM nuggets WHERE episode_id = ?", (episode_id,))
+    conn.executemany(
+        """
+        INSERT INTO nuggets (episode_id, type, claim, quote, speaker_name, start_ms,
+                             end_ms, entities, sectors, scores, signal_score,
+                             quote_verified, triage, model, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                episode_id,
+                n.type,
+                n.claim,
+                n.quote,
+                n.speaker_name,
+                n.start_ms,
+                n.end_ms,
+                json.dumps(n.entities) if n.entities else None,
+                json.dumps(n.sectors) if n.sectors else None,
+                json.dumps(n.scores) if n.scores else None,
+                n.signal_score,
+                1 if n.quote_verified else 0,
+                n.triage,
+                n.model,
+                now,
+            )
+            for n in nuggets
+        ],
+    )
+    conn.commit()
+    return len(nuggets)
+
+
+def list_nuggets(
+    conn: sqlite3.Connection,
+    episode_id: int | None = None,
+    nugget_type: str | None = None,
+    triage: str | None = None,
+    min_signal: float | None = None,
+    limit: int | None = None,
+) -> list[Nugget]:
+    clauses: list[str] = []
+    params: list[object] = []
+    if episode_id is not None:
+        clauses.append("episode_id = ?")
+        params.append(episode_id)
+    if nugget_type:
+        clauses.append("type = ?")
+        params.append(nugget_type)
+    if triage:
+        clauses.append("triage = ?")
+        params.append(triage)
+    if min_signal is not None:
+        clauses.append("signal_score >= ?")
+        params.append(min_signal)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    sql = f"SELECT * FROM nuggets {where} ORDER BY signal_score DESC, id ASC"
+    if limit:
+        sql += " LIMIT ?"
+        params.append(limit)
+    return [_row_to_nugget(r) for r in conn.execute(sql, params).fetchall()]
+
+
+def nugget_type_counts(conn: sqlite3.Connection, episode_id: int) -> dict[str, int]:
+    rows = conn.execute(
+        "SELECT type, COUNT(*) n FROM nuggets WHERE episode_id = ? GROUP BY type",
+        (episode_id,),
+    ).fetchall()
+    return {r["type"]: r["n"] for r in rows}
 
 
 def status_matrix(conn: sqlite3.Connection) -> list[sqlite3.Row]:

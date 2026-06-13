@@ -22,6 +22,8 @@ dependencies = [
     "tenacity>=8.2",
     "assemblyai>=0.35",
     "anthropic>=0.40",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
 ]
 
 [project.scripts]

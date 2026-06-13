@@ -61,3 +61,38 @@ class Transcript:
     meta: dict | None = None
     id: int | None = None
     segments: list[Segment] = field(default_factory=list)
+
+
+class NuggetType(str, Enum):
+    THESIS = "thesis"
+    PREDICTION = "prediction"
+    DATA_POINT = "data_point"
+    COMPANY_MOVE = "company_move"
+    CONTRARIAN = "contrarian"
+    MENTAL_MODEL = "mental_model"
+    WATCH_ITEM = "watch_item"
+
+
+class Triage(str, Enum):
+    PENDING = "pending"
+    RELEVANT = "relevant"
+    NOT_RELEVANT = "not_relevant"
+
+
+@dataclass
+class Nugget:
+    episode_id: int
+    type: str
+    claim: str
+    quote: str | None = None
+    speaker_name: str | None = None
+    start_ms: int | None = None
+    end_ms: int | None = None
+    entities: dict | None = None      # {companies: [], people: [], tickers: []}
+    sectors: list[str] | None = None
+    scores: dict | None = None        # {specificity, novelty, conviction, ...}
+    signal_score: float = 0.0
+    quote_verified: bool = False
+    triage: str = "pending"
+    model: str | None = None
+    id: int | None = None
