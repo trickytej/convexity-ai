@@ -1,7 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import type { Newsletter, NewsletterNugget, StockMention } from "@/lib/api";
 import { getNewsletter } from "@/lib/api";
 
@@ -20,6 +35,61 @@ const STANCE: Record<string, { label: string; cls: string }> = {
   bearish:   { label: "Bearish",   cls: "bg-rose-600 text-white" },
   mentioned: { label: "Mentioned", cls: "bg-zinc-200 text-zinc-700" },
 };
+
+function GripHandle(props: React.HTMLAttributes<SVGSVGElement>) {
+  return (
+    <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" {...props}>
+      <circle cx="4" cy="3"  r="1.4" />
+      <circle cx="8" cy="3"  r="1.4" />
+      <circle cx="4" cy="8"  r="1.4" />
+      <circle cx="8" cy="8"  r="1.4" />
+      <circle cx="4" cy="13" r="1.4" />
+      <circle cx="8" cy="13" r="1.4" />
+    </svg>
+  );
+}
+
+function SortableNuggetItem({ n }: { n: NewsletterNugget }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: n.id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`group flex items-start gap-2 py-4 border-b border-zinc-100 last:border-0 ${
+        isDragging ? "opacity-50 z-50 relative" : ""
+      }`}
+    >
+      {/* Drag handle — invisible until hover, hidden in print */}
+      <button
+        {...attributes}
+        {...listeners}
+        tabIndex={-1}
+        aria-label="Drag to reorder"
+        className="mt-1 shrink-0 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity text-zinc-300 hover:text-zinc-500 touch-none print:hidden"
+      >
+        <GripHandle />
+      </button>
+
+      {/* Nugget content — identical to original NuggetItem */}
+      <div className="flex-1 space-y-2">
+        <p className="text-sm font-medium text-zinc-900">{n.claim}</p>
+        {n.quote && (
+          <blockquote className="border-l-2 border-indigo-300 pl-3 text-sm text-zinc-600 italic">
+            {n.quote}
+            {n.speaker_name && (
+              <span className="not-italic text-zinc-500"> — {n.speaker_name}</span>
+            )}
+          </blockquote>
+        )}
+        {n.curation_note && (
+          <p className="text-xs italic text-zinc-500">{n.curation_note}</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function StockRow({ s }: { s: StockMention }) {
   const stance = STANCE[s.stance] ?? STANCE.mentioned;
@@ -44,22 +114,39 @@ function StockRow({ s }: { s: StockMention }) {
   );
 }
 
-function NuggetItem({ n }: { n: NewsletterNugget }) {
+function SortableSection({
+  title,
+  items,
+  onReorder,
+}: {
+  title: string;
+  items: NewsletterNugget[];
+  onReorder: (next: NewsletterNugget[]) => void;
+}) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIdx = items.findIndex((n) => n.id === active.id);
+      const newIdx = items.findIndex((n) => n.id === over.id);
+      onReorder(arrayMove(items, oldIdx, newIdx));
+    }
+  }
+
   return (
-    <div className="space-y-2 py-4 border-b border-zinc-100 last:border-0 break-inside-avoid">
-      <p className="text-sm font-medium text-zinc-900">{n.claim}</p>
-      {n.quote && (
-        <blockquote className="border-l-2 border-indigo-300 pl-3 text-sm text-zinc-600 italic">
-          {n.quote}
-          {n.speaker_name && (
-            <span className="not-italic text-zinc-500"> — {n.speaker_name}</span>
-          )}
-        </blockquote>
-      )}
-      {n.curation_note && (
-        <p className="text-xs italic text-zinc-500">{n.curation_note}</p>
-      )}
-    </div>
+    <section className="p-6 space-y-2">
+      <h2 className="text-base font-semibold text-zinc-900">{title}</h2>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={items.map((n) => n.id)} strategy={verticalListSortingStrategy}>
+          {items.map((n) => (
+            <SortableNuggetItem key={n.id} n={n} />
+          ))}
+        </SortableContext>
+      </DndContext>
+    </section>
   );
 }
 
@@ -67,9 +154,18 @@ export default function NewsletterPage() {
   const [fromDate, setFromDate] = useState(weekAgoStr());
   const [toDate, setToDate] = useState(todayStr());
   const [newsletter, setNewsletter] = useState<Newsletter | null>(null);
+  const [lead, setLead] = useState<NewsletterNugget[]>([]);
+  const [g2k, setG2k] = useState<NewsletterNugget[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showMarkdown, setShowMarkdown] = useState(false);
+
+  useEffect(() => {
+    if (newsletter) {
+      setLead(newsletter.lead);
+      setG2k(newsletter.good_to_know);
+    }
+  }, [newsletter]);
 
   async function generate() {
     setLoading(true);
@@ -87,7 +183,6 @@ export default function NewsletterPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page title — hidden when printing (browser adds its own header) */}
       <div className="print:hidden">
         <h1 className="text-2xl font-semibold tracking-tight">Newsletter</h1>
         <p className="text-sm text-zinc-500 mt-1">
@@ -95,7 +190,6 @@ export default function NewsletterPage() {
         </p>
       </div>
 
-      {/* Date range picker — hidden when printing */}
       <div className="print:hidden flex flex-wrap items-end gap-3 rounded-xl border border-zinc-200 bg-white p-4">
         <div className="space-y-1">
           <label className="text-xs font-medium text-zinc-600">From</label>
@@ -133,7 +227,6 @@ export default function NewsletterPage() {
 
       {newsletter && (
         <div className="space-y-6">
-          {/* Stats row */}
           <div className="flex flex-wrap gap-3 text-sm text-zinc-600">
             <span className="font-semibold text-zinc-900">{fromDate} – {toDate}</span>
             <span>·</span>
@@ -141,10 +234,9 @@ export default function NewsletterPage() {
             <span>·</span>
             <span className="font-semibold text-emerald-600">{newsletter.kept_count} kept</span>
             <span>·</span>
-            <span>{newsletter.lead.length} relevant, {newsletter.good_to_know.length} good to know</span>
+            <span>{lead.length} relevant, {g2k.length} good to know</span>
           </div>
 
-          {/* Tab bar + Export PDF — hidden when printing */}
           <div className="print:hidden flex items-center gap-2">
             <button
               type="button"
@@ -175,7 +267,7 @@ export default function NewsletterPage() {
             </div>
           </div>
 
-          {/* Markdown view — always hidden when printing */}
+          {/* Markdown view */}
           <div className={`${showMarkdown ? "" : "hidden"} print:hidden relative`}>
             <button
               type="button"
@@ -192,29 +284,16 @@ export default function NewsletterPage() {
             />
           </div>
 
-          {/* Preview — always rendered so print captures it regardless of active tab */}
+          {/* Preview — always in DOM so Export PDF works from any tab */}
           <div className={showMarkdown ? "hidden print:block" : ""}>
             <div className="space-y-10">
-              {/* Nuggets card */}
               <div className="rounded-xl border border-zinc-200 bg-white divide-y divide-zinc-100">
-                {newsletter.lead.length > 0 && (
-                  <section className="p-6 space-y-2">
-                    <h2 className="text-base font-semibold text-zinc-900">Relevant Nuggets</h2>
-                    {newsletter.lead.map((n) => (
-                      <NuggetItem key={n.id} n={n} />
-                    ))}
-                  </section>
+                {lead.length > 0 && (
+                  <SortableSection title="Relevant Nuggets" items={lead} onReorder={setLead} />
                 )}
-
-                {newsletter.good_to_know.length > 0 && (
-                  <section className="p-6 space-y-2">
-                    <h2 className="text-base font-semibold text-zinc-900">Good to Know</h2>
-                    {newsletter.good_to_know.map((n) => (
-                      <NuggetItem key={n.id} n={n} />
-                    ))}
-                  </section>
+                {g2k.length > 0 && (
+                  <SortableSection title="Good to Know" items={g2k} onReorder={setG2k} />
                 )}
-
                 {newsletter.kept_count === 0 && (
                   <div className="p-10 text-center text-sm text-zinc-500">
                     No kept nuggets in this date range.{" "}
@@ -225,7 +304,6 @@ export default function NewsletterPage() {
                 )}
               </div>
 
-              {/* Stock Read-Through */}
               {newsletter.stock_readthrough.length > 0 && (
                 <div className="break-before-avoid">
                   <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">
