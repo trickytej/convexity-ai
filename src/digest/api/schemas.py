@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class ShowOut(BaseModel):
@@ -59,3 +59,49 @@ class TranscriptOut(BaseModel):
     word_count: int | None = None
     speakers: list[str] = []
     segments: list[SegmentOut]
+
+
+# --- Layer 2: weekly report (built from dataclasses via from_attributes) ---
+
+
+class ReportNuggetOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    episode_id: int
+    show_slug: str
+    episode_title: str
+    published_at: str | None = None
+    type: str
+    claim: str
+    quote: str | None = None
+    speaker_name: str | None = None
+    start_ms: int | None = None
+    signal_score: float
+    quote_verified: bool
+    sectors: list[str] = []
+    companies: list[str] = []
+    corroboration_shows: int = 1
+
+
+class ReportSectionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    sector: str
+    count: int
+    nuggets: list[ReportNuggetOut]
+
+
+class EntityBuzzOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    name: str
+    shows: list[str]
+    nugget_count: int
+
+
+class WeeklyReportOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    since: str | None = None
+    until: str
+    days: int
+    stats: dict
+    sections: list[ReportSectionOut]
+    top_entities: list[EntityBuzzOut]

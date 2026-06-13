@@ -498,6 +498,35 @@ def list_nuggets(
     return [_row_to_nugget(r) for r in conn.execute(sql, params).fetchall()]
 
 
+def nuggets_in_window(
+    conn: sqlite3.Connection,
+    since: datetime | None = None,
+    min_signal: float = 0.0,
+) -> list[sqlite3.Row]:
+    """Nuggets joined to their episode + show, for the weekly report."""
+    clauses = ["s.active = 1"]
+    params: list[object] = []
+    if since is not None:
+        clauses.append("e.published_at >= ?")
+        params.append(_dt_to_iso(since))
+    if min_signal:
+        clauses.append("n.signal_score >= ?")
+        params.append(min_signal)
+    where = "WHERE " + " AND ".join(clauses)
+    return conn.execute(
+        f"""
+        SELECT n.*, e.show_slug AS show_slug, e.title AS episode_title,
+               e.published_at AS episode_published_at
+        FROM nuggets n
+        JOIN episodes e ON e.id = n.episode_id
+        JOIN shows s ON s.slug = e.show_slug
+        {where}
+        ORDER BY n.signal_score DESC, n.id ASC
+        """,
+        params,
+    ).fetchall()
+
+
 def nugget_type_counts(conn: sqlite3.Connection, episode_id: int) -> dict[str, int]:
     rows = conn.execute(
         "SELECT type, COUNT(*) n FROM nuggets WHERE episode_id = ? GROUP BY type",

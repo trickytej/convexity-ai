@@ -20,6 +20,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/" className="hover:text-zinc-900">
                 Home
               </Link>
+              <Link href="/report" className="hover:text-zinc-900">
+                Weekly report
+              </Link>
               <Link href="/episodes" className="hover:text-zinc-900">
                 Episodes
               </Link>

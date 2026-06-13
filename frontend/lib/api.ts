@@ -80,3 +80,54 @@ export function getEpisodes(
 export function getTranscript(id: number | string): Promise<Transcript> {
   return getJSON<Transcript>(`/api/episodes/${id}/transcript`);
 }
+
+export interface ReportNugget {
+  id: number;
+  episode_id: number;
+  show_slug: string;
+  episode_title: string;
+  published_at?: string | null;
+  type: string;
+  claim: string;
+  quote?: string | null;
+  speaker_name?: string | null;
+  start_ms?: number | null;
+  signal_score: number;
+  quote_verified: boolean;
+  sectors: string[];
+  companies: string[];
+  corroboration_shows: number;
+}
+
+export interface ReportSection {
+  sector: string;
+  count: number;
+  nuggets: ReportNugget[];
+}
+
+export interface EntityBuzz {
+  name: string;
+  shows: string[];
+  nugget_count: number;
+}
+
+export interface WeeklyReport {
+  since?: string | null;
+  until: string;
+  days: number;
+  stats: {
+    nuggets: number;
+    episodes: number;
+    shows: number;
+    verified: number;
+    by_type: Record<string, number>;
+  };
+  sections: ReportSection[];
+  top_entities: EntityBuzz[];
+}
+
+export function getReport(days = 7, perSectionLimit?: number): Promise<WeeklyReport> {
+  const q = new URLSearchParams({ days: String(days) });
+  if (perSectionLimit) q.set("per_section_limit", String(perSectionLimit));
+  return getJSON<WeeklyReport>(`/api/report?${q.toString()}`);
+}
