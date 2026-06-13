@@ -415,6 +415,7 @@ def _row_to_nugget(row: sqlite3.Row) -> Nugget:
         end_ms=row["end_ms"],
         entities=json.loads(row["entities"]) if row["entities"] else None,
         sectors=json.loads(row["sectors"]) if row["sectors"] else None,
+        primary_sector=(row["primary_sector"] if "primary_sector" in row.keys() else None),
         scores=json.loads(row["scores"]) if row["scores"] else None,
         signal_score=row["signal_score"],
         quote_verified=bool(row["quote_verified"]),
@@ -452,9 +453,9 @@ def replace_nuggets(
     conn.executemany(
         """
         INSERT INTO nuggets (episode_id, type, claim, quote, speaker_name, start_ms,
-                             end_ms, entities, sectors, scores, signal_score,
-                             quote_verified, triage, model, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             end_ms, entities, sectors, primary_sector, scores,
+                             signal_score, quote_verified, triage, model, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -467,6 +468,7 @@ def replace_nuggets(
                 n.end_ms,
                 json.dumps(n.entities) if n.entities else None,
                 json.dumps(n.sectors) if n.sectors else None,
+                n.primary_sector,
                 json.dumps(n.scores) if n.scores else None,
                 n.signal_score,
                 1 if n.quote_verified else 0,
@@ -479,6 +481,21 @@ def replace_nuggets(
     )
     conn.commit()
     return len(nuggets)
+
+
+def nuggets_for_classification(
+    conn: sqlite3.Connection, only_missing: bool = True
+) -> list[sqlite3.Row]:
+    where = "WHERE primary_sector IS NULL" if only_missing else ""
+    return conn.execute(
+        f"SELECT id, claim, quote FROM nuggets {where} ORDER BY id ASC"
+    ).fetchall()
+
+
+def set_primary_sector(conn: sqlite3.Connection, nugget_id: int, sector: str) -> None:
+    conn.execute(
+        "UPDATE nuggets SET primary_sector = ? WHERE id = ?", (sector, nugget_id)
+    )
 
 
 def list_nuggets(
@@ -583,6 +600,27 @@ def get_latest_report(conn: sqlite3.Connection) -> sqlite3.Row | None:
 def get_report_by_week(conn: sqlite3.Connection, week_key: str) -> sqlite3.Row | None:
     return conn.execute(
         "SELECT * FROM reports WHERE week_key = ?", (week_key,)
+    ).fetchone()
+
+
+def upsert_episode_digest(
+    conn: sqlite3.Connection, episode_id: int, model: str, payload: dict
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO episode_digests (episode_id, model, payload, generated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(episode_id) DO UPDATE SET
+            model=excluded.model, payload=excluded.payload, generated_at=excluded.generated_at
+        """,
+        (episode_id, model, json.dumps(payload), _now_iso()),
+    )
+    conn.commit()
+
+
+def get_episode_digest(conn: sqlite3.Connection, episode_id: int) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT * FROM episode_digests WHERE episode_id = ?", (episode_id,)
     ).fetchone()
 
 

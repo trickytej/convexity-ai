@@ -7,6 +7,8 @@ high recall (capture everything notable; rank later), and no sector filtering
 
 from __future__ import annotations
 
+from ..sectors import VERTICALS
+
 VALID_TYPES = {
     "thesis",
     "prediction",
@@ -90,8 +92,17 @@ facts, or vague platitudes.
 Output STRICT JSON only: an array of nugget objects. No prose, no markdown fences.
 
 Example of one nugget object:
-{"type": "thesis", "claim": "Inference, not training, will dominate AI compute spend as usage scales.", "quote": "the real money is going to be in inference, training is almost a rounding error once these models are deployed at scale", "speaker": "Bill Gurley", "entities": {"companies": [], "people": [], "tickers": []}, "sectors": ["ai", "semiconductors"], "scores": {"specificity": 4, "novelty": 3, "conviction": 4, "materiality": 5, "evidence": 3, "authority": 5}}
+{"type": "thesis", "claim": "Inference, not training, will dominate AI compute spend as usage scales.", "quote": "the real money is going to be in inference, training is almost a rounding error once these models are deployed at scale", "speaker": "Bill Gurley", "entities": {"companies": [], "people": [], "tickers": []}, "sectors": ["ai", "semiconductors"], "primary_sector": "AI & Foundation Models", "scores": {"specificity": 4, "novelty": 3, "conviction": 4, "materiality": 5, "evidence": 3, "authority": 5}}
 """
+
+# Bake the controlled primary_sector into the extraction schema for new episodes.
+SYSTEM_PROMPT += (
+    '\n\nAlso include for EACH nugget a "primary_sector": the single best-fit vertical '
+    "from EXACTLY this list - " + ", ".join(VERTICALS) + ". "
+    'AI is the TOOL, not the subject: use "AI & Foundation Models" only when the AI '
+    "industry itself (models, labs, AGI, AI compute) is the subject; if AI is applied to "
+    'another domain, classify by that domain (e.g. AI for drug discovery -> "Biotech & Health").'
+)
 
 
 def build_user_prompt(show_name: str, episode_title: str, speakers: list[str], chunk: str) -> str:

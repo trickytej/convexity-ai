@@ -82,7 +82,8 @@ CREATE TABLE IF NOT EXISTS nuggets (
     start_ms      INTEGER,
     end_ms        INTEGER,
     entities      TEXT,                  -- json {companies, people, tickers}
-    sectors       TEXT,                  -- json array of tags
+    sectors       TEXT,                  -- json array of cross-cutting tags (incl. AI)
+    primary_sector TEXT,                 -- controlled vertical for grouping
     scores        TEXT,                  -- json {specificity, novelty, ...}
     signal_score  REAL NOT NULL DEFAULT 0,
     quote_verified INTEGER NOT NULL DEFAULT 0,
@@ -107,6 +108,14 @@ CREATE TABLE IF NOT EXISTS reports (
     generated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_reports_week ON reports(week_key);
+
+CREATE TABLE IF NOT EXISTS episode_digests (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    episode_id   INTEGER NOT NULL UNIQUE REFERENCES episodes(id) ON DELETE CASCADE,
+    model        TEXT,
+    payload      TEXT NOT NULL,          -- json: themes, stocks
+    generated_at TEXT NOT NULL
+);
 """
 
 
@@ -122,8 +131,17 @@ def connect(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Idempotent column additions for existing databases."""
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(nuggets)").fetchall()}
+    if "primary_sector" not in cols:
+        conn.execute("ALTER TABLE nuggets ADD COLUMN primary_sector TEXT")
+    conn.commit()
+
+
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    _migrate(conn)
     conn.commit()
 
 

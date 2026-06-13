@@ -89,7 +89,8 @@ class Nugget:
     start_ms: int | None = None
     end_ms: int | None = None
     entities: dict | None = None      # {companies: [], people: [], tickers: []}
-    sectors: list[str] | None = None
+    sectors: list[str] | None = None  # cross-cutting tags (incl. AI)
+    primary_sector: str | None = None # controlled vertical for grouping
     scores: dict | None = None        # {specificity, novelty, conviction, ...}
     signal_score: float = 0.0
     quote_verified: bool = False

@@ -190,6 +190,56 @@ export async function generateReport(days = 7): Promise<GeneratedReport> {
   return (await res.json()) as GeneratedReport;
 }
 
+// --- per-episode digest (TMTB-style) ---
+
+export interface DigestSource {
+  nugget_id: number;
+  episode_id: number;
+  start_ms?: number | null;
+  speaker_name?: string | null;
+}
+
+export interface DigestPoint {
+  text: string;
+  quote?: string | null;
+  sources: DigestSource[];
+}
+
+export interface DigestTheme {
+  headline: string;
+  takeaway: string;
+  points: DigestPoint[];
+}
+
+export interface DigestStock {
+  company: string;
+  stance: string;
+  summary: string;
+  sources: DigestSource[];
+}
+
+export interface EpisodeDigest {
+  episode_id: number;
+  title: string;
+  show_slug: string;
+  nugget_count: number;
+  generated_at?: string;
+  themes: DigestTheme[];
+  stocks: DigestStock[];
+}
+
+export function getEpisodeDigest(id: number | string): Promise<EpisodeDigest | null> {
+  return getJSON<EpisodeDigest | null>(`/api/episodes/${id}/digest`);
+}
+
+export async function generateEpisodeDigest(id: number | string): Promise<EpisodeDigest> {
+  const res = await fetch(`${API_BASE}/api/episodes/${id}/digest`, { method: "POST" });
+  if (!res.ok) {
+    throw new Error(`digest generation failed: ${res.status}`);
+  }
+  return (await res.json()) as EpisodeDigest;
+}
+
 export async function setTriage(id: number, triage: TriageValue): Promise<void> {
   const res = await fetch(`${API_BASE}/api/nuggets/${id}/triage`, {
     method: "POST",

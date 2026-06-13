@@ -546,6 +546,37 @@ def status() -> None:
 
 
 @app.command()
+def reclassify(
+    all_nuggets: bool = typer.Option(
+        False, "--all", help="Reclassify every nugget, not just unclassified ones."
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Assign each nugget a controlled primary_sector (AI is treated as cross-cutting,
+    not a catch-all bucket). Cheap batched LLM pass; safe to re-run.
+    """
+    _setup_logging(verbose)
+    settings = get_settings()
+    if not settings.anthropic_api_key:
+        console.print("[red]ANTHROPIC_API_KEY is not set.[/red]")
+        raise typer.Exit(code=1)
+    from .sectors import reclassify as run_reclassify
+
+    with get_conn(settings.resolved_db_path) as conn:
+        init_db(conn)
+        with console.status("[bold]Classifying sectors...[/bold]") as widget:
+            n = run_reclassify(
+                conn,
+                settings,
+                only_missing=not all_nuggets,
+                progress=lambda done, total: widget.update(
+                    f"[bold]Classifying {done}/{total}...[/bold]"
+                ),
+            )
+    console.print(f"Set primary_sector on [bold green]{n}[/bold green] nugget(s).")
+
+
+@app.command()
 def serve(
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(8000, "--port", help="API port (avoid 8080)."),

@@ -87,6 +87,7 @@ class ReportNugget:
     quote_verified: bool
     triage: str
     sectors: list[str]
+    primary_sector: str | None
     companies: list[str]
     corroboration_shows: int = 1
 
@@ -175,6 +176,7 @@ def build_weekly_report(
                 quote_verified=bool(r["quote_verified"]),
                 triage=r["triage"],
                 sectors=sectors,
+                primary_sector=(r["primary_sector"] if "primary_sector" in r.keys() else None),
                 companies=companies,
             )
         )
@@ -197,10 +199,10 @@ def build_weekly_report(
         triage_counts[n.triage] += 1
     visible = [n for n in nuggets if triage is None or n.triage == triage]
 
-    # Group by primary (first) sector.
+    # Group by the controlled primary_sector; fall back to the legacy first-tag.
     by_sector: dict[str, list[ReportNugget]] = defaultdict(list)
     for n in visible:
-        primary = n.sectors[0] if n.sectors else "Other"
+        primary = n.primary_sector or (n.sectors[0] if n.sectors else "Other")
         by_sector[primary].append(n)
 
     sections: list[ReportSection] = []

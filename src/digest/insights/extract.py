@@ -99,6 +99,9 @@ def _parse_item(item: dict, chunk: list[dict], episode_id: int, model: str) -> N
     scores = item.get("scores") if isinstance(item.get("scores"), dict) else {}
     entities = item.get("entities") if isinstance(item.get("entities"), dict) else None
     sectors = item.get("sectors") if isinstance(item.get("sectors"), list) else None
+    primary_sector = item.get("primary_sector")
+    if primary_sector not in taxonomy.VERTICALS:
+        primary_sector = None
 
     return Nugget(
         episode_id=episode_id,
@@ -110,6 +113,7 @@ def _parse_item(item: dict, chunk: list[dict], episode_id: int, model: str) -> N
         end_ms=end_ms,
         entities=entities,
         sectors=sectors,
+        primary_sector=primary_sector,
         scores=scores or None,
         signal_score=taxonomy.composite_score(scores),
         quote_verified=exact,

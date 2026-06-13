@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { Transcript } from "@/lib/api";
-import { getTranscript } from "@/lib/api";
+import type { EpisodeDigest, Transcript } from "@/lib/api";
+import { getEpisodeDigest, getTranscript } from "@/lib/api";
 import { fmtDate, fmtDuration } from "@/lib/format";
 import { Badge, SourceBadge } from "@/components/ui";
-import TranscriptView from "@/components/TranscriptView";
+import { EpisodeTabs } from "@/components/EpisodeTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +18,13 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
     data = null;
   }
   if (!data) notFound();
+
+  let digest: EpisodeDigest | null = null;
+  try {
+    digest = await getEpisodeDigest(id);
+  } catch {
+    digest = null;
+  }
 
   const e = data.episode;
 
@@ -62,7 +69,12 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
       </header>
 
       <div className="rounded-xl border border-zinc-200 bg-white p-5 sm:p-7">
-        <TranscriptView segments={data.segments} speakers={data.speakers} />
+        <EpisodeTabs
+          episodeId={e.id}
+          segments={data.segments}
+          speakers={data.speakers}
+          digest={digest}
+        />
       </div>
     </div>
   );
