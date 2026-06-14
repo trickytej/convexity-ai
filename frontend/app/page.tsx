@@ -15,9 +15,9 @@ export default async function Home() {
   const totalTranscribed = active.reduce((n, s) => n + s.transcribed, 0);
 
   return (
-    <div className="space-y-8">
+    <div className={`${garamond.className} space-y-8`}>
       <header className="space-y-1">
-        <h1 className="text-xl font-semibold tracking-tight">Podcasts</h1>
+        <h1 className="font-sans text-xl font-semibold tracking-tight">Podcasts</h1>
         <p className="text-zinc-500">
           {active.length} shows · {totalTranscribed} episodes transcribed
         </p>
@@ -27,7 +27,7 @@ export default async function Home() {
         {active.map((s) => (
           <div
             key={s.slug}
-            className={`${garamond.className} group flex flex-col rounded-xl p-5 transition-all`}
+            className="group flex flex-col rounded-xl p-5 transition-all"
             style={{ backgroundColor: "rgb(45, 45, 90)" }}
           >
             <Link
