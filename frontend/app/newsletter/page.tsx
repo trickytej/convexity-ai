@@ -20,6 +20,8 @@ import { CSS } from "@dnd-kit/utilities";
 import type { Newsletter, NewsletterNugget, Show, StockMention } from "@/lib/api";
 import { getNewsletter, getShows, sendNewsletter } from "@/lib/api";
 
+const STANCE_ORDER = ["bullish", "owned", "mentioned", "bearish"] as const;
+
 const STANCE: Record<string, { label: string; cls: string }> = {
   owned:     { label: "Owned",     cls: "bg-emerald-600 text-white" },
   bullish:   { label: "Bullish",   cls: "bg-blue-600 text-white" },
@@ -42,41 +44,42 @@ function GripHandle(props: React.HTMLAttributes<SVGSVGElement>) {
 
 function PencilIcon() {
   return (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" className="shrink-0">
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
       <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/>
     </svg>
   );
 }
 
+// ── Nugget item ──────────────────────────────────────────────────────────────
+
 interface NuggetItemProps {
   n: NewsletterNugget;
-  onEdit: (field: "claim" | "curation_note", value: string) => void;
+  onEdit: (value: string) => void;
+  onDelete: () => void;
 }
 
-function SortableNuggetItem({ n, onEdit }: NuggetItemProps) {
+function SortableNuggetItem({ n, onEdit, onDelete }: NuggetItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: n.id });
 
-  const [editingField, setEditingField] = useState<"claim" | "curation_note" | null>(null);
+  const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
 
-  function startEdit(field: "claim" | "curation_note") {
-    setDraft(field === "claim" ? n.claim : (n.curation_note ?? ""));
-    setEditingField(field);
-    setTimeout(() => textareaRef.current?.focus(), 0);
+  function startEdit() {
+    setDraft(n.claim);
+    setEditing(true);
+    setTimeout(() => taRef.current?.focus(), 0);
   }
 
-  function commitEdit() {
-    if (editingField) {
-      onEdit(editingField, draft.trim());
-      setEditingField(null);
-    }
+  function commit() {
+    onEdit(draft.trim() || n.claim);
+    setEditing(false);
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Escape") { setEditingField(null); return; }
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commitEdit(); }
+    if (e.key === "Escape") { setEditing(false); return; }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commit(); }
   }
 
   return (
@@ -100,12 +103,12 @@ function SortableNuggetItem({ n, onEdit }: NuggetItemProps) {
 
       <div className="flex-1 space-y-2 min-w-0">
         {/* Claim — inline editable */}
-        {editingField === "claim" ? (
+        {editing ? (
           <textarea
-            ref={textareaRef}
+            ref={taRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            onBlur={commitEdit}
+            onBlur={commit}
             onKeyDown={handleKeyDown}
             rows={2}
             className="w-full resize-none rounded border border-indigo-300 bg-indigo-50 px-2 py-1 text-sm font-medium text-zinc-900 focus:outline-none focus:ring-1 focus:ring-indigo-400"
@@ -115,8 +118,8 @@ function SortableNuggetItem({ n, onEdit }: NuggetItemProps) {
             <p className="text-sm font-medium text-zinc-900 flex-1">{n.claim}</p>
             <button
               type="button"
-              onClick={() => startEdit("claim")}
-              title="Edit insight"
+              onClick={startEdit}
+              title="Edit"
               className="print:hidden shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-indigo-600"
             >
               <PencilIcon />
@@ -134,70 +137,135 @@ function SortableNuggetItem({ n, onEdit }: NuggetItemProps) {
           </blockquote>
         )}
 
-        {/* Curation note — inline editable */}
-        {editingField === "curation_note" ? (
-          <textarea
-            ref={editingField === "curation_note" ? textareaRef : undefined}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commitEdit}
-            onKeyDown={handleKeyDown}
-            rows={2}
-            placeholder="Add a note…"
-            className="w-full resize-none rounded border border-indigo-300 bg-indigo-50 px-2 py-1 text-xs italic text-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-          />
-        ) : (
-          <div className="flex items-start gap-1.5">
-            {n.curation_note
-              ? <p className="text-xs italic text-zinc-500 flex-1">{n.curation_note}</p>
-              : <p className="text-xs italic text-zinc-400 flex-1 opacity-0 group-hover:opacity-100 transition-opacity">Add a note…</p>
-            }
-            <button
-              type="button"
-              onClick={() => startEdit("curation_note")}
-              title="Edit note"
-              className="print:hidden shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-indigo-600"
-            >
-              <PencilIcon />
-            </button>
-          </div>
+        {/* Curation note — display only, no editing */}
+        {n.curation_note && (
+          <p className="text-xs italic text-zinc-500">{n.curation_note}</p>
         )}
       </div>
+
+      {/* Delete */}
+      <button
+        type="button"
+        onClick={onDelete}
+        title="Remove nugget"
+        className="print:hidden shrink-0 mt-1 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-300 hover:text-rose-500"
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+        </svg>
+      </button>
     </div>
   );
 }
 
-function StockRow({ s }: { s: StockMention }) {
+// ── Stock row ────────────────────────────────────────────────────────────────
+
+interface StockRowProps {
+  s: StockMention;
+  onEdit: (field: "summary" | "stance", value: string) => void;
+  onDelete: () => void;
+}
+
+function EditableStockRow({ s, onEdit, onDelete }: StockRowProps) {
   const stance = STANCE[s.stance] ?? STANCE.mentioned;
-  const href = s.source_episode_id != null
-    ? `/episode/${s.source_episode_id}${s.source_start_ms != null ? `#t-${s.source_start_ms}` : ""}`
-    : null;
+  const [editingSummary, setEditingSummary] = useState(false);
+  const [draft, setDraft] = useState("");
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  function startEditSummary() {
+    setDraft(s.summary);
+    setEditingSummary(true);
+    setTimeout(() => taRef.current?.focus(), 0);
+  }
+
+  function commitSummary() {
+    onEdit("summary", draft.trim());
+    setEditingSummary(false);
+  }
+
+  function cycleStance() {
+    const idx = STANCE_ORDER.indexOf(s.stance as typeof STANCE_ORDER[number]);
+    const next = STANCE_ORDER[(idx + 1) % STANCE_ORDER.length];
+    onEdit("stance", next);
+  }
+
   return (
-    <div className="flex flex-wrap items-start gap-x-3 gap-y-1 px-4 py-3 break-inside-avoid">
+    <div className="group flex flex-wrap items-start gap-x-3 gap-y-1 px-4 py-3 break-inside-avoid">
       <span className="w-36 shrink-0 font-medium text-zinc-900">{s.company}</span>
-      <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${stance.cls}`}>
+
+      {/* Stance — click to cycle */}
+      <button
+        type="button"
+        onClick={cycleStance}
+        title="Click to change stance"
+        className={`print:hidden shrink-0 rounded-full px-2 py-0.5 text-xs font-medium transition-opacity hover:opacity-80 ${stance.cls}`}
+      >
+        {stance.label}
+      </button>
+      {/* Print-only static badge */}
+      <span className={`hidden print:inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${stance.cls}`}>
         {stance.label}
       </span>
-      <span className="flex-1 text-sm text-zinc-600">
-        {s.summary}
-        {href && (
-          <Link href={href} className="ml-1 text-indigo-500 hover:text-indigo-700 print:hidden">↗</Link>
+
+      {/* Summary — inline editable */}
+      <div className="flex flex-1 items-start gap-1.5 min-w-0">
+        {editingSummary ? (
+          <textarea
+            ref={taRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commitSummary}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") { setEditingSummary(false); return; }
+              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commitSummary(); }
+            }}
+            rows={2}
+            className="flex-1 resize-none rounded border border-indigo-300 bg-indigo-50 px-2 py-0.5 text-sm text-zinc-700 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+          />
+        ) : (
+          <>
+            <span className="flex-1 text-sm text-zinc-600">{s.summary}</span>
+            <button
+              type="button"
+              onClick={startEditSummary}
+              title="Edit summary"
+              className="print:hidden shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-indigo-600"
+            >
+              <PencilIcon />
+            </button>
+          </>
         )}
-      </span>
+      </div>
+
+      {/* Delete */}
+      <button
+        type="button"
+        onClick={onDelete}
+        title="Remove"
+        className="print:hidden shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-300 hover:text-rose-500"
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+        </svg>
+      </button>
     </div>
   );
 }
+
+// ── Sortable section ─────────────────────────────────────────────────────────
 
 function SortableSection({
   title,
   items,
   onReorder,
   onEdit,
+  onDelete,
 }: {
   title: string;
   items: NewsletterNugget[];
   onReorder: (next: NewsletterNugget[]) => void;
-  onEdit: (id: number, field: "claim" | "curation_note", value: string) => void;
+  onEdit: (id: number, value: string) => void;
+  onDelete: (id: number) => void;
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -221,7 +289,8 @@ function SortableSection({
             <SortableNuggetItem
               key={n.id}
               n={n}
-              onEdit={(field, value) => onEdit(n.id, field, value)}
+              onEdit={(val) => onEdit(n.id, val)}
+              onDelete={() => onDelete(n.id)}
             />
           ))}
         </SortableContext>
@@ -230,14 +299,7 @@ function SortableSection({
   );
 }
 
-function nuggetPatch(
-  list: NewsletterNugget[],
-  id: number,
-  field: "claim" | "curation_note",
-  value: string,
-): NewsletterNugget[] {
-  return list.map((n) => (n.id === id ? { ...n, [field]: value } : n));
-}
+// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function NewsletterPage() {
   const [shows, setShows] = useState<Show[]>([]);
@@ -245,11 +307,12 @@ export default function NewsletterPage() {
   const [newsletter, setNewsletter] = useState<Newsletter | null>(null);
   const [lead, setLead] = useState<NewsletterNugget[]>([]);
   const [g2k, setG2k] = useState<NewsletterNugget[]>([]);
+  const [stocks, setStocks] = useState<StockMention[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showMarkdown, setShowMarkdown] = useState(false);
 
-  // Email panel state
+  // Email panel
   const [showEmail, setShowEmail] = useState(false);
   const [recipients, setRecipients] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
@@ -264,6 +327,7 @@ export default function NewsletterPage() {
     if (newsletter) {
       setLead(newsletter.lead);
       setG2k(newsletter.good_to_know);
+      setStocks(newsletter.stock_readthrough);
     }
   }, [newsletter]);
 
@@ -274,8 +338,7 @@ export default function NewsletterPage() {
     setShowMarkdown(false);
     setShowEmail(false);
     try {
-      const result = await getNewsletter({ show });
-      setNewsletter(result);
+      setNewsletter(await getNewsletter({ show }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to generate newsletter");
     } finally {
@@ -288,11 +351,31 @@ export default function NewsletterPage() {
     generate(slug);
   }
 
-  function handleEdit(id: number, field: "claim" | "curation_note", value: string) {
-    setLead((prev) => nuggetPatch(prev, id, field, value));
-    setG2k((prev) => nuggetPatch(prev, id, field, value));
+  // Nugget handlers
+  function editNugget(id: number, value: string) {
+    const patch = (list: NewsletterNugget[]) =>
+      list.map((n) => (n.id === id ? { ...n, claim: value } : n));
+    setLead(patch);
+    setG2k(patch);
   }
 
+  function deleteNugget(id: number) {
+    setLead((prev) => prev.filter((n) => n.id !== id));
+    setG2k((prev) => prev.filter((n) => n.id !== id));
+  }
+
+  // Stock handlers
+  function editStock(company: string, field: "summary" | "stance", value: string) {
+    setStocks((prev) =>
+      prev.map((s) => (s.company === company ? { ...s, [field]: value } : s))
+    );
+  }
+
+  function deleteStock(company: string) {
+    setStocks((prev) => prev.filter((s) => s.company !== company));
+  }
+
+  // Email
   function openEmail() {
     const name = shows.find((s) => s.slug === selectedShow)?.name ?? selectedShow ?? "";
     setEmailSubject(`${name} — Podcast Insights`);
@@ -318,9 +401,7 @@ export default function NewsletterPage() {
         good_to_know: g2k.map(({ claim, quote, speaker_name, curation_note, show_slug }) => ({
           claim, quote, speaker_name, curation_note, show_slug,
         })),
-        stocks: (newsletter?.stock_readthrough ?? []).map(({ company, stance, summary }) => ({
-          company, stance, summary,
-        })),
+        stocks: stocks.map(({ company, stance, summary }) => ({ company, stance, summary })),
       });
       setSendStatus("sent");
       setSendMessage(`Sent to ${result.sent} recipient${result.sent !== 1 ? "s" : ""}.`);
@@ -370,7 +451,7 @@ export default function NewsletterPage() {
 
       {newsletter && !loading && (
         <div className="space-y-6">
-          {/* Stats row */}
+          {/* Stats */}
           <div className="flex flex-wrap gap-3 text-sm text-zinc-600">
             <span className="font-semibold text-zinc-900">{selectedShowName}</span>
             <span>·</span>
@@ -428,13 +509,7 @@ export default function NewsletterPage() {
             <div className="print:hidden rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-zinc-900">Send to readers</p>
-                <button
-                  type="button"
-                  onClick={() => setShowEmail(false)}
-                  className="text-zinc-400 hover:text-zinc-600 text-lg leading-none"
-                >
-                  ×
-                </button>
+                <button type="button" onClick={() => setShowEmail(false)} className="text-zinc-400 hover:text-zinc-600 text-lg leading-none">×</button>
               </div>
               <input
                 type="text"
@@ -467,7 +542,7 @@ export default function NewsletterPage() {
               </div>
               {sendStatus !== "sent" && (
                 <p className="text-xs text-zinc-500">
-                  Requires <code className="font-mono">DIGEST_SMTP_HOST</code> and friends in <code className="font-mono">.env</code>
+                  Requires <code className="font-mono">DIGEST_SMTP_*</code> vars in <code className="font-mono">.env</code>
                 </p>
               )}
             </div>
@@ -499,7 +574,8 @@ export default function NewsletterPage() {
                     title="Relevant Nuggets"
                     items={lead}
                     onReorder={setLead}
-                    onEdit={handleEdit}
+                    onEdit={editNugget}
+                    onDelete={deleteNugget}
                   />
                 )}
                 {g2k.length > 0 && (
@@ -507,7 +583,8 @@ export default function NewsletterPage() {
                     title="Good to Know"
                     items={g2k}
                     onReorder={setG2k}
-                    onEdit={handleEdit}
+                    onEdit={editNugget}
+                    onDelete={deleteNugget}
                   />
                 )}
                 {newsletter.kept_count === 0 && (
@@ -520,14 +597,19 @@ export default function NewsletterPage() {
                 )}
               </div>
 
-              {newsletter.stock_readthrough.length > 0 && (
+              {stocks.length > 0 && (
                 <div className="break-before-avoid">
                   <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">
                     Stock read-through
                   </h3>
                   <div className="divide-y divide-zinc-100 overflow-hidden rounded-xl border border-zinc-200 bg-white">
-                    {newsletter.stock_readthrough.map((s) => (
-                      <StockRow key={s.company} s={s} />
+                    {stocks.map((s) => (
+                      <EditableStockRow
+                        key={s.company}
+                        s={s}
+                        onEdit={(field, value) => editStock(s.company, field, value)}
+                        onDelete={() => deleteStock(s.company)}
+                      />
                     ))}
                   </div>
                 </div>
