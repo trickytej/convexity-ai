@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getShows } from "@/lib/api";
 import { TierBadge } from "@/components/ui";
+import ImportPodcast from "@/components/ImportPodcast";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,8 @@ export default async function Home() {
           {active.length} shows · {totalTranscribed} episodes transcribed
         </p>
       </header>
+
+      <ImportPodcast />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {active.map((s) => (

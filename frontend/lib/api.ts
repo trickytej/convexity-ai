@@ -356,6 +356,26 @@ export interface Newsletter {
   markdown: string;
 }
 
+export interface ImportResult {
+  slug: string;
+  name: string;
+  episode_count: number;
+  created: boolean;
+}
+
+export async function importPodcast(url: string): Promise<ImportResult> {
+  const res = await fetch(`${API_BASE}/api/shows/import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `Import failed: ${res.status}`);
+  }
+  return (await res.json()) as ImportResult;
+}
+
 export function getNewsletter(params: {
   from?: string;
   to?: string;

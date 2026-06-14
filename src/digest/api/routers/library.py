@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
+import feedparser
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
+from ...feeds import parse_feed
+from ...net import fetch_bytes
+from ...registry import Show
 from ...store import repo
 from ...store.models import Episode
 from ..deps import get_db
@@ -147,3 +153,81 @@ def get_transcript(
             for s in segments
         ],
     )
+
+
+# --- podcast URL import --------------------------------------------------
+
+
+def _slugify(text: str) -> str:
+    return re.sub(r"-{2,}", "-", re.sub(r"[^a-z0-9]+", "-", text.lower())).strip("-")[:48]
+
+
+class ImportPodcastIn(BaseModel):
+    url: str
+
+
+class ImportPodcastOut(BaseModel):
+    slug: str
+    name: str
+    episode_count: int
+    created: bool
+
+
+@router.post("/shows/import", response_model=ImportPodcastOut)
+def import_podcast(body: ImportPodcastIn, db: sqlite3.Connection = Depends(get_db)) -> ImportPodcastOut:
+    """Accept an RSS feed URL, register the show, and import its episode list."""
+    url = body.url.strip()
+    if not url:
+        raise HTTPException(status_code=422, detail="url is required")
+
+    try:
+        raw = fetch_bytes(url, timeout=20)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not fetch URL: {exc}") from exc
+
+    parsed = feedparser.parse(raw)
+    feed_title = (parsed.feed.get("title") or "").strip()
+    if not feed_title and not parsed.entries:
+        raise HTTPException(status_code=400, detail="URL does not appear to be a valid RSS/Atom feed")
+
+    name = feed_title or url
+    base_slug = _slugify(name) or "imported"
+
+    # ensure slug is unique
+    existing_slugs = {r["slug"] for r in db.execute("SELECT slug FROM shows").fetchall()}
+    slug = base_slug
+    suffix = 2
+    while slug in existing_slugs:
+        slug = f"{base_slug}-{suffix}"
+        suffix += 1
+
+    show_existed = slug in existing_slugs  # always False after loop, but track via DB
+    # Check if this RSS URL is already registered
+    existing_by_url = db.execute("SELECT slug FROM shows WHERE rss_url = ?", (url,)).fetchone()
+    created = existing_by_url is None
+    if existing_by_url:
+        slug = existing_by_url["slug"]
+        name = db.execute("SELECT name FROM shows WHERE slug = ?", (slug,)).fetchone()["name"]
+
+    if created:
+        show = Show(
+            slug=slug,
+            name=name,
+            rss_url=url,
+            tier="B",
+            transcript_source="asr",
+            active=True,
+        )
+        repo.sync_shows(db, [show])
+
+    # Upsert episodes from the feed
+    show_obj = Show(slug=slug, name=name, rss_url=url, tier="B", transcript_source="asr")
+    try:
+        episodes = parse_feed(show_obj, raw)
+    except Exception:
+        episodes = []
+
+    for ep in episodes:
+        repo.upsert_episode(db, ep)
+
+    return ImportPodcastOut(slug=slug, name=name, episode_count=len(episodes), created=created)
