@@ -1,15 +1,11 @@
 import Link from "next/link";
-import localFont from "next/font/local";
+import { EB_Garamond } from "next/font/google";
 import { getShows } from "@/lib/api";
 import ImportPodcast from "@/components/ImportPodcast";
 import ImportEpisode from "@/components/ImportEpisode";
 import PollButton from "@/components/PollButton";
 
-const brownStd = localFont({
-  src: "../public/fonts/BrownStd-Light.woff2",
-  weight: "300",
-  display: "swap",
-});
+const garamond = EB_Garamond({ subsets: ["latin"], weight: ["400", "500", "600"] });
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +15,7 @@ export default async function Home() {
   const totalTranscribed = active.reduce((n, s) => n + s.transcribed, 0);
 
   return (
-    <div className={`${brownStd.className} space-y-8`}>
+    <div className={`${garamond.className} space-y-8`}>
       <header className="space-y-1">
         <h1 className="font-sans text-xl font-semibold tracking-tight">Podcasts</h1>
         <p className="text-zinc-500">
