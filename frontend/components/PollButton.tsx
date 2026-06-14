@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { pollShow } from "@/lib/api";
 
-export default function PollButton({ slug }: { slug: string }) {
+export default function PollButton({ slug, dark = false }: { slug: string; dark?: boolean }) {
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [message, setMessage] = useState("");
 
@@ -32,6 +32,8 @@ export default function PollButton({ slug }: { slug: string }) {
           ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
           : status === "error"
           ? "bg-rose-50 text-rose-600 ring-rose-200"
+          : dark
+          ? "bg-white/10 text-white/80 ring-white/20 hover:bg-white/20 hover:text-white"
           : "bg-zinc-50 text-zinc-500 ring-zinc-200 hover:bg-zinc-100 hover:text-zinc-700"
       }`}
     >

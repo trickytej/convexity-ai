@@ -1,8 +1,11 @@
 import Link from "next/link";
+import { EB_Garamond } from "next/font/google";
 import { getShows } from "@/lib/api";
 import ImportPodcast from "@/components/ImportPodcast";
 import ImportEpisode from "@/components/ImportEpisode";
 import PollButton from "@/components/PollButton";
+
+const garamond = EB_Garamond({ subsets: ["latin"], weight: ["400", "500", "600"] });
 
 export const dynamic = "force-dynamic";
 
@@ -22,19 +25,27 @@ export default async function Home() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {active.map((s) => (
-          <div key={s.slug} className="group flex flex-col rounded-xl border border-zinc-200 bg-white p-5 transition-all hover:border-indigo-300 hover:shadow-md">
-            <Link href={`/episodes?show=${s.slug}`} className="flex-1">
-              <h2 className="text-base font-semibold leading-snug tracking-tight group-hover:text-indigo-700 transition-colors">
+          <div
+            key={s.slug}
+            className={`${garamond.className} group flex flex-col rounded-xl p-5 transition-all`}
+            style={{ backgroundColor: "rgb(45, 45, 90)" }}
+          >
+            <Link
+              href={`/episodes?show=${s.slug}`}
+              className="flex-1"
+              style={{ color: "white" }}
+            >
+              <h2 className="text-lg font-semibold leading-snug tracking-tight transition-opacity group-hover:opacity-80">
                 {s.name}
               </h2>
             </Link>
 
             <div className="mt-4 flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-sm">
-                <span className="font-semibold text-zinc-900">{s.transcribed}</span>
-                <span className="text-zinc-400">transcribed</span>
+              <div className="flex items-center gap-1.5 text-sm" style={{ color: "rgba(255,255,255,0.65)" }}>
+                <span className="font-semibold" style={{ color: "white" }}>{s.transcribed}</span>
+                <span>transcribed</span>
               </div>
-              <PollButton slug={s.slug} />
+              <PollButton slug={s.slug} dark />
             </div>
           </div>
         ))}
