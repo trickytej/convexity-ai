@@ -131,18 +131,19 @@ def _build_stock_readthrough_from_nuggets(rows: list[sqlite3.Row]) -> list[Stock
 
 
 def _render_markdown(
-    from_date: str,
-    to_date: str,
+    from_date: str | None,
+    to_date: str | None,
     lead: list[NewsletterNuggetOut],
     good_to_know: list[NewsletterNuggetOut],
     stocks: list[StockMentionOut],
     episode_count: int,
     kept_count: int,
 ) -> str:
-    from_label = from_date[:10]
-    to_label = to_date[:10]
+    from_label = from_date[:10] if from_date else "all time"
+    to_label = to_date[:10] if to_date else ""
+    date_range = f"{from_label} – {to_label}" if to_label else from_label
     lines: list[str] = [
-        f"# Research Digest · {from_label} – {to_label}",
+        f"# Research Digest · {date_range}",
         "",
         f"_{episode_count} episode{'s' if episode_count != 1 else ''} · "
         f"{kept_count} kept insight{'s' if kept_count != 1 else ''}_",

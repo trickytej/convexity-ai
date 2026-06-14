@@ -346,8 +346,8 @@ export interface StockMention {
 }
 
 export interface Newsletter {
-  from_date: string;
-  to_date: string;
+  from_date: string | null;
+  to_date: string | null;
   episode_count: number;
   kept_count: number;
   lead: NewsletterNugget[];

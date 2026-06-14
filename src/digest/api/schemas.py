@@ -188,8 +188,8 @@ class StockMentionOut(BaseModel):
 
 
 class NewsletterOut(BaseModel):
-    from_date: str
-    to_date: str
+    from_date: str | None
+    to_date: str | None
     episode_count: int
     kept_count: int
     lead: list[NewsletterNuggetOut]         # curator_rank == 1
