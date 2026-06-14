@@ -80,6 +80,24 @@ export function getEpisodes(
   return getJSON<EpisodeList>(`/api/episodes?${q.toString()}`);
 }
 
+export async function deleteEpisode(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/episodes/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+}
+
+export async function renameEpisode(id: number, title: string): Promise<Episode> {
+  const res = await fetch(`${API_BASE}/api/episodes/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `Rename failed: ${res.status}`);
+  }
+  return (await res.json()) as Episode;
+}
+
 export async function deleteShow(slug: string): Promise<void> {
   const res = await fetch(`${API_BASE}/api/shows/${slug}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`Delete failed: ${res.status}`);

@@ -4,6 +4,7 @@ import { fmtDate, fmtDuration } from "@/lib/format";
 import { Badge, SourceBadge } from "@/components/ui";
 import TranscribeButton from "@/components/TranscribeButton";
 import PollButton from "@/components/PollButton";
+import ImportedEpisodeList from "@/components/ImportedEpisodeList";
 
 export const dynamic = "force-dynamic";
 
@@ -70,51 +71,55 @@ export default async function EpisodesPage({
       </div>
 
       {/* Episode list */}
-      <div className="divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 bg-white">
-        {list.episodes.length === 0 && (
-          <p className="px-4 py-8 text-center text-zinc-500">
-            {show
-              ? "No episodes discovered yet. Use the Refresh button above to check for new episodes."
-              : "No transcribed episodes yet."}
-          </p>
-        )}
-        {list.episodes.map((e) => {
-          const isTranscribed = e.status === "transcribed" || (!e.status && !!e.source);
-          const statusInfo = STATUS_BADGE[e.status ?? (e.source ? "transcribed" : "discovered")];
+      {show === "imported" ? (
+        <ImportedEpisodeList initialEpisodes={list.episodes} />
+      ) : (
+        <div className="divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 bg-white">
+          {list.episodes.length === 0 && (
+            <p className="px-4 py-8 text-center text-zinc-500">
+              {show
+                ? "No episodes discovered yet. Use the Refresh button above to check for new episodes."
+                : "No transcribed episodes yet."}
+            </p>
+          )}
+          {list.episodes.map((e) => {
+            const isTranscribed = e.status === "transcribed" || (!e.status && !!e.source);
+            const statusInfo = STATUS_BADGE[e.status ?? (e.source ? "transcribed" : "discovered")];
 
-          return (
-            <div key={e.id} className="flex items-center justify-between gap-4 px-4 py-3">
-              <div className="min-w-0 flex-1">
-                {isTranscribed ? (
-                  <Link href={`/episode/${e.id}`} className="hover:text-indigo-700 transition-colors">
-                    <p className="truncate font-medium">{e.title}</p>
-                  </Link>
-                ) : (
-                  <p className="truncate font-medium text-zinc-500">{e.title}</p>
-                )}
-                <p className="mt-0.5 text-sm text-zinc-500">
-                  {e.show_slug} · {fmtDate(e.published_at)} · {fmtDuration(e.duration_seconds)}
-                  {e.guests && e.guests.length > 0 ? ` · ${e.guests.join(", ")}` : ""}
-                </p>
+            return (
+              <div key={e.id} className="flex items-center justify-between gap-4 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  {isTranscribed ? (
+                    <Link href={`/episode/${e.id}`} className="hover:text-indigo-700 transition-colors">
+                      <p className="truncate font-medium">{e.title}</p>
+                    </Link>
+                  ) : (
+                    <p className="truncate font-medium text-zinc-500">{e.title}</p>
+                  )}
+                  <p className="mt-0.5 text-sm text-zinc-500">
+                    {e.show_slug} · {fmtDate(e.published_at)} · {fmtDuration(e.duration_seconds)}
+                    {e.guests && e.guests.length > 0 ? ` · ${e.guests.join(", ")}` : ""}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {isTranscribed && e.nugget_count > 0 && (
+                    <Badge tone="indigo">{e.nugget_count} nuggets</Badge>
+                  )}
+                  {isTranscribed && <SourceBadge source={e.source} />}
+                  {!isTranscribed && statusInfo && (
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${statusInfo.cls}`}>
+                      {statusInfo.label}
+                    </span>
+                  )}
+                  {!isTranscribed && (
+                    <TranscribeButton episodeId={e.id} initialStatus={e.status} />
+                  )}
+                </div>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {isTranscribed && e.nugget_count > 0 && (
-                  <Badge tone="indigo">{e.nugget_count} nuggets</Badge>
-                )}
-                {isTranscribed && <SourceBadge source={e.source} />}
-                {!isTranscribed && statusInfo && (
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${statusInfo.cls}`}>
-                    {statusInfo.label}
-                  </span>
-                )}
-                {!isTranscribed && (
-                  <TranscribeButton episodeId={e.id} initialStatus={e.status} />
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

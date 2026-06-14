@@ -122,6 +122,44 @@ def get_episode(
     return _episode_out(ep, transcript, nugget_count)
 
 
+@router.delete("/episodes/{episode_id}")
+def delete_episode(episode_id: int, db: sqlite3.Connection = Depends(get_db)) -> dict:
+    if db.execute("SELECT id FROM episodes WHERE id = ?", (episode_id,)).fetchone() is None:
+        raise HTTPException(status_code=404, detail="episode not found")
+    db.execute("DELETE FROM nugget_curation WHERE nugget_id IN (SELECT id FROM nuggets WHERE episode_id = ?)", (episode_id,))
+    db.execute("DELETE FROM nuggets WHERE episode_id = ?", (episode_id,))
+    db.execute("DELETE FROM episode_digests WHERE episode_id = ?", (episode_id,))
+    db.execute("DELETE FROM transcripts WHERE episode_id = ?", (episode_id,))
+    db.execute("DELETE FROM episodes WHERE id = ?", (episode_id,))
+    db.commit()
+    return {"deleted": episode_id}
+
+
+class EpisodePatch(BaseModel):
+    title: str
+
+
+@router.patch("/episodes/{episode_id}", response_model=EpisodeOut)
+def patch_episode(
+    episode_id: int, body: EpisodePatch, db: sqlite3.Connection = Depends(get_db)
+) -> EpisodeOut:
+    ep = repo.get_episode(db, episode_id)
+    if ep is None:
+        raise HTTPException(status_code=404, detail="episode not found")
+    title = body.title.strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="title cannot be empty")
+    db.execute(
+        "UPDATE episodes SET title = ?, updated_at = ? WHERE id = ?",
+        (title, __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(), episode_id),
+    )
+    db.commit()
+    ep = repo.get_episode(db, episode_id)
+    transcript = repo.get_transcript_for_episode(db, episode_id)
+    nugget_count = sum(repo.nugget_type_counts(db, episode_id).values())
+    return _episode_out(ep, transcript, nugget_count)
+
+
 @router.get("/episodes/{episode_id}/transcript", response_model=TranscriptOut)
 def get_transcript(
     episode_id: int, db: sqlite3.Connection = Depends(get_db)
@@ -239,7 +277,19 @@ def _run_process(episode_id: int) -> None:
         )
         glossary = _load_glossary(settings)
 
-        if ep.status not in (EpisodeStatus.ACQUIRED, EpisodeStatus.TRANSCRIBED):
+        # Re-acquire if not yet acquired, or if ACQUIRED but audio file is missing/invalid
+        def _audio_is_valid(path: str | None) -> bool:
+            if not path:
+                return False
+            from pathlib import Path as _Path
+            from ...acquire.audio import _is_valid_audio_file
+            p = _Path(path)
+            return p.exists() and _is_valid_audio_file(p)
+
+        needs_acquire = ep.status not in (EpisodeStatus.ACQUIRED, EpisodeStatus.TRANSCRIBED) or (
+            ep.status == EpisodeStatus.ACQUIRED and not _audio_is_valid(ep.audio_path)
+        )
+        if needs_acquire:
             acquire_episode(conn, ep, show, settings)
             ep = repo.get_episode(conn, episode_id)
             if ep is None:
