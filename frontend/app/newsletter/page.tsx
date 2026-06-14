@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { Questrial } from "next/font/google";
+
+const questrial = Questrial({ subsets: ["latin"], weight: "400" });
 import {
   DndContext,
   closestCenter,
@@ -414,7 +417,7 @@ export default function NewsletterPage() {
   const selectedShowName = shows.find((s) => s.slug === selectedShow)?.name ?? selectedShow;
 
   return (
-    <div className="space-y-6">
+    <div className={`${questrial.className} space-y-6`}>
       <div className="print:hidden">
         <h1 className="text-2xl font-semibold tracking-tight">Newsletter</h1>
         <p className="text-sm text-zinc-500 mt-1">

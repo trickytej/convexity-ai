@@ -1,11 +1,8 @@
 import Link from "next/link";
-import { Questrial } from "next/font/google";
 import { getShows } from "@/lib/api";
 import ImportPodcast from "@/components/ImportPodcast";
 import ImportEpisode from "@/components/ImportEpisode";
 import DeleteShowButton from "@/components/DeleteShowButton";
-
-const questrial = Questrial({ subsets: ["latin"], weight: "400" });
 
 export const dynamic = "force-dynamic";
 
@@ -15,9 +12,9 @@ export default async function Home() {
   const totalTranscribed = active.reduce((n, s) => n + s.transcribed, 0);
 
   return (
-    <div className={`${questrial.className} space-y-8`}>
+    <div className="space-y-8">
       <header className="space-y-1">
-        <h1 className="font-sans text-xl font-semibold tracking-tight">Podcasts</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Podcasts</h1>
         <p className="text-zinc-500">
           {active.length} shows · {totalTranscribed} episodes transcribed
         </p>
@@ -27,22 +24,18 @@ export default async function Home() {
         {active.map((s) => (
           <div
             key={s.slug}
-            className="group flex flex-col rounded-xl p-5 transition-all"
-            style={{ backgroundColor: "rgb(45, 45, 90)" }}
+            className="group flex flex-col rounded-xl border border-zinc-200 bg-white pl-5 pr-5 pt-5 pb-4 transition-all hover:border-zinc-300 hover:shadow-sm"
+            style={{ borderLeft: "4px solid rgb(45, 45, 90)" }}
           >
-            <Link
-              href={`/episodes?show=${s.slug}`}
-              className="flex-1"
-              style={{ color: "white" }}
-            >
-              <h2 className="text-lg leading-snug tracking-tight transition-opacity group-hover:opacity-80">
+            <Link href={`/episodes?show=${s.slug}`} className="flex-1">
+              <h2 className="text-base font-semibold leading-snug tracking-tight text-zinc-900 transition-colors group-hover:text-indigo-700">
                 {s.name}
               </h2>
             </Link>
 
-            <div className="mt-4 flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-sm" style={{ color: "rgba(255,255,255,0.65)" }}>
-                <span style={{ color: "white" }}>{s.transcribed}</span>
+            <div className="mt-3 flex items-center justify-between">
+              <div className="flex items-center gap-1 text-sm text-zinc-400">
+                <span className="font-medium text-zinc-600">{s.transcribed}</span>
                 <span>transcribed</span>
               </div>
               <DeleteShowButton slug={s.slug} />

@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-zinc-50 text-zinc-900 antialiased">
+      <body className="min-h-screen bg-white text-zinc-900 antialiased">
         <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/80 backdrop-blur print:hidden">
           <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
             <Link href="/" className="text-2xl font-semibold tracking-tight">
