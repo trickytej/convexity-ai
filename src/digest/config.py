@@ -63,6 +63,13 @@ class Settings(BaseSettings):
     user_agent: str = "research-digest/0.1 (+https://localhost)"
     http_timeout_seconds: float = 60.0
 
+    # Email / SMTP (optional — set to enable Send Email in newsletter UI)
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_pass: str = ""
+    smtp_from: str = ""
+
     def _anchor(self, p: Path) -> Path:
         return p if p.is_absolute() else (find_project_root() / p)
 

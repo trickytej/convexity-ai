@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   DndContext,
@@ -18,7 +18,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Newsletter, NewsletterNugget, Show, StockMention } from "@/lib/api";
-import { getNewsletter, getShows } from "@/lib/api";
+import { getNewsletter, getShows, sendNewsletter } from "@/lib/api";
 
 const STANCE: Record<string, { label: string; cls: string }> = {
   owned:     { label: "Owned",     cls: "bg-emerald-600 text-white" },
@@ -40,9 +40,44 @@ function GripHandle(props: React.HTMLAttributes<SVGSVGElement>) {
   );
 }
 
-function SortableNuggetItem({ n }: { n: NewsletterNugget }) {
+function PencilIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" className="shrink-0">
+      <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/>
+    </svg>
+  );
+}
+
+interface NuggetItemProps {
+  n: NewsletterNugget;
+  onEdit: (field: "claim" | "curation_note", value: string) => void;
+}
+
+function SortableNuggetItem({ n, onEdit }: NuggetItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: n.id });
+
+  const [editingField, setEditingField] = useState<"claim" | "curation_note" | null>(null);
+  const [draft, setDraft] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  function startEdit(field: "claim" | "curation_note") {
+    setDraft(field === "claim" ? n.claim : (n.curation_note ?? ""));
+    setEditingField(field);
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  }
+
+  function commitEdit() {
+    if (editingField) {
+      onEdit(editingField, draft.trim());
+      setEditingField(null);
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Escape") { setEditingField(null); return; }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commitEdit(); }
+  }
 
   return (
     <div
@@ -52,6 +87,7 @@ function SortableNuggetItem({ n }: { n: NewsletterNugget }) {
         isDragging ? "opacity-50 z-50 relative" : ""
       }`}
     >
+      {/* Drag handle */}
       <button
         {...attributes}
         {...listeners}
@@ -61,8 +97,34 @@ function SortableNuggetItem({ n }: { n: NewsletterNugget }) {
       >
         <GripHandle />
       </button>
-      <div className="flex-1 space-y-2">
-        <p className="text-sm font-medium text-zinc-900">{n.claim}</p>
+
+      <div className="flex-1 space-y-2 min-w-0">
+        {/* Claim — inline editable */}
+        {editingField === "claim" ? (
+          <textarea
+            ref={textareaRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={handleKeyDown}
+            rows={2}
+            className="w-full resize-none rounded border border-indigo-300 bg-indigo-50 px-2 py-1 text-sm font-medium text-zinc-900 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+          />
+        ) : (
+          <div className="flex items-start gap-1.5">
+            <p className="text-sm font-medium text-zinc-900 flex-1">{n.claim}</p>
+            <button
+              type="button"
+              onClick={() => startEdit("claim")}
+              title="Edit insight"
+              className="print:hidden shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-indigo-600"
+            >
+              <PencilIcon />
+            </button>
+          </div>
+        )}
+
+        {/* Quote */}
         {n.quote && (
           <blockquote className="border-l-2 border-indigo-300 pl-3 text-sm text-zinc-600 italic">
             {n.quote}
@@ -71,8 +133,34 @@ function SortableNuggetItem({ n }: { n: NewsletterNugget }) {
             )}
           </blockquote>
         )}
-        {n.curation_note && (
-          <p className="text-xs italic text-zinc-500">{n.curation_note}</p>
+
+        {/* Curation note — inline editable */}
+        {editingField === "curation_note" ? (
+          <textarea
+            ref={editingField === "curation_note" ? textareaRef : undefined}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={handleKeyDown}
+            rows={2}
+            placeholder="Add a note…"
+            className="w-full resize-none rounded border border-indigo-300 bg-indigo-50 px-2 py-1 text-xs italic text-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+          />
+        ) : (
+          <div className="flex items-start gap-1.5">
+            {n.curation_note
+              ? <p className="text-xs italic text-zinc-500 flex-1">{n.curation_note}</p>
+              : <p className="text-xs italic text-zinc-400 flex-1 opacity-0 group-hover:opacity-100 transition-opacity">Add a note…</p>
+            }
+            <button
+              type="button"
+              onClick={() => startEdit("curation_note")}
+              title="Edit note"
+              className="print:hidden shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-indigo-600"
+            >
+              <PencilIcon />
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -93,9 +181,7 @@ function StockRow({ s }: { s: StockMention }) {
       <span className="flex-1 text-sm text-zinc-600">
         {s.summary}
         {href && (
-          <Link href={href} className="ml-1 text-indigo-500 hover:text-indigo-700 print:hidden">
-            ↗
-          </Link>
+          <Link href={href} className="ml-1 text-indigo-500 hover:text-indigo-700 print:hidden">↗</Link>
         )}
       </span>
     </div>
@@ -106,10 +192,12 @@ function SortableSection({
   title,
   items,
   onReorder,
+  onEdit,
 }: {
   title: string;
   items: NewsletterNugget[];
   onReorder: (next: NewsletterNugget[]) => void;
+  onEdit: (id: number, field: "claim" | "curation_note", value: string) => void;
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -130,12 +218,25 @@ function SortableSection({
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={items.map((n) => n.id)} strategy={verticalListSortingStrategy}>
           {items.map((n) => (
-            <SortableNuggetItem key={n.id} n={n} />
+            <SortableNuggetItem
+              key={n.id}
+              n={n}
+              onEdit={(field, value) => onEdit(n.id, field, value)}
+            />
           ))}
         </SortableContext>
       </DndContext>
     </section>
   );
+}
+
+function nuggetPatch(
+  list: NewsletterNugget[],
+  id: number,
+  field: "claim" | "curation_note",
+  value: string,
+): NewsletterNugget[] {
+  return list.map((n) => (n.id === id ? { ...n, [field]: value } : n));
 }
 
 export default function NewsletterPage() {
@@ -147,6 +248,13 @@ export default function NewsletterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showMarkdown, setShowMarkdown] = useState(false);
+
+  // Email panel state
+  const [showEmail, setShowEmail] = useState(false);
+  const [recipients, setRecipients] = useState("");
+  const [emailSubject, setEmailSubject] = useState("");
+  const [sendStatus, setSendStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [sendMessage, setSendMessage] = useState("");
 
   useEffect(() => {
     getShows().then((all) => setShows(all.filter((s) => s.active && s.transcribed > 0)));
@@ -164,6 +272,7 @@ export default function NewsletterPage() {
     setError(null);
     setNewsletter(null);
     setShowMarkdown(false);
+    setShowEmail(false);
     try {
       const result = await getNewsletter({ show });
       setNewsletter(result);
@@ -177,6 +286,48 @@ export default function NewsletterPage() {
   function selectShow(slug: string) {
     setSelectedShow(slug);
     generate(slug);
+  }
+
+  function handleEdit(id: number, field: "claim" | "curation_note", value: string) {
+    setLead((prev) => nuggetPatch(prev, id, field, value));
+    setG2k((prev) => nuggetPatch(prev, id, field, value));
+  }
+
+  function openEmail() {
+    const name = shows.find((s) => s.slug === selectedShow)?.name ?? selectedShow ?? "";
+    setEmailSubject(`${name} — Podcast Insights`);
+    setSendStatus("idle");
+    setSendMessage("");
+    setShowEmail(true);
+  }
+
+  async function handleSend() {
+    const toList = recipients.split(/[,\n]+/).map((s) => s.trim()).filter(Boolean);
+    if (!toList.length) { setSendMessage("Enter at least one recipient."); return; }
+    setSendStatus("sending");
+    setSendMessage("");
+    const showName = shows.find((s) => s.slug === selectedShow)?.name ?? selectedShow ?? "";
+    try {
+      const result = await sendNewsletter({
+        to: toList,
+        subject: emailSubject,
+        show_name: showName,
+        lead: lead.map(({ claim, quote, speaker_name, curation_note, show_slug }) => ({
+          claim, quote, speaker_name, curation_note, show_slug,
+        })),
+        good_to_know: g2k.map(({ claim, quote, speaker_name, curation_note, show_slug }) => ({
+          claim, quote, speaker_name, curation_note, show_slug,
+        })),
+        stocks: (newsletter?.stock_readthrough ?? []).map(({ company, stance, summary }) => ({
+          company, stance, summary,
+        })),
+      });
+      setSendStatus("sent");
+      setSendMessage(`Sent to ${result.sent} recipient${result.sent !== 1 ? "s" : ""}.`);
+    } catch (e) {
+      setSendStatus("error");
+      setSendMessage(e instanceof Error ? e.message : "Send failed");
+    }
   }
 
   const selectedShowName = shows.find((s) => s.slug === selectedShow)?.name ?? selectedShow;
@@ -209,9 +360,7 @@ export default function NewsletterPage() {
         ))}
       </div>
 
-      {loading && (
-        <p className="text-sm text-zinc-500 animate-pulse">Building newsletter…</p>
-      )}
+      {loading && <p className="text-sm text-zinc-500 animate-pulse">Building newsletter…</p>}
 
       {error && (
         <p className="print:hidden text-sm text-rose-600 rounded-lg border border-rose-200 bg-rose-50 p-3">
@@ -232,7 +381,7 @@ export default function NewsletterPage() {
             <span>{lead.length} relevant, {g2k.length} good to know</span>
           </div>
 
-          {/* Tab bar + Export PDF */}
+          {/* Tab bar + actions */}
           <div className="print:hidden flex items-center gap-2">
             <button
               type="button"
@@ -252,7 +401,18 @@ export default function NewsletterPage() {
             >
               Markdown
             </button>
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                onClick={openEmail}
+                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                  showEmail
+                    ? "border-indigo-300 bg-indigo-600 text-white"
+                    : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50"
+                }`}
+              >
+                Send Email
+              </button>
               <button
                 type="button"
                 onClick={() => window.print()}
@@ -262,6 +422,56 @@ export default function NewsletterPage() {
               </button>
             </div>
           </div>
+
+          {/* Email panel */}
+          {showEmail && (
+            <div className="print:hidden rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-zinc-900">Send to readers</p>
+                <button
+                  type="button"
+                  onClick={() => setShowEmail(false)}
+                  className="text-zinc-400 hover:text-zinc-600 text-lg leading-none"
+                >
+                  ×
+                </button>
+              </div>
+              <input
+                type="text"
+                value={emailSubject}
+                onChange={(e) => setEmailSubject(e.target.value)}
+                placeholder="Subject"
+                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+              />
+              <textarea
+                value={recipients}
+                onChange={(e) => setRecipients(e.target.value)}
+                placeholder="Recipients (comma-separated emails)"
+                rows={2}
+                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-mono focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+              />
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleSend}
+                  disabled={sendStatus === "sending"}
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                >
+                  {sendStatus === "sending" ? "Sending…" : "Send"}
+                </button>
+                {sendMessage && (
+                  <p className={`text-sm ${sendStatus === "error" ? "text-rose-600" : "text-emerald-600"}`}>
+                    {sendMessage}
+                  </p>
+                )}
+              </div>
+              {sendStatus !== "sent" && (
+                <p className="text-xs text-zinc-500">
+                  Requires <code className="font-mono">DIGEST_SMTP_HOST</code> and friends in <code className="font-mono">.env</code>
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Markdown view */}
           <div className={`${showMarkdown ? "" : "hidden"} print:hidden relative`}>
@@ -285,10 +495,20 @@ export default function NewsletterPage() {
             <div className="space-y-10">
               <div className="rounded-xl border border-zinc-200 bg-white divide-y divide-zinc-100">
                 {lead.length > 0 && (
-                  <SortableSection title="Relevant Nuggets" items={lead} onReorder={setLead} />
+                  <SortableSection
+                    title="Relevant Nuggets"
+                    items={lead}
+                    onReorder={setLead}
+                    onEdit={handleEdit}
+                  />
                 )}
                 {g2k.length > 0 && (
-                  <SortableSection title="Good to Know" items={g2k} onReorder={setG2k} />
+                  <SortableSection
+                    title="Good to Know"
+                    items={g2k}
+                    onReorder={setG2k}
+                    onEdit={handleEdit}
+                  />
                 )}
                 {newsletter.kept_count === 0 && (
                   <div className="p-10 text-center text-sm text-zinc-500">

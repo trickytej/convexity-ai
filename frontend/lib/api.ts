@@ -396,6 +396,28 @@ export async function importPodcast(url: string): Promise<ImportResult> {
   return (await res.json()) as ImportResult;
 }
 
+export interface NewsletterSendPayload {
+  to: string[];
+  subject: string;
+  show_name: string;
+  lead: Array<{ claim: string; quote: string | null; speaker_name: string | null; curation_note: string | null; show_slug: string }>;
+  good_to_know: Array<{ claim: string; quote: string | null; speaker_name: string | null; curation_note: string | null; show_slug: string }>;
+  stocks: Array<{ company: string; stance: string; summary: string }>;
+}
+
+export async function sendNewsletter(payload: NewsletterSendPayload): Promise<{ sent: number }> {
+  const res = await fetch(`${API_BASE}/api/newsletter/send`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `Send failed: ${res.status}`);
+  }
+  return (await res.json()) as { sent: number };
+}
+
 export function getNewsletter(params: {
   from?: string;
   to?: string;
