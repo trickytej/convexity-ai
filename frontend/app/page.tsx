@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { getShows } from "@/lib/api";
-import { TierBadge } from "@/components/ui";
 import ImportPodcast from "@/components/ImportPodcast";
 import ImportEpisode from "@/components/ImportEpisode";
 
@@ -14,7 +13,7 @@ export default async function Home() {
   return (
     <div className="space-y-8">
       <header className="space-y-1">
-        <h1 className="text-3xl font-semibold tracking-tight">Podcasts</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Podcasts</h1>
         <p className="text-zinc-500">
           {active.length} shows · {totalTranscribed} episodes transcribed
         </p>
@@ -27,13 +26,9 @@ export default async function Home() {
             href={`/episodes?show=${s.slug}`}
             className="group flex flex-col rounded-xl border border-zinc-200 bg-white p-5 transition-all hover:border-indigo-300 hover:shadow-md"
           >
-            {/* Top: name + tier */}
-            <div className="flex items-start justify-between gap-3">
-              <h2 className="text-base font-semibold leading-snug tracking-tight group-hover:text-indigo-700 transition-colors">
-                {s.name}
-              </h2>
-              <TierBadge tier={s.tier} />
-            </div>
+            <h2 className="text-base font-semibold leading-snug tracking-tight group-hover:text-indigo-700 transition-colors">
+              {s.name}
+            </h2>
 
             {/* Hosts */}
             {s.hosts.length > 0 && (
