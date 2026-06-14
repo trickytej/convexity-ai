@@ -25,6 +25,8 @@ export interface Episode {
   provider?: string | null;
   word_count?: number | null;
   nugget_count: number;
+  status?: string | null;
+  error?: string | null;
 }
 
 export interface EpisodeList {
@@ -67,14 +69,37 @@ export function getShows(): Promise<Show[]> {
 }
 
 export function getEpisodes(
-  params: { show?: string; days?: number; limit?: number; offset?: number } = {},
+  params: { show?: string; days?: number; all?: boolean; limit?: number; offset?: number } = {},
 ): Promise<EpisodeList> {
   const q = new URLSearchParams();
   if (params.show) q.set("show", params.show);
   if (params.days) q.set("days", String(params.days));
+  if (params.all) q.set("all", "true");
   q.set("limit", String(params.limit ?? 50));
   q.set("offset", String(params.offset ?? 0));
   return getJSON<EpisodeList>(`/api/episodes?${q.toString()}`);
+}
+
+export async function pollShow(slug: string): Promise<{ new: number; seen: number; total: number }> {
+  const res = await fetch(`${API_BASE}/api/shows/${slug}/poll`, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `Poll failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function processEpisode(id: number): Promise<{ status: string }> {
+  const res = await fetch(`${API_BASE}/api/episodes/${id}/process`, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `Process failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getEpisodeStatus(id: number): Promise<{ status: string; error?: string; nugget_count: number }> {
+  return getJSON(`/api/episodes/${id}/status`);
 }
 
 export function getTranscript(id: number | string): Promise<Transcript> {

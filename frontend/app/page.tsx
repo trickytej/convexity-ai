@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getShows } from "@/lib/api";
 import ImportPodcast from "@/components/ImportPodcast";
 import ImportEpisode from "@/components/ImportEpisode";
+import PollButton from "@/components/PollButton";
 
 export const dynamic = "force-dynamic";
 
@@ -21,22 +22,21 @@ export default async function Home() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {active.map((s) => (
-          <Link
-            key={s.slug}
-            href={`/episodes?show=${s.slug}`}
-            className="group flex flex-col rounded-xl border border-zinc-200 bg-white p-5 transition-all hover:border-indigo-300 hover:shadow-md"
-          >
-            <h2 className="text-base font-semibold leading-snug tracking-tight group-hover:text-indigo-700 transition-colors">
-              {s.name}
-            </h2>
+          <div key={s.slug} className="group flex flex-col rounded-xl border border-zinc-200 bg-white p-5 transition-all hover:border-indigo-300 hover:shadow-md">
+            <Link href={`/episodes?show=${s.slug}`} className="flex-1">
+              <h2 className="text-base font-semibold leading-snug tracking-tight group-hover:text-indigo-700 transition-colors">
+                {s.name}
+              </h2>
+            </Link>
 
-            <div className="flex-1" />
-
-            <div className="mt-4 flex items-center gap-1.5 text-sm">
-              <span className="font-semibold text-zinc-900">{s.transcribed}</span>
-              <span className="text-zinc-400">transcribed</span>
+            <div className="mt-4 flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-sm">
+                <span className="font-semibold text-zinc-900">{s.transcribed}</span>
+                <span className="text-zinc-400">transcribed</span>
+              </div>
+              <PollButton slug={s.slug} />
             </div>
-          </Link>
+          </div>
         ))}
       </div>
 

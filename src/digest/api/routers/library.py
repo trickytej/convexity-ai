@@ -8,14 +8,16 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 
 import feedparser
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from ...config import get_settings
 from ...feeds import parse_feed
 from ...net import fetch_bytes
-from ...registry import Show
+from ...pipeline import acquire_episode, discover_show, generate_insights, transcribe_episode
+from ...registry import Glossary, Registry, Show
 from ...store import repo
-from ...store.models import Episode
+from ...store.models import Episode, EpisodeStatus
 from ..deps import get_db
 from ..schemas import EpisodeListOut, EpisodeOut, SegmentOut, ShowOut, TranscriptOut
 
@@ -33,6 +35,7 @@ def _json_list(raw: str | None) -> list[str]:
 
 
 def _episode_out_from_row(row: sqlite3.Row) -> EpisodeOut:
+    keys = row.keys()
     return EpisodeOut(
         id=row["id"],
         show_slug=row["show_slug"],
@@ -42,10 +45,12 @@ def _episode_out_from_row(row: sqlite3.Row) -> EpisodeOut:
         guests=_json_list(row["guests"]) or None,
         episode_url=row["episode_url"],
         audio_url=row["audio_url"],
-        source=row["transcript_source"],
-        provider=row["transcript_provider"],
-        word_count=row["word_count"],
-        nugget_count=row["nugget_count"] or 0,
+        source=row["transcript_source"] if "transcript_source" in keys else None,
+        provider=row["transcript_provider"] if "transcript_provider" in keys else None,
+        word_count=row["word_count"] if "word_count" in keys else None,
+        nugget_count=row["nugget_count"] or 0 if "nugget_count" in keys else 0,
+        status=row["status"] if "status" in keys else None,
+        error=row["error"] if "error" in keys else None,
     )
 
 
@@ -88,13 +93,15 @@ def list_shows(db: sqlite3.Connection = Depends(get_db)) -> list[ShowOut]:
 def list_episodes(
     show: str | None = None,
     days: int | None = None,
+    all: bool = Query(False, alias="all"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: sqlite3.Connection = Depends(get_db),
 ) -> EpisodeListOut:
     since = datetime.now(timezone.utc) - timedelta(days=days) if days else None
-    rows = repo.browse_episodes(db, show_slug=show, published_since=since, limit=limit, offset=offset)
-    total = repo.count_episodes(db, show_slug=show, published_since=since)
+    transcript_only = not all
+    rows = repo.browse_episodes(db, show_slug=show, published_since=since, with_transcript_only=transcript_only, limit=limit, offset=offset)
+    total = repo.count_episodes(db, show_slug=show, published_since=since, with_transcript_only=transcript_only)
     return EpisodeListOut(
         total=total,
         limit=limit,
@@ -153,6 +160,113 @@ def get_transcript(
             for s in segments
         ],
     )
+
+
+# --- poll / process / status --------------------------------------------
+
+
+def _show_from_db(db: sqlite3.Connection, slug: str) -> Show:
+    row = db.execute("SELECT * FROM shows WHERE slug = ?", (slug,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"show '{slug}' not found")
+    return Show(
+        slug=row["slug"],
+        name=row["name"],
+        rss_url=row["rss_url"] or "",
+        tier=row["tier"],
+        transcript_source=row["transcript_source"] or "asr",
+        hosts=_json_list(row["hosts"]),
+        active=bool(row["active"]),
+    )
+
+
+@router.post("/shows/{slug}/poll")
+def poll_show(slug: str, db: sqlite3.Connection = Depends(get_db)) -> dict:
+    """Discover new episodes for a show from its RSS feed."""
+    show = _show_from_db(db, slug)
+    if not show.rss_url:
+        raise HTTPException(status_code=400, detail="This show has no RSS URL configured")
+    result = discover_show(db, show)
+    if result.error:
+        raise HTTPException(status_code=502, detail=result.error)
+    return {"new": result.new, "seen": result.seen, "total": result.total_in_feed}
+
+
+def _load_glossary(settings) -> Glossary:
+    try:
+        return Registry.load(settings.shows_file).glossary
+    except Exception:
+        return Glossary()
+
+
+def _run_process(episode_id: int) -> None:
+    """Background: acquire → transcribe → extract insights for one episode."""
+    settings = get_settings()
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(str(settings.resolved_db_path))
+    conn.row_factory = _sqlite3.Row
+    try:
+        ep = repo.get_episode(conn, episode_id)
+        if ep is None:
+            return
+        show_row = conn.execute("SELECT * FROM shows WHERE slug = ?", (ep.show_slug,)).fetchone()
+        if show_row is None:
+            return
+        show = Show(
+            slug=show_row["slug"],
+            name=show_row["name"],
+            rss_url=show_row["rss_url"] or "",
+            tier=show_row["tier"],
+            transcript_source=show_row["transcript_source"] or "asr",
+            hosts=json.loads(show_row["hosts"]) if show_row["hosts"] else [],
+            active=bool(show_row["active"]),
+        )
+        glossary = _load_glossary(settings)
+
+        if ep.status not in (EpisodeStatus.ACQUIRED, EpisodeStatus.TRANSCRIBED):
+            acquire_episode(conn, ep, show, settings)
+            ep = repo.get_episode(conn, episode_id)
+            if ep is None:
+                return
+
+        if ep.status == EpisodeStatus.ACQUIRED:
+            result = transcribe_episode(conn, ep, show, glossary, settings)
+            if not result.ok:
+                return
+            ep = repo.get_episode(conn, episode_id)
+            if ep is None:
+                return
+
+        if ep.status == EpisodeStatus.TRANSCRIBED:
+            generate_insights(conn, ep, show, settings)
+    finally:
+        conn.close()
+
+
+@router.post("/episodes/{episode_id}/process")
+def process_episode(
+    episode_id: int,
+    background_tasks: BackgroundTasks,
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Start acquire → transcribe → insights pipeline for an episode in the background."""
+    ep = repo.get_episode(db, episode_id)
+    if ep is None:
+        raise HTTPException(status_code=404, detail="episode not found")
+    if ep.status == EpisodeStatus.TRANSCRIBED and repo.has_nuggets(db, episode_id):
+        return {"status": "already_done"}
+    background_tasks.add_task(_run_process, episode_id)
+    return {"status": "started"}
+
+
+@router.get("/episodes/{episode_id}/status")
+def get_episode_status(episode_id: int, db: sqlite3.Connection = Depends(get_db)) -> dict:
+    ep = repo.get_episode(db, episode_id)
+    if ep is None:
+        raise HTTPException(status_code=404, detail="episode not found")
+    nugget_count = sum(repo.nugget_type_counts(db, episode_id).values())
+    return {"status": ep.status, "error": ep.error, "nugget_count": nugget_count}
 
 
 # --- podcast URL import --------------------------------------------------
