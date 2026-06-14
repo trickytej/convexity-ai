@@ -30,22 +30,11 @@ export default async function Home() {
               {s.name}
             </h2>
 
-            {/* Hosts */}
-            {s.hosts.length > 0 && (
-              <p className="mt-1.5 text-sm text-zinc-500 leading-snug">
-                {s.hosts.join(" · ")}
-              </p>
-            )}
-
-            {/* Spacer */}
             <div className="flex-1" />
 
-            {/* Stats */}
             <div className="mt-4 flex items-center gap-1.5 text-sm">
               <span className="font-semibold text-zinc-900">{s.transcribed}</span>
               <span className="text-zinc-400">transcribed</span>
-              <span className="mx-1 text-zinc-300">·</span>
-              <span className="text-zinc-400">{s.total} known</span>
             </div>
           </Link>
         ))}
