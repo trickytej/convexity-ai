@@ -19,8 +19,6 @@ export default async function Home() {
         </p>
       </header>
 
-      <ImportPodcast />
-
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {active.map((s) => (
           <Link
@@ -56,6 +54,8 @@ export default async function Home() {
           </Link>
         ))}
       </div>
+
+      <ImportPodcast />
     </div>
   );
 }
