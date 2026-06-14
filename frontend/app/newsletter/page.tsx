@@ -17,17 +17,8 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { Newsletter, NewsletterNugget, StockMention } from "@/lib/api";
-import { getNewsletter } from "@/lib/api";
-
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
-function weekAgoStr() {
-  const d = new Date();
-  d.setDate(d.getDate() - 7);
-  return d.toISOString().slice(0, 10);
-}
+import type { Newsletter, NewsletterNugget, Show, StockMention } from "@/lib/api";
+import { getNewsletter, getShows } from "@/lib/api";
 
 const STANCE: Record<string, { label: string; cls: string }> = {
   owned:     { label: "Owned",     cls: "bg-emerald-600 text-white" },
@@ -61,7 +52,6 @@ function SortableNuggetItem({ n }: { n: NewsletterNugget }) {
         isDragging ? "opacity-50 z-50 relative" : ""
       }`}
     >
-      {/* Drag handle — invisible until hover, hidden in print */}
       <button
         {...attributes}
         {...listeners}
@@ -71,8 +61,6 @@ function SortableNuggetItem({ n }: { n: NewsletterNugget }) {
       >
         <GripHandle />
       </button>
-
-      {/* Nugget content — identical to original NuggetItem */}
       <div className="flex-1 space-y-2">
         <p className="text-sm font-medium text-zinc-900">{n.claim}</p>
         {n.quote && (
@@ -151,8 +139,8 @@ function SortableSection({
 }
 
 export default function NewsletterPage() {
-  const [fromDate, setFromDate] = useState(weekAgoStr());
-  const [toDate, setToDate] = useState(todayStr());
+  const [shows, setShows] = useState<Show[]>([]);
+  const [selectedShow, setSelectedShow] = useState<string | null>(null);
   const [newsletter, setNewsletter] = useState<Newsletter | null>(null);
   const [lead, setLead] = useState<NewsletterNugget[]>([]);
   const [g2k, setG2k] = useState<NewsletterNugget[]>([]);
@@ -161,18 +149,23 @@ export default function NewsletterPage() {
   const [showMarkdown, setShowMarkdown] = useState(false);
 
   useEffect(() => {
+    getShows().then((all) => setShows(all.filter((s) => s.active && s.transcribed > 0)));
+  }, []);
+
+  useEffect(() => {
     if (newsletter) {
       setLead(newsletter.lead);
       setG2k(newsletter.good_to_know);
     }
   }, [newsletter]);
 
-  async function generate() {
+  async function generate(show: string) {
     setLoading(true);
     setError(null);
     setNewsletter(null);
+    setShowMarkdown(false);
     try {
-      const result = await getNewsletter({ from: fromDate, to: toDate });
+      const result = await getNewsletter({ show });
       setNewsletter(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to generate newsletter");
@@ -181,43 +174,44 @@ export default function NewsletterPage() {
     }
   }
 
+  function selectShow(slug: string) {
+    setSelectedShow(slug);
+    generate(slug);
+  }
+
+  const selectedShowName = shows.find((s) => s.slug === selectedShow)?.name ?? selectedShow;
+
   return (
     <div className="space-y-6">
       <div className="print:hidden">
         <h1 className="text-2xl font-semibold tracking-tight">Newsletter</h1>
         <p className="text-sm text-zinc-500 mt-1">
-          Renders kept insights as a distributable digest.
+          Select a podcast to render its kept insights as a distributable digest.
         </p>
       </div>
 
-      <div className="print:hidden flex flex-wrap items-end gap-3 rounded-xl border border-zinc-200 bg-white p-4">
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-zinc-600">From</label>
-          <input
-            type="date"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400"
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-zinc-600">To</label>
-          <input
-            type="date"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={generate}
-          disabled={loading}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-        >
-          {loading ? "Building…" : "Build newsletter"}
-        </button>
+      {/* Podcast selector */}
+      <div className="print:hidden flex flex-wrap gap-2">
+        {shows.map((s) => (
+          <button
+            key={s.slug}
+            type="button"
+            onClick={() => selectShow(s.slug)}
+            disabled={loading}
+            className={`rounded-full px-3 py-1.5 text-sm ring-1 ring-inset transition disabled:opacity-50 ${
+              selectedShow === s.slug
+                ? "bg-indigo-600 text-white ring-indigo-600"
+                : "bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-50"
+            }`}
+          >
+            {s.name}
+          </button>
+        ))}
       </div>
+
+      {loading && (
+        <p className="text-sm text-zinc-500 animate-pulse">Building newsletter…</p>
+      )}
 
       {error && (
         <p className="print:hidden text-sm text-rose-600 rounded-lg border border-rose-200 bg-rose-50 p-3">
@@ -225,10 +219,11 @@ export default function NewsletterPage() {
         </p>
       )}
 
-      {newsletter && (
+      {newsletter && !loading && (
         <div className="space-y-6">
+          {/* Stats row */}
           <div className="flex flex-wrap gap-3 text-sm text-zinc-600">
-            <span className="font-semibold text-zinc-900">{fromDate} – {toDate}</span>
+            <span className="font-semibold text-zinc-900">{selectedShowName}</span>
             <span>·</span>
             <span>{newsletter.episode_count} episode{newsletter.episode_count !== 1 ? "s" : ""}</span>
             <span>·</span>
@@ -237,6 +232,7 @@ export default function NewsletterPage() {
             <span>{lead.length} relevant, {g2k.length} good to know</span>
           </div>
 
+          {/* Tab bar + Export PDF */}
           <div className="print:hidden flex items-center gap-2">
             <button
               type="button"
@@ -296,9 +292,9 @@ export default function NewsletterPage() {
                 )}
                 {newsletter.kept_count === 0 && (
                   <div className="p-10 text-center text-sm text-zinc-500">
-                    No kept nuggets in this date range.{" "}
+                    No kept nuggets for this podcast.{" "}
                     <Link href="/episodes" className="text-indigo-600 hover:underline print:hidden">
-                      Review an episode →
+                      Review episodes →
                     </Link>
                   </div>
                 )}

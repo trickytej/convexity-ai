@@ -357,11 +357,15 @@ export interface Newsletter {
 }
 
 export function getNewsletter(params: {
-  from: string;
-  to: string;
+  from?: string;
+  to?: string;
+  show?: string;
   episode_ids?: number[];
 }): Promise<Newsletter> {
-  const q = new URLSearchParams({ from: params.from, to: params.to });
+  const q = new URLSearchParams();
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
+  if (params.show) q.set("show", params.show);
   (params.episode_ids ?? []).forEach((id) => q.append("episode_ids", String(id)));
   return getJSON<Newsletter>(`/api/newsletter?${q.toString()}`);
 }

@@ -16,17 +16,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="font-semibold tracking-tight">
               research<span className="text-indigo-600">·</span>digest
             </Link>
-            <nav className="flex gap-5 text-sm text-zinc-600">
-              <Link href="/" className="hover:text-zinc-900">
-                Home
+            <nav className="flex gap-6 text-sm text-zinc-600">
+              <Link href="/" className="hover:text-zinc-900 transition-colors">
+                Podcasts
               </Link>
-              <Link href="/insights" className="hover:text-zinc-900">
-                Weekly insights
+              <Link href="/episodes" className="hover:text-zinc-900 transition-colors">
+                Insights
               </Link>
-              <Link href="/episodes" className="hover:text-zinc-900">
-                Episodes
-              </Link>
-              <Link href="/newsletter" className="hover:text-zinc-900">
+              <Link href="/newsletter" className="hover:text-zinc-900 transition-colors">
                 Newsletter
               </Link>
             </nav>

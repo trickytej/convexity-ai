@@ -195,18 +195,19 @@ def _render_markdown(
 
 @router.get("/newsletter", response_model=NewsletterOut)
 def get_newsletter(
-    from_date: str = Query(..., alias="from", description="YYYY-MM-DD"),
-    to_date: str = Query(..., alias="to", description="YYYY-MM-DD"),
+    from_date: str | None = Query(None, alias="from", description="YYYY-MM-DD"),
+    to_date: str | None = Query(None, alias="to", description="YYYY-MM-DD"),
+    show: str | None = Query(None, description="Filter by show slug"),
     episode_ids: list[int] = Query(default=[], description="Restrict to specific episode ids"),
     db: sqlite3.Connection = Depends(get_db),
 ) -> NewsletterOut:
-    from_iso = _parse_date(from_date, "from")
-    to_iso = _parse_date(to_date, "to", end_of_day=True)
-    if from_iso > to_iso:
+    from_iso = _parse_date(from_date, "from") if from_date else None
+    to_iso = _parse_date(to_date, "to", end_of_day=True) if to_date else None
+    if from_iso and to_iso and from_iso > to_iso:
         raise HTTPException(status_code=422, detail="'from' must be before 'to'")
 
     rows = repo.list_kept_nuggets_for_newsletter(
-        db, from_iso, to_iso, episode_ids or None
+        db, from_iso, to_iso, episode_ids or None, show_slug=show
     )
 
     lead = [_nugget_out(r) for r in rows if r["curator_rank"] == 1]

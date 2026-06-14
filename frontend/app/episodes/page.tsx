@@ -20,10 +20,11 @@ export default async function EpisodesPage({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Episodes</h1>
-        <p className="mt-1 text-zinc-600">{list.total} transcribed episodes</p>
+        <h1 className="text-2xl font-semibold tracking-tight">Insights</h1>
+        <p className="mt-1 text-zinc-500">{list.total} transcribed episodes</p>
       </div>
 
+      {/* Show filter pills */}
       <div className="flex flex-wrap gap-2">
         <Link
           href="/episodes"
@@ -45,11 +46,15 @@ export default async function EpisodesPage({
                 : "bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-50"
             }`}
           >
-            {s.slug} <span className="opacity-60">{s.transcribed}</span>
+            {s.name}
+            <span className={`ml-1.5 ${show === s.slug ? "opacity-70" : "opacity-50"}`}>
+              {s.transcribed}
+            </span>
           </Link>
         ))}
       </div>
 
+      {/* Episode list */}
       <div className="divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 bg-white">
         {list.episodes.length === 0 && (
           <p className="px-4 py-8 text-center text-zinc-500">No transcribed episodes yet.</p>

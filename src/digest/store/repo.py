@@ -769,21 +769,27 @@ def nugget_curation_stats(conn: sqlite3.Connection, episode_id: int) -> dict[str
 
 def list_kept_nuggets_for_newsletter(
     conn: sqlite3.Connection,
-    from_iso: str,
-    to_iso: str,
+    from_iso: str | None = None,
+    to_iso: str | None = None,
     episode_ids: list[int] | None = None,
+    show_slug: str | None = None,
 ) -> list[sqlite3.Row]:
-    """Kept nuggets in a date window, ordered rank ASC then signal DESC."""
-    clauses = [
-        "nc.decision = 'kept'",
-        "e.published_at >= ?",
-        "e.published_at <= ?",
-    ]
-    params: list[object] = [from_iso, to_iso]
+    """Kept nuggets ordered rank ASC then signal DESC. All filters are optional."""
+    clauses = ["nc.decision = 'kept'"]
+    params: list[object] = []
+    if from_iso:
+        clauses.append("e.published_at >= ?")
+        params.append(from_iso)
+    if to_iso:
+        clauses.append("e.published_at <= ?")
+        params.append(to_iso)
     if episode_ids:
         placeholders = ",".join("?" * len(episode_ids))
         clauses.append(f"n.episode_id IN ({placeholders})")
         params.extend(episode_ids)
+    if show_slug:
+        clauses.append("e.show_slug = ?")
+        params.append(show_slug)
     where = " AND ".join(clauses)
     return conn.execute(
         f"""

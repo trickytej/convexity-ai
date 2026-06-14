@@ -112,14 +112,13 @@ cd frontend && npm run dev
 ```
 
 **Pages:**
-- `/` — library overview: shows, episode counts, recent activity
-- `/episodes` — browse and filter episodes by show
+- `/` — **Podcasts** — card grid of configured shows with episode counts; click a show to jump to its insights
+- `/episodes` — **Insights** — browse and filter transcribed episodes by show
 - `/episode/{id}` — episode detail with three tabs:
   - **Digest** — TMTB-style synthesized summary (themes + stock read-through), generated on demand via Claude
   - **Transcript** — full diarized transcript with color-coded speakers and timestamps
   - **Review** — nugget triage: keep/kill each insight, set rank (1 = lead, 2–3 = good-to-know), flag contrarian takes, add a curator note
-- `/insights` — weekly insights: all extracted nuggets grouped by sector, filterable by triage status
-- `/newsletter` — newsletter builder: pick a date range, render kept nuggets as a distributable digest
+- `/newsletter` — **Newsletter** — select a podcast, auto-renders its kept nuggets as a distributable digest with drag-to-reorder and PDF export
 
 ### Triage (Review tab)
 
@@ -136,8 +135,8 @@ All changes autosave instantly via `PATCH /api/nuggets/{id}/curation`. Curator d
 
 **Via the web UI:**
 1. Go to `/newsletter`
-2. Pick a date range
-3. Click **Build newsletter**
+2. Click a podcast pill — the digest builds automatically
+3. Drag nuggets to reorder; click **Export PDF** to save
 
 The output has three sections:
 - **Relevant Nuggets** — rank-1 kept insights: claim (bold) → quote (italic, speaker-attributed)
