@@ -363,6 +363,26 @@ export interface ImportResult {
   created: boolean;
 }
 
+export interface ImportEpisodeResult {
+  episode_id: number;
+  title: string;
+  show_slug: string;
+  created: boolean;
+}
+
+export async function importEpisode(url: string, title?: string): Promise<ImportEpisodeResult> {
+  const res = await fetch(`${API_BASE}/api/episodes/import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, title: title ?? "" }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `Import failed: ${res.status}`);
+  }
+  return (await res.json()) as ImportEpisodeResult;
+}
+
 export async function importPodcast(url: string): Promise<ImportResult> {
   const res = await fetch(`${API_BASE}/api/shows/import`, {
     method: "POST",

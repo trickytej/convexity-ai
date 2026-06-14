@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getShows } from "@/lib/api";
 import { TierBadge } from "@/components/ui";
 import ImportPodcast from "@/components/ImportPodcast";
+import ImportEpisode from "@/components/ImportEpisode";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,7 @@ export default async function Home() {
       </div>
 
       <ImportPodcast />
+      <ImportEpisode />
     </div>
   );
 }

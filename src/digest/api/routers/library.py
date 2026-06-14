@@ -231,3 +231,66 @@ def import_podcast(body: ImportPodcastIn, db: sqlite3.Connection = Depends(get_d
         repo.upsert_episode(db, ep)
 
     return ImportPodcastOut(slug=slug, name=name, episode_count=len(episodes), created=created)
+
+
+# --- single episode / interview import -----------------------------------
+
+_IMPORTED_SHOW_SLUG = "imported"
+_IMPORTED_SHOW = Show(
+    slug=_IMPORTED_SHOW_SLUG,
+    name="Imported",
+    tier="B",
+    transcript_source="asr",
+    active=True,
+)
+
+
+class ImportEpisodeIn(BaseModel):
+    url: str
+    title: str = ""
+
+
+class ImportEpisodeOut(BaseModel):
+    episode_id: int
+    title: str
+    show_slug: str
+    created: bool
+
+
+@router.post("/episodes/import", response_model=ImportEpisodeOut)
+def import_episode(body: ImportEpisodeIn, db: sqlite3.Connection = Depends(get_db)) -> ImportEpisodeOut:
+    """Add a single interview or audio URL as an importable episode."""
+    url = body.url.strip()
+    if not url:
+        raise HTTPException(status_code=422, detail="url is required")
+
+    title = body.title.strip() or url
+
+    # Ensure the "imported" catch-all show exists
+    existing_show = db.execute("SELECT slug FROM shows WHERE slug = ?", (_IMPORTED_SHOW_SLUG,)).fetchone()
+    if not existing_show:
+        repo.sync_shows(db, [_IMPORTED_SHOW])
+
+    # Check for existing episode with this URL to stay idempotent
+    existing_ep = db.execute(
+        "SELECT id, title FROM episodes WHERE (audio_url = ? OR episode_url = ?) AND show_slug = ?",
+        (url, url, _IMPORTED_SHOW_SLUG),
+    ).fetchone()
+    if existing_ep:
+        return ImportEpisodeOut(
+            episode_id=existing_ep["id"],
+            title=existing_ep["title"],
+            show_slug=_IMPORTED_SHOW_SLUG,
+            created=False,
+        )
+
+    ep = Episode(
+        show_slug=_IMPORTED_SHOW_SLUG,
+        guid=url,
+        title=title,
+        audio_url=url,
+        episode_url=url,
+        published_at=None,
+    )
+    episode_id, _ = repo.upsert_episode(db, ep)
+    return ImportEpisodeOut(episode_id=episode_id, title=title, show_slug=_IMPORTED_SHOW_SLUG, created=True)
