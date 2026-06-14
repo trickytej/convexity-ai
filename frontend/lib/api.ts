@@ -80,6 +80,11 @@ export function getEpisodes(
   return getJSON<EpisodeList>(`/api/episodes?${q.toString()}`);
 }
 
+export async function deleteShow(slug: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/shows/${slug}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+}
+
 export async function pollShow(slug: string): Promise<{ new: number; seen: number; total: number }> {
   const res = await fetch(`${API_BASE}/api/shows/${slug}/poll`, { method: "POST" });
   if (!res.ok) {

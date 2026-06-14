@@ -3,7 +3,7 @@ import { Questrial } from "next/font/google";
 import { getShows } from "@/lib/api";
 import ImportPodcast from "@/components/ImportPodcast";
 import ImportEpisode from "@/components/ImportEpisode";
-import PollButton from "@/components/PollButton";
+import DeleteShowButton from "@/components/DeleteShowButton";
 
 const questrial = Questrial({ subsets: ["latin"], weight: "400" });
 
@@ -45,7 +45,7 @@ export default async function Home() {
                 <span style={{ color: "white" }}>{s.transcribed}</span>
                 <span>transcribed</span>
               </div>
-              <PollButton slug={s.slug} dark />
+              <DeleteShowButton slug={s.slug} />
             </div>
           </div>
         ))}

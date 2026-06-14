@@ -30,9 +30,17 @@ export default function ImportEpisode() {
     }
   }
 
+  const inputStyle = {
+    backgroundColor: "rgba(255,255,255,0.1)",
+    border: "1px solid rgba(255,255,255,0.2)",
+    color: "white",
+  };
+
   return (
-    <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-5">
-      <p className="mb-3 text-sm font-medium text-zinc-700">Add an interview or another source</p>
+    <div className="rounded-xl p-5" style={{ backgroundColor: "rgb(45, 45, 90)" }}>
+      <p className="mb-3 text-sm font-medium" style={{ color: "rgba(255,255,255,0.85)" }}>
+        Add an interview or another source
+      </p>
       <form onSubmit={handleSubmit} className="space-y-2">
         <div className="flex gap-2">
           <input
@@ -40,13 +48,15 @@ export default function ImportEpisode() {
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://example.com/episode.mp3"
-            className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm placeholder:text-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+            className="flex-1 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1"
+            style={inputStyle}
             disabled={status === "loading"}
           />
           <button
             type="submit"
             disabled={status === "loading" || !url.trim()}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
+            className="rounded-lg px-4 py-2 text-sm font-medium transition disabled:opacity-50"
+            style={{ backgroundColor: "white", color: "rgb(45, 45, 90)" }}
           >
             {status === "loading" ? "Adding…" : "Add"}
           </button>
@@ -56,15 +66,16 @@ export default function ImportEpisode() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Title (optional)"
-          className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm placeholder:text-zinc-400 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+          className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1"
+          style={inputStyle}
           disabled={status === "loading"}
         />
       </form>
       {message && (
-        <p className={`mt-2 text-sm ${status === "error" ? "text-rose-600" : "text-emerald-600"}`}>
+        <p className={`mt-2 text-sm ${status === "error" ? "text-rose-300" : "text-emerald-300"}`}>
           {message}
           {episodeId && (
-            <Link href={`/episode/${episodeId}`} className="ml-2 underline hover:text-emerald-700">
+            <Link href={`/episode/${episodeId}`} className="ml-2 underline hover:opacity-80">
               View episode →
             </Link>
           )}

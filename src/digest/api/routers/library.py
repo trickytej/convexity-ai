@@ -180,6 +180,21 @@ def _show_from_db(db: sqlite3.Connection, slug: str) -> Show:
     )
 
 
+@router.delete("/shows/{slug}")
+def delete_show(slug: str, db: sqlite3.Connection = Depends(get_db)) -> dict:
+    """Remove a show and all its associated data."""
+    episode_ids = [r["id"] for r in db.execute("SELECT id FROM episodes WHERE show_slug = ?", (slug,)).fetchall()]
+    if episode_ids:
+        placeholders = ",".join("?" * len(episode_ids))
+        db.execute(f"DELETE FROM nugget_curation WHERE nugget_id IN (SELECT id FROM nuggets WHERE episode_id IN ({placeholders}))", episode_ids)
+        db.execute(f"DELETE FROM nuggets WHERE episode_id IN ({placeholders})", episode_ids)
+        db.execute(f"DELETE FROM episode_digests WHERE episode_id IN ({placeholders})", episode_ids)
+        db.execute(f"DELETE FROM episodes WHERE show_slug = ?", (slug,))
+    db.execute("DELETE FROM shows WHERE slug = ?", (slug,))
+    db.commit()
+    return {"deleted": slug}
+
+
 @router.post("/shows/{slug}/poll")
 def poll_show(slug: str, db: sqlite3.Connection = Depends(get_db)) -> dict:
     """Discover new episodes for a show from its RSS feed."""

@@ -3,6 +3,7 @@ import { getEpisodes, getShows } from "@/lib/api";
 import { fmtDate, fmtDuration } from "@/lib/format";
 import { Badge, SourceBadge } from "@/components/ui";
 import TranscribeButton from "@/components/TranscribeButton";
+import PollButton from "@/components/PollButton";
 
 export const dynamic = "force-dynamic";
 
@@ -28,11 +29,14 @@ export default async function EpisodesPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Insights</h1>
-        <p className="mt-1 text-zinc-500">
-          {show ? `${list.total} episodes` : `${list.total} transcribed episodes`}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Insights</h1>
+          <p className="mt-1 text-zinc-500">
+            {show ? `${list.total} episodes` : `${list.total} transcribed episodes`}
+          </p>
+        </div>
+        {show && <PollButton slug={show} />}
       </div>
 
       {/* Show filter pills */}
@@ -70,7 +74,7 @@ export default async function EpisodesPage({
         {list.episodes.length === 0 && (
           <p className="px-4 py-8 text-center text-zinc-500">
             {show
-              ? "No episodes discovered yet. Use the Refresh button on the Podcasts page."
+              ? "No episodes discovered yet. Use the Refresh button above to check for new episodes."
               : "No transcribed episodes yet."}
           </p>
         )}
