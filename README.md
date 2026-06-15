@@ -14,6 +14,41 @@ Extract investment insights ("nuggets") from transcripts, curate them in a revie
 
 ---
 
+## Live site — how to push updates to the webpage
+
+The app is **deployed** and every page reads/writes one shared **hosted database (Turso)**, so most content updates appear on the live site **immediately, with no redeploy**.
+
+- **Live site:** https://research-digest-topaz.vercel.app — private; log in with the shared username/password (ask David).
+- **API:** https://research-digest-api-jud5.onrender.com — internal, key-protected.
+- **Database:** Turso (hosted, source of truth for the live site).
+- **Flow:** GitHub Action (daily) → Turso ← Render API ← Vercel site.
+
+There are three ways to update what's on the site:
+
+### 1. Edit content right in the app — *no deploy needed*
+Log into the live site and work normally; every change saves straight to the hosted DB and is live instantly:
+- **Insights** — mark nuggets *Important* / *To review* (triage).
+- **Episode → Review** — keep/kill, set rank (1 = lead, 2–3 = good-to-know), flag contrarian, add a curator note.
+- **Episode → Digest** — generate the TMTB-style summary.
+- **Newsletter** — build it, reorder, export PDF, or email it.
+- **Podcasts** — add a new podcast (RSS) or a one-off episode.
+
+### 2. Pull in new episodes (transcription)
+New episodes are transcribed automatically by a **daily GitHub Action**. To run it now or backfill more history:
+- GitHub repo → **Actions → "ingest" → Run workflow** (optional `days` input, e.g. `30` for the last month).
+- It transcribes new episodes and extracts insights directly into Turso, so they show up on the site within a minute or two. (Transcription is billed per audio-hour via AssemblyAI + Anthropic.)
+
+### 3. Change the code or design
+Push to **`main`** and both hosts **auto-deploy** from the repo (Render rebuilds the API, Vercel rebuilds the site):
+```bash
+git add -A && git commit -m "your change" && git push origin main
+```
+Only code/design changes need this — the content edits in step 1 do not.
+
+> Secrets live in the hosting dashboards, never in the repo: **Vercel** (`SITE_USER`, `SITE_PASSWORD`, `API_BASE_URL`, `DIGEST_API_KEY`), **Render** (`TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `DIGEST_API_KEY`, `ANTHROPIC_API_KEY`), **GitHub Actions** (`TURSO_*`, `ASSEMBLYAI_API_KEY`, `ANTHROPIC_API_KEY`). Full deploy steps: [`docs/deployment.md`](docs/deployment.md).
+
+---
+
 ## Quickstart (for collaborators)
 
 **Prerequisites**
