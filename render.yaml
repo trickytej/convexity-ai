@@ -7,8 +7,9 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     plan: starter # always-on (~$7/mo); free tier sleeps when idle
+    region: ohio # co-located with the Turso DB (aws-us-east-2 = Ohio) for low latency
     healthCheckPath: /api/health
-    autoDeploy: true
+    autoDeployTrigger: commit
     envVars:
       - key: TURSO_DATABASE_URL
         sync: false
