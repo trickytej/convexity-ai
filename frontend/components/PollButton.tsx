@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { pollShow } from "@/lib/api";
 
-export default function PollButton({ slug, dark = false }: { slug: string; dark?: boolean }) {
+export default function PollButton({ slug }: { slug: string; dark?: boolean }) {
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [message, setMessage] = useState("");
 
@@ -29,12 +29,10 @@ export default function PollButton({ slug, dark = false }: { slug: string; dark?
       title="Refresh episode list from RSS"
       className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset transition-all print:hidden ${
         status === "done"
-          ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+          ? "bg-emerald-500/10 text-emerald-300 ring-emerald-500/25"
           : status === "error"
-          ? "bg-rose-50 text-rose-600 ring-rose-200"
-          : dark
-          ? "bg-white/10 text-white/80 ring-white/20 hover:bg-white/20 hover:text-white"
-          : "bg-zinc-50 text-zinc-500 ring-zinc-200 hover:bg-zinc-100 hover:text-zinc-700"
+          ? "bg-rose-500/10 text-rose-300 ring-rose-500/25"
+          : "bg-white/[0.06] text-zinc-400 ring-white/10 hover:bg-white/10 hover:text-zinc-100"
       }`}
     >
       <svg

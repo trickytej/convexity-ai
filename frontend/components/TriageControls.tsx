@@ -30,8 +30,8 @@ export function TriageControls({ id, initial }: { id: number; initial: string })
         onClick={() => apply("relevant")}
         className={
           state === "relevant"
-            ? `${base} bg-emerald-600 text-white ring-emerald-600`
-            : `${base} bg-white text-zinc-600 ring-zinc-200 hover:bg-zinc-50`
+            ? `${base} bg-[#1ec997] text-[#06160f] ring-[#1ec997]`
+            : `${base} bg-white/[0.04] text-zinc-400 ring-white/10 hover:bg-white/[0.08] hover:text-zinc-200`
         }
       >
         ★ Relevant
@@ -42,8 +42,8 @@ export function TriageControls({ id, initial }: { id: number; initial: string })
         onClick={() => apply("not_relevant")}
         className={
           state === "not_relevant"
-            ? `${base} bg-rose-600 text-white ring-rose-600`
-            : `${base} bg-white text-zinc-600 ring-zinc-200 hover:bg-zinc-50`
+            ? `${base} bg-rose-500 text-white ring-rose-500`
+            : `${base} bg-white/[0.04] text-zinc-400 ring-white/10 hover:bg-white/[0.08] hover:text-zinc-200`
         }
       >
         ✕ Not

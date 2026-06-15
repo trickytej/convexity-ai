@@ -1,6 +1,8 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import Link from "next/link";
+import { fontVars } from "@/lib/fonts";
+import SiteHeader from "@/components/SiteHeader";
+import WaveBackground from "@/components/WaveBackground";
 
 export const metadata: Metadata = {
   title: "research-digest",
@@ -10,26 +12,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-white text-zinc-900 antialiased">
-        <header className="sticky top-0 z-10 print:hidden" style={{ backgroundColor: "rgb(45, 45, 90)" }}>
-          <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-            <Link href="/" className="text-2xl font-semibold tracking-tight text-white">
-              TMTB<span className="text-white/60">:</span> Podcast Insights
-            </Link>
-            <nav className="flex gap-6 text-sm" style={{ color: "rgba(255,255,255,0.7)" }}>
-              <Link href="/" className="transition-colors hover:text-white">
-                Podcasts
-              </Link>
-              <Link href="/episodes" className="transition-colors hover:text-white">
-                Insights
-              </Link>
-              <Link href="/newsletter" className="transition-colors hover:text-white">
-                Newsletter
-              </Link>
-            </nav>
-          </div>
-        </header>
-        <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
+      <body
+        className={`${fontVars} min-h-screen bg-[#0a0a0c] text-zinc-400 antialiased [color-scheme:dark] [font-family:var(--font-body)] print:bg-white print:text-zinc-900`}
+      >
+        <WaveBackground />
+        <SiteHeader />
+        <main className="relative z-10 mx-auto max-w-6xl px-6 pb-24 pt-10">{children}</main>
       </body>
     </html>
   );

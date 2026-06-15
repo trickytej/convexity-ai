@@ -36,7 +36,7 @@ export function ReportActions({ report }: { report: GeneratedReport }) {
   }
 
   const btn =
-    "rounded-lg px-3 py-2 text-sm font-medium ring-1 ring-inset transition bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-50";
+    "rounded-lg px-3 py-2 text-sm font-medium ring-1 ring-inset transition bg-white/[0.06] text-zinc-200 ring-white/10 hover:bg-white/10 hover:text-white";
 
   return (
     <div className="flex items-center gap-2 print:hidden">

@@ -417,10 +417,16 @@ export default function NewsletterPage() {
   const selectedShowName = shows.find((s) => s.slug === selectedShow)?.name ?? selectedShow;
 
   return (
-    <div className={`${questrial.className} space-y-6`}>
+    <div className="space-y-6">
       <div className="print:hidden">
-        <h1 className="text-2xl font-semibold tracking-tight">Newsletter</h1>
-        <p className="text-sm text-zinc-500 mt-1">
+        <p className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
+          <span className="inline-block h-px w-8 bg-[#1ec997]" />
+          <span className="text-[#1ec997]">Distribute</span>
+        </p>
+        <h1 className="mt-4 text-4xl font-light tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-5xl">
+          Newsletter
+        </h1>
+        <p className="mt-3 text-[15px] text-zinc-400">
           Select a podcast to render its kept insights as a distributable digest.
         </p>
       </div>
@@ -433,10 +439,10 @@ export default function NewsletterPage() {
             type="button"
             onClick={() => selectShow(s.slug)}
             disabled={loading}
-            className={`rounded-full px-3 py-1.5 text-sm ring-1 ring-inset transition disabled:opacity-50 ${
+            className={`rounded-full px-3.5 py-1.5 text-sm transition disabled:opacity-50 ${
               selectedShow === s.slug
-                ? "bg-indigo-600 text-white ring-indigo-600"
-                : "bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-50"
+                ? "bg-[#1ec997] font-medium text-[#06160f]"
+                : "border border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-100"
             }`}
           >
             {s.name}
@@ -447,7 +453,7 @@ export default function NewsletterPage() {
       {loading && <p className="text-sm text-zinc-500 animate-pulse">Building newsletter…</p>}
 
       {error && (
-        <p className="print:hidden text-sm text-rose-600 rounded-lg border border-rose-200 bg-rose-50 p-3">
+        <p className="print:hidden text-sm text-rose-300 rounded-lg border border-rose-500/25 bg-rose-500/10 p-3">
           {error}
         </p>
       )}
@@ -455,13 +461,13 @@ export default function NewsletterPage() {
       {newsletter && !loading && (
         <div className="space-y-6">
           {/* Stats */}
-          <div className="flex flex-wrap gap-3 text-sm text-zinc-600">
-            <span className="font-semibold text-zinc-900">{selectedShowName}</span>
-            <span>·</span>
+          <div className="flex flex-wrap gap-3 text-sm text-zinc-500">
+            <span className="font-semibold text-zinc-100">{selectedShowName}</span>
+            <span className="text-zinc-700">·</span>
             <span>{newsletter.episode_count} episode{newsletter.episode_count !== 1 ? "s" : ""}</span>
-            <span>·</span>
-            <span className="font-semibold text-emerald-600">{newsletter.kept_count} kept</span>
-            <span>·</span>
+            <span className="text-zinc-700">·</span>
+            <span className="font-semibold text-emerald-300">{newsletter.kept_count} kept</span>
+            <span className="text-zinc-700">·</span>
             <span>{lead.length} relevant, {g2k.length} good to know</span>
           </div>
 
@@ -471,7 +477,7 @@ export default function NewsletterPage() {
               type="button"
               onClick={() => setShowMarkdown(false)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                !showMarkdown ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                !showMarkdown ? "bg-[#1ec997] text-[#06160f]" : "bg-white/[0.06] text-zinc-300 hover:bg-white/10"
               }`}
             >
               Preview
@@ -480,7 +486,7 @@ export default function NewsletterPage() {
               type="button"
               onClick={() => setShowMarkdown(true)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                showMarkdown ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                showMarkdown ? "bg-[#1ec997] text-[#06160f]" : "bg-white/[0.06] text-zinc-300 hover:bg-white/10"
               }`}
             >
               Markdown
@@ -491,8 +497,8 @@ export default function NewsletterPage() {
                 onClick={openEmail}
                 className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
                   showEmail
-                    ? "border-indigo-300 bg-indigo-600 text-white"
-                    : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50"
+                    ? "border-[#1ec997]/40 bg-[#1ec997] text-[#06160f]"
+                    : "border-white/15 bg-white/[0.06] text-zinc-200 hover:bg-white/10"
                 }`}
               >
                 Send Email
@@ -500,7 +506,7 @@ export default function NewsletterPage() {
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+                className="rounded-lg border border-white/15 bg-white/[0.06] px-3 py-1.5 text-sm font-medium text-zinc-200 transition-colors hover:bg-white/10"
               >
                 Export PDF
               </button>
@@ -509,43 +515,43 @@ export default function NewsletterPage() {
 
           {/* Email panel */}
           {showEmail && (
-            <div className="print:hidden rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-3">
+            <div className="print:hidden rounded-xl border border-white/[0.08] bg-[#0b0c10]/75 p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-zinc-900">Send to readers</p>
-                <button type="button" onClick={() => setShowEmail(false)} className="text-zinc-400 hover:text-zinc-600 text-lg leading-none">×</button>
+                <p className="text-sm font-semibold text-zinc-100">Send to readers</p>
+                <button type="button" onClick={() => setShowEmail(false)} className="text-zinc-500 hover:text-zinc-200 text-lg leading-none">×</button>
               </div>
               <input
                 type="text"
                 value={emailSubject}
                 onChange={(e) => setEmailSubject(e.target.value)}
                 placeholder="Subject"
-                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-[#1ec997]/50 focus:outline-none focus:ring-1 focus:ring-[#1ec997]/30"
               />
               <textarea
                 value={recipients}
                 onChange={(e) => setRecipients(e.target.value)}
                 placeholder="Recipients (comma-separated emails)"
                 rows={2}
-                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-mono focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-mono text-zinc-100 placeholder-zinc-500 focus:border-[#1ec997]/50 focus:outline-none focus:ring-1 focus:ring-[#1ec997]/30"
               />
               <div className="flex items-center gap-3">
                 <button
                   type="button"
                   onClick={handleSend}
                   disabled={sendStatus === "sending"}
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                  className="rounded-lg bg-[#1ec997] px-4 py-2 text-sm font-medium text-[#06160f] hover:bg-[#34d6a8] disabled:opacity-50 transition-colors"
                 >
                   {sendStatus === "sending" ? "Sending…" : "Send"}
                 </button>
                 {sendMessage && (
-                  <p className={`text-sm ${sendStatus === "error" ? "text-rose-600" : "text-emerald-600"}`}>
+                  <p className={`text-sm ${sendStatus === "error" ? "text-rose-400" : "text-emerald-300"}`}>
                     {sendMessage}
                   </p>
                 )}
               </div>
               {sendStatus !== "sent" && (
                 <p className="text-xs text-zinc-500">
-                  Requires <code className="font-mono">DIGEST_SMTP_*</code> vars in <code className="font-mono">.env</code>
+                  Requires <code className="font-mono text-zinc-400">DIGEST_SMTP_*</code> vars in <code className="font-mono text-zinc-400">.env</code>
                 </p>
               )}
             </div>
@@ -556,7 +562,7 @@ export default function NewsletterPage() {
             <button
               type="button"
               onClick={() => navigator.clipboard.writeText(newsletter.markdown)}
-              className="absolute top-3 right-3 rounded-md bg-zinc-800 px-2 py-1 text-xs text-white hover:bg-zinc-700"
+              className="absolute top-3 right-3 rounded-md bg-white/10 px-2 py-1 text-xs text-zinc-200 hover:bg-white/20"
             >
               Copy
             </button>
@@ -564,14 +570,15 @@ export default function NewsletterPage() {
               readOnly
               value={newsletter.markdown}
               rows={40}
-              className="w-full rounded-xl border border-zinc-200 bg-zinc-950 px-4 py-4 font-mono text-xs text-zinc-100 focus:outline-none"
+              className="w-full rounded-xl border border-white/10 bg-[#08090c] px-4 py-4 font-mono text-xs text-zinc-200 focus:outline-none"
             />
           </div>
 
-          {/* Preview — always in DOM so Export PDF works from any tab */}
-          <div className={showMarkdown ? "hidden print:block" : ""}>
+          {/* Preview — always in DOM so Export PDF works from any tab.
+              Renders as a light "paper" sheet on the dark canvas; exports cleanly. */}
+          <div className={`${questrial.className} ${showMarkdown ? "hidden print:block" : ""}`}>
             <div className="space-y-10">
-              <div className="rounded-xl border border-zinc-200 bg-white divide-y divide-zinc-100">
+              <div className="divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white text-zinc-900 shadow-2xl shadow-black/30 ring-1 ring-white/10 print:shadow-none print:ring-0">
                 {lead.length > 0 && (
                   <SortableSection
                     title="Relevant Nuggets"
@@ -593,7 +600,7 @@ export default function NewsletterPage() {
                 {newsletter.kept_count === 0 && (
                   <div className="p-10 text-center text-sm text-zinc-500">
                     No kept nuggets for this podcast.{" "}
-                    <Link href="/episodes" className="text-indigo-600 hover:underline print:hidden">
+                    <Link href="/episodes" className="text-teal-700 hover:underline print:hidden">
                       Review episodes →
                     </Link>
                   </div>
@@ -605,7 +612,7 @@ export default function NewsletterPage() {
                   <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">
                     Stock read-through
                   </h3>
-                  <div className="divide-y divide-zinc-100 overflow-hidden rounded-xl border border-zinc-200 bg-white">
+                  <div className="divide-y divide-zinc-100 overflow-hidden rounded-xl border border-zinc-200 bg-white text-zinc-900 shadow-2xl shadow-black/30 ring-1 ring-white/10 print:shadow-none print:ring-0">
                     {stocks.map((s) => (
                       <EditableStockRow
                         key={s.company}

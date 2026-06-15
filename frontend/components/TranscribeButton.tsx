@@ -88,12 +88,12 @@ export default function TranscribeButton({ episodeId, initialStatus }: { episode
         title={errorMsg || undefined}
         className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset transition-all ${
           phase === "done"
-            ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+            ? "bg-emerald-500/10 text-emerald-300 ring-emerald-500/25"
             : phase === "error"
-            ? "bg-rose-50 text-rose-600 ring-rose-200 cursor-pointer"
+            ? "bg-rose-500/10 text-rose-300 ring-rose-500/25 cursor-pointer"
             : isRunning
-            ? "bg-indigo-50 text-indigo-600 ring-indigo-200"
-            : "bg-white text-zinc-700 ring-zinc-300 hover:bg-indigo-50 hover:text-indigo-700 hover:ring-indigo-300 cursor-pointer"
+            ? "bg-[#1ec997]/10 text-[#1ec997] ring-[#1ec997]/25"
+            : "bg-white/[0.06] text-zinc-300 ring-white/10 hover:bg-[#1ec997]/10 hover:text-[#1ec997] hover:ring-[#1ec997]/30 cursor-pointer"
         }`}
       >
         {isRunning && (
@@ -105,7 +105,7 @@ export default function TranscribeButton({ episodeId, initialStatus }: { episode
         {label}
       </button>
       {phase === "error" && errorMsg && (
-        <span className="text-xs text-rose-500 max-w-xs truncate" title={errorMsg}>{errorMsg}</span>
+        <span className="text-xs text-rose-400 max-w-xs truncate" title={errorMsg}>{errorMsg}</span>
       )}
     </div>
   );

@@ -37,14 +37,14 @@ export default function DeleteShowButton({ slug }: { slug: string }) {
         <button
           onClick={handleDelete}
           disabled={deleting}
-          className="text-xs text-rose-500 hover:text-rose-700 disabled:opacity-50 transition-opacity"
+          className="text-xs text-rose-400 hover:text-rose-300 disabled:opacity-50 transition-opacity"
         >
           {deleting ? "Deleting…" : "Delete"}
         </button>
-        <span className="text-zinc-300">·</span>
+        <span className="text-zinc-600">·</span>
         <button
           onClick={handleCancel}
-          className="text-xs text-zinc-400 hover:text-zinc-700 transition-opacity"
+          className="text-xs text-zinc-400 hover:text-zinc-200 transition-opacity"
         >
           Cancel
         </button>
@@ -56,7 +56,7 @@ export default function DeleteShowButton({ slug }: { slug: string }) {
     <button
       onClick={handleConfirmClick}
       title="Remove podcast"
-      className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-300 hover:text-rose-500"
+      className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-600 hover:text-rose-400"
     >
       <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
         <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/>

@@ -37,14 +37,17 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="space-y-6">
-      <Link href="/episodes" className="text-sm text-indigo-600 hover:text-indigo-800">
+      <Link href="/episodes" className="text-sm text-[#1ec997] transition hover:text-[#34d6a8]">
         ← All episodes
       </Link>
 
       <header className="space-y-3">
-        <h1 className="text-2xl font-semibold leading-tight tracking-tight">{e.title}</h1>
-        <p className="text-zinc-600">
-          {e.show_slug} · {fmtDate(e.published_at)} · {fmtDuration(e.duration_seconds)}
+        <h1 className="text-3xl font-light leading-tight tracking-tight text-zinc-50 [font-family:var(--font-display)]">
+          {e.title}
+        </h1>
+        <p className="text-zinc-400">
+          <span className="font-[family-name:var(--font-mono)] text-zinc-300">{e.show_slug}</span> ·{" "}
+          {fmtDate(e.published_at)} · {fmtDuration(e.duration_seconds)}
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <SourceBadge source={data.source} />
@@ -57,7 +60,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
               href={e.episode_url}
               target="_blank"
               rel="noreferrer"
-              className="text-sm text-indigo-600 hover:text-indigo-800"
+              className="text-sm text-[#1ec997] transition hover:text-[#34d6a8]"
             >
               source ↗
             </a>
@@ -67,7 +70,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
               href={e.audio_url}
               target="_blank"
               rel="noreferrer"
-              className="text-sm text-indigo-600 hover:text-indigo-800"
+              className="text-sm text-[#1ec997] transition hover:text-[#34d6a8]"
             >
               audio ↗
             </a>
@@ -75,7 +78,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
         </div>
       </header>
 
-      <div className="rounded-xl border border-zinc-200 bg-white p-5 sm:p-7">
+      <div className="rounded-2xl border border-white/[0.08] bg-[#0b0c10]/70 p-5 backdrop-blur-md sm:p-7">
         <EpisodeTabs
           episodeId={e.id}
           segments={data.segments}

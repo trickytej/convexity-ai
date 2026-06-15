@@ -14,7 +14,7 @@ function highlight(text: string, query: string) {
   const parts = text.split(new RegExp(`(${escapeRegExp(query)})`, "ig"));
   return parts.map((part, i) =>
     part.toLowerCase() === query ? (
-      <mark key={i} className="rounded bg-amber-200/70 px-0.5">
+      <mark key={i} className="rounded bg-[#1ec997]/30 px-0.5 text-zinc-50">
         {part}
       </mark>
     ) : (
@@ -46,7 +46,7 @@ export default function TranscriptView({
               className="h-2.5 w-2.5 rounded-full"
               style={{ backgroundColor: speakerColor(sp, speakers) }}
             />
-            <span className="text-zinc-700">{sp}</span>
+            <span className="text-zinc-300">{sp}</span>
           </span>
         ))}
       </div>
@@ -55,7 +55,7 @@ export default function TranscriptView({
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Search this transcript…"
-        className="mb-6 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+        className="mb-6 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:border-[#1ec997]/50 focus:ring-2 focus:ring-[#1ec997]/20"
       />
       {query && (
         <p className="mb-4 text-sm text-zinc-500">
@@ -73,13 +73,13 @@ export default function TranscriptView({
                   {s.speaker_name ?? "Unknown"}
                 </span>
                 {s.start_ms != null && (
-                  <span className="text-xs tabular-nums text-zinc-400">
+                  <span className="font-[family-name:var(--font-mono)] text-xs tabular-nums text-zinc-500">
                     {fmtTimestamp(s.start_ms)}
                   </span>
                 )}
               </div>
               <p
-                className="border-l-2 pl-3 text-[15px] leading-relaxed text-zinc-800"
+                className="border-l-2 pl-3 text-[15px] leading-relaxed text-zinc-300"
                 style={{ borderColor: color }}
               >
                 {highlight(s.text, query)}

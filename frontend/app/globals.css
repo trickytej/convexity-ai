@@ -17,6 +17,7 @@ html {
 @media print {
   body {
     background: #fff;
+    color: #18181b;
   }
   a {
     color: inherit;

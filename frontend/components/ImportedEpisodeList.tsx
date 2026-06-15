@@ -10,10 +10,10 @@ import TranscribeButton from "@/components/TranscribeButton";
 import RenameEpisodeTitle from "@/components/RenameEpisodeTitle";
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  transcribed: { label: "Transcribed", cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
-  acquired:    { label: "Downloaded",  cls: "bg-blue-50 text-blue-700 ring-blue-200" },
-  discovered:  { label: "Discovered",  cls: "bg-zinc-100 text-zinc-500 ring-zinc-200" },
-  failed:      { label: "Failed",      cls: "bg-rose-50 text-rose-600 ring-rose-200" },
+  transcribed: { label: "Transcribed", cls: "bg-emerald-500/10 text-emerald-300 ring-emerald-500/25" },
+  acquired:    { label: "Downloaded",  cls: "bg-sky-500/10 text-sky-300 ring-sky-500/25" },
+  discovered:  { label: "Discovered",  cls: "bg-white/[0.05] text-zinc-400 ring-white/10" },
+  failed:      { label: "Failed",      cls: "bg-rose-500/10 text-rose-300 ring-rose-500/25" },
 };
 
 function DeleteEpisodeButton({ episodeId, onDeleted }: { episodeId: number; onDeleted: () => void }) {
@@ -38,14 +38,14 @@ function DeleteEpisodeButton({ episodeId, onDeleted }: { episodeId: number; onDe
         <button
           onClick={handleDelete}
           disabled={deleting}
-          className="text-xs text-rose-500 hover:text-rose-700 disabled:opacity-50 transition-opacity"
+          className="text-xs text-rose-400 hover:text-rose-300 disabled:opacity-50 transition-opacity"
         >
           {deleting ? "Deleting…" : "Delete"}
         </button>
-        <span className="text-zinc-300">·</span>
+        <span className="text-zinc-600">·</span>
         <button
           onClick={(e) => { e.preventDefault(); setConfirming(false); }}
-          className="text-xs text-zinc-400 hover:text-zinc-700 transition-opacity"
+          className="text-xs text-zinc-400 hover:text-zinc-200 transition-opacity"
         >
           Cancel
         </button>
@@ -57,7 +57,7 @@ function DeleteEpisodeButton({ episodeId, onDeleted }: { episodeId: number; onDe
     <button
       onClick={(e) => { e.preventDefault(); setConfirming(true); }}
       title="Delete episode"
-      className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-300 hover:text-rose-500"
+      className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-600 hover:text-rose-400"
     >
       <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
         <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/>
@@ -77,14 +77,14 @@ export default function ImportedEpisodeList({ initialEpisodes }: { initialEpisod
 
   if (episodes.length === 0) {
     return (
-      <div className="divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 bg-white">
+      <div className="divide-y divide-white/[0.06] overflow-hidden rounded-xl border border-white/[0.08] bg-[#0b0c10]/60">
         <p className="px-4 py-8 text-center text-zinc-500">No imported episodes yet.</p>
       </div>
     );
   }
 
   return (
-    <div className="divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 bg-white">
+    <div className="divide-y divide-white/[0.06] overflow-hidden rounded-xl border border-white/[0.08] bg-[#0b0c10]/60">
       {episodes.map((e) => {
         const isTranscribed = e.status === "transcribed" || (!e.status && !!e.source);
         const statusInfo = STATUS_BADGE[e.status ?? (e.source ? "transcribed" : "discovered")];

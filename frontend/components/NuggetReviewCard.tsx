@@ -51,10 +51,10 @@ export function NuggetReviewCard({
   const companies = nugget.entities?.companies ?? [];
 
   const cardBg = isKept
-    ? "bg-emerald-50 border-emerald-200"
+    ? "bg-emerald-500/[0.07] border-emerald-500/30"
     : isKilled
-      ? "bg-zinc-50 border-zinc-200 opacity-60"
-      : "bg-white border-zinc-200";
+      ? "bg-white/[0.02] border-white/[0.06] opacity-60"
+      : "bg-[#0b0c10]/75 border-white/[0.08]";
 
   return (
     <div className={`rounded-lg border p-4 space-y-3 transition-colors ${cardBg}`}>
@@ -67,19 +67,19 @@ export function NuggetReviewCard({
             <Badge key={t} tone="amber">{t}</Badge>
           ))}
           {nugget.quote_verified && <Badge tone="green">verified</Badge>}
-          <span className="text-xs text-zinc-400 self-center">
+          <span className="text-xs text-zinc-500 self-center">
             signal {nugget.signal_score.toFixed(2)} · suggest rank {nugget.suggested_rank}
           </span>
         </div>
-        {saving && <span className="text-xs text-zinc-400">saving…</span>}
+        {saving && <span className="text-xs text-zinc-500">saving…</span>}
       </div>
 
       {/* Claim */}
-      <p className="text-sm font-medium text-zinc-900">{nugget.claim}</p>
+      <p className="text-sm font-medium text-zinc-100">{nugget.claim}</p>
 
       {/* Quote */}
       {nugget.quote && (
-        <blockquote className="border-l-2 border-zinc-300 pl-3 text-sm text-zinc-600 italic">
+        <blockquote className="border-l-2 border-[#1ec997]/40 pl-3 text-sm text-zinc-400 italic">
           {nugget.quote}
           {nugget.speaker_name && (
             <span className="not-italic text-zinc-500"> — {nugget.speaker_name}</span>
@@ -87,7 +87,7 @@ export function NuggetReviewCard({
           {nugget.start_ms != null && (
             <a
               href={`/episode/${episodeId}?t=${nugget.start_ms}`}
-              className="ml-2 text-xs text-indigo-500 hover:text-indigo-700 not-italic"
+              className="ml-2 text-xs text-[#1ec997] hover:text-[#34d6a8] not-italic"
             >
               {fmtMs(nugget.start_ms)} ↗
             </a>
@@ -103,7 +103,7 @@ export function NuggetReviewCard({
       {/* Controls row */}
       <div className="flex flex-wrap items-center gap-3 pt-1">
         {/* Keep / Kill toggle */}
-        <div className="flex rounded-md overflow-hidden border border-zinc-300 text-xs font-medium">
+        <div className="flex rounded-md overflow-hidden border border-white/15 text-xs font-medium">
           <button
             type="button"
             onClick={() => {
@@ -112,7 +112,7 @@ export function NuggetReviewCard({
               save({ decision: next });
             }}
             className={`px-3 py-1.5 transition-colors ${
-              isKept ? "bg-emerald-500 text-white" : "bg-white text-zinc-700 hover:bg-emerald-50"
+              isKept ? "bg-emerald-500 text-[#05140e]" : "bg-white/[0.04] text-zinc-300 hover:bg-emerald-500/10 hover:text-emerald-300"
             }`}
           >
             ✓ Keep
@@ -124,8 +124,8 @@ export function NuggetReviewCard({
               setCuration((c) => ({ ...c, decision: next }));
               save({ decision: next });
             }}
-            className={`px-3 py-1.5 border-l border-zinc-300 transition-colors ${
-              isKilled ? "bg-zinc-500 text-white" : "bg-white text-zinc-700 hover:bg-zinc-100"
+            className={`px-3 py-1.5 border-l border-white/15 transition-colors ${
+              isKilled ? "bg-zinc-600 text-white" : "bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08]"
             }`}
           >
             ✕ Kill
@@ -146,8 +146,8 @@ export function NuggetReviewCard({
               }}
               className={`w-6 h-6 rounded-full text-xs font-semibold transition-colors ${
                 curation.curator_rank === r
-                  ? "bg-indigo-600 text-white"
-                  : "bg-zinc-100 text-zinc-600 hover:bg-indigo-100"
+                  ? "bg-[#1ec997] text-[#06160f]"
+                  : "bg-white/[0.06] text-zinc-400 hover:bg-[#1ec997]/15 hover:text-[#1ec997]"
               }`}
             >
               {r}
@@ -156,7 +156,7 @@ export function NuggetReviewCard({
         </div>
 
         {/* Contradicts consensus */}
-        <label className="flex items-center gap-1.5 text-xs text-zinc-600 cursor-pointer select-none">
+        <label className="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer select-none">
           <input
             type="checkbox"
             checked={curation.contradicts_consensus}
@@ -165,7 +165,7 @@ export function NuggetReviewCard({
               setCuration((c) => ({ ...c, contradicts_consensus: v }));
               save({ contradicts_consensus: v });
             }}
-            className="rounded"
+            className="rounded accent-[#1ec997]"
           />
           contradicts consensus
         </label>
@@ -179,7 +179,7 @@ export function NuggetReviewCard({
         onChange={(e) => {
           save({ note: e.target.value });
         }}
-        className="w-full rounded-md border border-zinc-200 px-3 py-1.5 text-xs text-zinc-700 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-indigo-400 resize-none"
+        className="w-full rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#1ec997]/40 resize-none"
       />
     </div>
   );

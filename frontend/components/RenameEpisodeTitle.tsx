@@ -62,7 +62,7 @@ export default function RenameEpisodeTitle({ episodeId, title: initialTitle, hre
         onBlur={commit}
         onKeyDown={handleKeyDown}
         disabled={saving}
-        className="w-full rounded border border-indigo-300 bg-indigo-50 px-2 py-0.5 text-sm font-medium text-zinc-900 focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:opacity-60"
+        className="w-full rounded border border-[#1ec997]/40 bg-white/5 px-2 py-0.5 text-sm font-medium text-zinc-100 focus:outline-none focus:ring-1 focus:ring-[#1ec997]/50 disabled:opacity-60"
       />
     );
   }
@@ -70,7 +70,7 @@ export default function RenameEpisodeTitle({ episodeId, title: initialTitle, hre
   return (
     <div className="group/rename flex min-w-0 items-center gap-1.5">
       {href ? (
-        <Link href={href} className="truncate font-medium hover:text-indigo-700 transition-colors">
+        <Link href={href} className="truncate font-medium text-zinc-100 transition-colors hover:text-[#1ec997]">
           {title}
         </Link>
       ) : (
@@ -80,7 +80,7 @@ export default function RenameEpisodeTitle({ episodeId, title: initialTitle, hre
         type="button"
         onClick={startEdit}
         title="Rename"
-        className="shrink-0 opacity-0 group-hover/rename:opacity-100 transition-opacity text-zinc-400 hover:text-indigo-600"
+        className="shrink-0 opacity-0 group-hover/rename:opacity-100 transition-opacity text-zinc-600 hover:text-[#1ec997]"
       >
         <PencilIcon />
       </button>

@@ -34,11 +34,11 @@ export function GenerateEpisodeDigestButton({
         type="button"
         onClick={run}
         disabled={busy}
-        className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
+        className="rounded-lg bg-[#1ec997] px-4 py-2 text-sm font-medium text-[#06160f] transition hover:bg-[#34d6a8] disabled:opacity-50"
       >
         {busy ? "Generating… (~a minute)" : label}
       </button>
-      {error && <span className="text-sm text-rose-600">{error}</span>}
+      {error && <span className="text-sm text-rose-400">{error}</span>}
     </div>
   );
 }

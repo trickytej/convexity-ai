@@ -31,8 +31,8 @@ export default function ImportEpisode() {
   }
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-5">
-      <p className="mb-3 text-sm font-medium text-zinc-700">
+    <div className="rounded-xl border border-white/[0.08] bg-[#0b0c10]/70 p-5">
+      <p className="mb-3 text-sm font-medium text-zinc-300">
         Add an interview or another source
       </p>
       <form onSubmit={handleSubmit} className="space-y-2">
@@ -42,13 +42,13 @@ export default function ImportEpisode() {
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://example.com/episode.mp3"
-            className="flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-300"
+            className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-[#1ec997]/50 focus:outline-none focus:ring-1 focus:ring-[#1ec997]/30"
             disabled={status === "loading"}
           />
           <button
             type="submit"
             disabled={status === "loading" || !url.trim()}
-            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:opacity-40"
+            className="rounded-lg bg-[#1ec997] px-4 py-2 text-sm font-medium text-[#06160f] transition hover:bg-[#34d6a8] disabled:opacity-40"
           >
             {status === "loading" ? "Adding…" : "Add"}
           </button>
@@ -58,15 +58,15 @@ export default function ImportEpisode() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Title (optional)"
-          className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-300"
+          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-[#1ec997]/50 focus:outline-none focus:ring-1 focus:ring-[#1ec997]/30"
           disabled={status === "loading"}
         />
       </form>
       {message && (
-        <p className={`mt-2 text-sm ${status === "error" ? "text-rose-600" : "text-emerald-600"}`}>
+        <p className={`mt-2 text-sm ${status === "error" ? "text-rose-400" : "text-emerald-300"}`}>
           {message}
           {episodeId && (
-            <Link href={`/episode/${episodeId}`} className="ml-2 underline hover:opacity-80">
+            <Link href={`/episode/${episodeId}`} className="ml-2 text-[#1ec997] underline hover:text-[#34d6a8]">
               View episode →
             </Link>
           )}
