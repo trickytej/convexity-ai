@@ -1,0 +1,24 @@
+# Render blueprint for the API. Deploy: New > Blueprint > pick this repo.
+# All secrets are sync:false — set them in the Render dashboard after the first deploy.
+services:
+  - type: web
+    name: research-digest-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter # always-on (~$7/mo); free tier sleeps when idle
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: DIGEST_API_KEY
+        sync: false # shared secret the frontend proxy must send
+      - key: ANTHROPIC_API_KEY
+        sync: false # needed for on-demand report/digest/newsletter generation
+      - key: DIGEST_CORS_ORIGINS
+        sync: false # e.g. https://your-app.vercel.app
+      - key: DIGEST_SYNTHESIS_MODEL
+        value: claude-opus-4-8

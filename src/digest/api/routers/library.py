@@ -255,10 +255,9 @@ def _load_glossary(settings) -> Glossary:
 def _run_process(episode_id: int) -> None:
     """Background: acquire → transcribe → extract insights for one episode."""
     settings = get_settings()
-    import sqlite3 as _sqlite3
+    from ...store.db import connect as _db_connect
 
-    conn = _sqlite3.connect(str(settings.resolved_db_path))
-    conn.row_factory = _sqlite3.Row
+    conn = _db_connect(settings.resolved_db_path)
     try:
         ep = repo.get_episode(conn, episode_id)
         if ep is None:

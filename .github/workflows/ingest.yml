@@ -1,0 +1,50 @@
+name: ingest
+
+# Scheduled ingestion: pull feeds, transcribe new episodes, extract insights, and
+# write everything to the hosted Turso DB. Audio is downloaded transiently on the
+# runner and discarded. Runs daily; also runnable on demand from the Actions tab.
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # 06:00 UTC daily
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Look-back window (days) for new episodes"
+        required: false
+        default: "7"
+
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+      ASSEMBLYAI_API_KEY: ${{ secrets.ASSEMBLYAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ffmpeg (audio extraction)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
+      - name: Install package
+        run: pip install --upgrade pip && pip install .
+
+      - name: Ensure schema on Turso
+        run: digest init
+
+      - name: Ingest new episodes
+        run: digest ingest --days "${{ github.event.inputs.days || '7' }}" -v
+
+      - name: Extract insights
+        run: digest insights

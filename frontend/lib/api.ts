@@ -1,4 +1,26 @@
-export const API_BASE = process.env.API_BASE_URL ?? "http://127.0.0.1:8000";
+const SERVER = typeof window === "undefined";
+const BACKEND = process.env.API_BASE_URL ?? "http://127.0.0.1:8000";
+
+/**
+ * Isomorphic API call.
+ * - Server (RSC / route handlers): hit the backend directly and attach the secret
+ *   `DIGEST_API_KEY` (never exposed to the browser).
+ * - Browser: hit the same-origin Next proxy at `/api/...`, which injects the key
+ *   server-side. This keeps the API key out of the client bundle and avoids CORS.
+ */
+export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  let url = path;
+  if (SERVER) {
+    url = `${BACKEND}${path}`;
+    const key = process.env.DIGEST_API_KEY;
+    if (key) headers.set("x-api-key", key);
+  }
+  return fetch(url, { cache: "no-store", ...init, headers });
+}
+
+/** Backend base URL, for the server-side proxy route only. */
+export const API_BASE = BACKEND;
 
 export interface Show {
   slug: string;
@@ -57,7 +79,7 @@ export interface Transcript {
 }
 
 async function getJSON<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
+  const res = await apiFetch(path);
   if (!res.ok) {
     throw new Error(`API ${res.status} for ${path}`);
   }
@@ -81,12 +103,12 @@ export function getEpisodes(
 }
 
 export async function deleteEpisode(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/episodes/${id}`, { method: "DELETE" });
+  const res = await apiFetch(`/api/episodes/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
 }
 
 export async function renameEpisode(id: number, title: string): Promise<Episode> {
-  const res = await fetch(`${API_BASE}/api/episodes/${id}`, {
+  const res = await apiFetch(`/api/episodes/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title }),
@@ -99,12 +121,12 @@ export async function renameEpisode(id: number, title: string): Promise<Episode>
 }
 
 export async function deleteShow(slug: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/shows/${slug}`, { method: "DELETE" });
+  const res = await apiFetch(`/api/shows/${slug}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
 }
 
 export async function pollShow(slug: string): Promise<{ new: number; seen: number; total: number }> {
-  const res = await fetch(`${API_BASE}/api/shows/${slug}/poll`, { method: "POST" });
+  const res = await apiFetch(`/api/shows/${slug}/poll`, { method: "POST" });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error((err as { detail?: string }).detail ?? `Poll failed: ${res.status}`);
@@ -113,7 +135,7 @@ export async function pollShow(slug: string): Promise<{ new: number; seen: numbe
 }
 
 export async function processEpisode(id: number): Promise<{ status: string }> {
-  const res = await fetch(`${API_BASE}/api/episodes/${id}/process`, { method: "POST" });
+  const res = await apiFetch(`/api/episodes/${id}/process`, { method: "POST" });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error((err as { detail?: string }).detail ?? `Process failed: ${res.status}`);
@@ -231,7 +253,7 @@ export function getLatestReport(): Promise<GeneratedReport | null> {
 }
 
 export async function generateReport(days = 7): Promise<GeneratedReport> {
-  const res = await fetch(`${API_BASE}/api/report/generate?days=${days}`, { method: "POST" });
+  const res = await apiFetch(`/api/report/generate?days=${days}`, { method: "POST" });
   if (!res.ok) {
     throw new Error(`report generation failed: ${res.status}`);
   }
@@ -281,7 +303,7 @@ export function getEpisodeDigest(id: number | string): Promise<EpisodeDigest | n
 }
 
 export async function generateEpisodeDigest(id: number | string): Promise<EpisodeDigest> {
-  const res = await fetch(`${API_BASE}/api/episodes/${id}/digest`, { method: "POST" });
+  const res = await apiFetch(`/api/episodes/${id}/digest`, { method: "POST" });
   if (!res.ok) {
     throw new Error(`digest generation failed: ${res.status}`);
   }
@@ -289,7 +311,7 @@ export async function generateEpisodeDigest(id: number | string): Promise<Episod
 }
 
 export async function setTriage(id: number, triage: TriageValue): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/nuggets/${id}/triage`, {
+  const res = await apiFetch(`/api/nuggets/${id}/triage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ triage }),
@@ -352,7 +374,7 @@ export function getNuggetCurationStats(id: number | string): Promise<CurationSta
 }
 
 export async function patchCuration(nuggetId: number, patch: CurationPatch): Promise<Curation> {
-  const res = await fetch(`${API_BASE}/api/nuggets/${nuggetId}/curation`, {
+  const res = await apiFetch(`/api/nuggets/${nuggetId}/curation`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
@@ -419,7 +441,7 @@ export interface ImportEpisodeResult {
 }
 
 export async function importEpisode(url: string, title?: string): Promise<ImportEpisodeResult> {
-  const res = await fetch(`${API_BASE}/api/episodes/import`, {
+  const res = await apiFetch(`/api/episodes/import`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url, title: title ?? "" }),
@@ -432,7 +454,7 @@ export async function importEpisode(url: string, title?: string): Promise<Import
 }
 
 export async function importPodcast(url: string): Promise<ImportResult> {
-  const res = await fetch(`${API_BASE}/api/shows/import`, {
+  const res = await apiFetch(`/api/shows/import`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url }),
@@ -454,7 +476,7 @@ export interface NewsletterSendPayload {
 }
 
 export async function sendNewsletter(payload: NewsletterSendPayload): Promise<{ sent: number }> {
-  const res = await fetch(`${API_BASE}/api/newsletter/send`, {
+  const res = await apiFetch(`/api/newsletter/send`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

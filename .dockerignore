@@ -1,0 +1,19 @@
+# Keep the API image lean — never ship local data (audio is ~880MB) or the frontend.
+data/
+frontend/
+.venv/
+venv/
+.git/
+.github/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.*
+node_modules/
+docs/
+scripts/
+*.md
