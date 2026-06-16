@@ -31,7 +31,7 @@ function KeptNuggetCard({ n }: { n: NewsletterNugget }) {
         {n.curator_rank != null && (
           <Badge tone="amber">{"★".repeat(n.curator_rank)}</Badge>
         )}
-        {n.companies.slice(0, 3).map((c) => (
+        {(n.companies ?? []).slice(0, 3).map((c) => (
           <span
             key={c}
             className="rounded-full border border-[#00d4ff]/25 px-2 py-0.5 text-[11px] font-medium text-[#00d4ff]/80"
