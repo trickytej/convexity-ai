@@ -398,6 +398,7 @@ export interface NewsletterNugget {
   start_ms: number | null;
   sectors: string[];
   primary_sector: string | null;
+  companies: string[];
   tickers: string[];
   curator_rank: 1 | 2 | 3 | null;
   contradicts_consensus: boolean;

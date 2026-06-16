@@ -172,6 +172,7 @@ class NewsletterNuggetOut(BaseModel):
     start_ms: int | None = None
     sectors: list[str] = []
     primary_sector: str | None = None
+    companies: list[str] = []
     tickers: list[str] = []
     curator_rank: int | None = None
     contradicts_consensus: bool = False

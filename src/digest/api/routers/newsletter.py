@@ -36,6 +36,7 @@ def _parse_date(value: str, param: str, *, end_of_day: bool = False) -> str:
 def _nugget_out(row: sqlite3.Row) -> NewsletterNuggetOut:
     entities = json.loads(row["entities"]) if row["entities"] else {}
     sectors = json.loads(row["sectors"]) if row["sectors"] else []
+    companies = entities.get("companies", []) or []
     tickers = entities.get("tickers", []) or []
     return NewsletterNuggetOut(
         id=row["id"],
@@ -50,6 +51,7 @@ def _nugget_out(row: sqlite3.Row) -> NewsletterNuggetOut:
         start_ms=row["start_ms"],
         sectors=sectors if isinstance(sectors, list) else [],
         primary_sector=row["primary_sector"] if "primary_sector" in row.keys() else None,
+        companies=companies if isinstance(companies, list) else [],
         tickers=tickers if isinstance(tickers, list) else [],
         curator_rank=row["curator_rank"],
         contradicts_consensus=bool(row["contradicts_consensus"] or 0),
