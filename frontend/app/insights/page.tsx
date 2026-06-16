@@ -3,6 +3,7 @@ import { getNewsletter } from "@/lib/api";
 import { fmtDate } from "@/lib/format";
 import type { NewsletterNugget, StockMention } from "@/lib/api";
 import { Badge } from "@/components/ui";
+import RefreshFeedsButton from "@/components/RefreshFeedsButton";
 
 export const dynamic = "force-dynamic";
 
@@ -186,6 +187,11 @@ export default async function InsightsPage() {
           tab and mark what matters.
         </p>
       )}
+
+      {/* refresh feeds */}
+      <div className="mt-12">
+        <RefreshFeedsButton />
+      </div>
 
       {/* lead */}
       {lead.length > 0 && (
