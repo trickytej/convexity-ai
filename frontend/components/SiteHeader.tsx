@@ -22,7 +22,7 @@ export default function SiteHeader() {
           className="flex items-center gap-2 text-[15px] font-medium tracking-tight text-zinc-100 [font-family:var(--font-display)]"
         >
           <span className="inline-block h-3 w-3 rounded-sm bg-[#00d4ff]" />
-          TMTB<span className="px-0.5 text-zinc-600">/</span>
+          ConvexityAI<span className="px-0.5 text-zinc-600">/</span>
           <span className="font-light text-zinc-400">Research</span>
         </Link>
         <nav className="flex gap-6 text-sm sm:gap-7">
