@@ -34,7 +34,7 @@ export function GenerateReportButton({
         type="button"
         onClick={run}
         disabled={busy}
-        className="rounded-lg bg-[#1ec997] px-4 py-2 text-sm font-medium text-[#06160f] transition hover:bg-[#34d6a8] disabled:opacity-50"
+        className="rounded-lg bg-[#e53e3e] px-4 py-2 text-sm font-medium text-[#ffffff] transition hover:bg-[#f56565] disabled:opacity-50"
       >
         {busy ? "Generating… (a minute or two)" : label}
       </button>

@@ -30,7 +30,7 @@ export function TriageControls({ id, initial }: { id: number; initial: string })
         onClick={() => apply("relevant")}
         className={
           state === "relevant"
-            ? `${base} bg-[#1ec997] text-[#06160f] ring-[#1ec997]`
+            ? `${base} bg-[#e53e3e] text-[#ffffff] ring-[#e53e3e]`
             : `${base} bg-white/[0.04] text-zinc-400 ring-white/10 hover:bg-white/[0.08] hover:text-zinc-200`
         }
       >

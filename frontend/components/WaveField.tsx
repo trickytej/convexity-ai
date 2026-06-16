@@ -16,11 +16,11 @@ type Layer = {
 
 // Layered swells — mostly mid/lower field so headings stay clean.
 const LAYERS: Layer[] = [
-  { baseY: 0.46, amp: 30, wl1: 620, wl2: 270, speed: 0.5, phase: 0.4, color: "30,201,151", alpha: 0.16, width: 1.4 },
-  { baseY: 0.55, amp: 26, wl1: 540, wl2: 240, speed: 0.62, phase: 1.7, color: "30,201,151", alpha: 0.13, width: 1.3 },
-  { baseY: 0.66, amp: 38, wl1: 720, wl2: 320, speed: 0.44, phase: 2.6, color: "30,201,151", alpha: 0.18, width: 1.5 },
-  { baseY: 0.75, amp: 30, wl1: 600, wl2: 280, speed: 0.7, phase: 0.9, color: "74,128,255", alpha: 0.1, width: 1.3 },
-  { baseY: 0.85, amp: 42, wl1: 760, wl2: 340, speed: 0.5, phase: 3.3, color: "30,201,151", alpha: 0.15, width: 1.5 },
+  { baseY: 0.46, amp: 30, wl1: 620, wl2: 270, speed: 0.5, phase: 0.4, color: "229,62,62", alpha: 0.16, width: 1.4 },
+  { baseY: 0.55, amp: 26, wl1: 540, wl2: 240, speed: 0.62, phase: 1.7, color: "229,62,62", alpha: 0.13, width: 1.3 },
+  { baseY: 0.66, amp: 38, wl1: 720, wl2: 320, speed: 0.44, phase: 2.6, color: "229,62,62", alpha: 0.18, width: 1.5 },
+  { baseY: 0.75, amp: 30, wl1: 600, wl2: 280, speed: 0.7, phase: 0.9, color: "180,30,30", alpha: 0.1, width: 1.3 },
+  { baseY: 0.85, amp: 42, wl1: 760, wl2: 340, speed: 0.5, phase: 3.3, color: "229,62,62", alpha: 0.15, width: 1.5 },
 ];
 
 export default function WaveField({ scrollTargetId }: { scrollTargetId?: string }) {

@@ -21,7 +21,7 @@ export default function SiteHeader() {
           href="/"
           className="flex items-center gap-2 text-[15px] font-medium tracking-tight text-zinc-100 [font-family:var(--font-display)]"
         >
-          <span className="inline-block h-3 w-3 rounded-sm bg-[#1ec997]" />
+          <span className="inline-block h-3 w-3 rounded-sm bg-[#e53e3e]" />
           TMTB<span className="px-0.5 text-zinc-600">/</span>
           <span className="font-light text-zinc-400">Research</span>
         </Link>
@@ -32,7 +32,7 @@ export default function SiteHeader() {
               <Link
                 key={n.href}
                 href={n.href}
-                className={active ? "text-[#1ec997]" : "text-zinc-400 transition hover:text-zinc-100"}
+                className={active ? "text-[#e53e3e]" : "text-zinc-400 transition hover:text-zinc-100"}
               >
                 {n.label}
               </Link>

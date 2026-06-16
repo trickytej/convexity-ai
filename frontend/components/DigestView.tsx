@@ -21,7 +21,7 @@ function SourceChips({ sources }: { sources: DigestSource[] }) {
           key={s.nugget_id}
           href={srcHref(s)}
           title={s.speaker_name ?? "source"}
-          className="rounded bg-white/[0.06] px-1.5 py-0.5 text-xs text-zinc-400 ring-1 ring-inset ring-white/10 transition hover:bg-white/10 hover:text-[#1ec997]"
+          className="rounded bg-white/[0.06] px-1.5 py-0.5 text-xs text-zinc-400 ring-1 ring-inset ring-white/10 transition hover:bg-white/10 hover:text-[#e53e3e]"
         >
           ↗
         </Link>
@@ -37,11 +37,11 @@ export function DigestView({ digest }: { digest: EpisodeDigest }) {
         {digest.themes.map((t, i) => (
           <section key={i}>
             <h3 className="text-lg font-medium tracking-tight text-zinc-50 [font-family:var(--font-display)]">{t.headline}</h3>
-            {t.takeaway && <p className="mt-1 text-sm italic text-[#1ec997]">{t.takeaway}</p>}
+            {t.takeaway && <p className="mt-1 text-sm italic text-[#e53e3e]">{t.takeaway}</p>}
             <ul className="mt-3 space-y-3">
               {t.points.map((p, j) => (
                 <li key={j} className="text-[15px] leading-relaxed text-zinc-300">
-                  <span className="mr-1.5 text-[#1ec997]/70">•</span>
+                  <span className="mr-1.5 text-[#e53e3e]/70">•</span>
                   {p.text}
                   <SourceChips sources={p.sources} />
                   {p.quote && (
@@ -49,7 +49,7 @@ export function DigestView({ digest }: { digest: EpisodeDigest }) {
                       <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300">
                         quote
                       </summary>
-                      <blockquote className="mt-1 border-l-2 border-[#1ec997]/40 pl-3 text-sm italic text-zinc-500">
+                      <blockquote className="mt-1 border-l-2 border-[#e53e3e]/40 pl-3 text-sm italic text-zinc-500">
                         “{p.quote}”
                       </blockquote>
                     </details>
@@ -63,8 +63,8 @@ export function DigestView({ digest }: { digest: EpisodeDigest }) {
 
       {digest.stocks.length > 0 && (
         <div>
-          <h3 className="mb-3 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.2em] text-[#1ec997]">
-            <span className="inline-block h-px w-6 bg-[#1ec997]" />
+          <h3 className="mb-3 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.2em] text-[#e53e3e]">
+            <span className="inline-block h-px w-6 bg-[#e53e3e]" />
             Stock read-through
           </h3>
           <div className="divide-y divide-white/[0.06] overflow-hidden rounded-xl border border-white/[0.08] bg-[#0b0c10]/60">
@@ -83,7 +83,7 @@ export function DigestView({ digest }: { digest: EpisodeDigest }) {
                     {s.sources.length > 0 && (
                       <Link
                         href={srcHref(s.sources[0])}
-                        className="ml-1 text-[#1ec997] hover:text-[#34d6a8]"
+                        className="ml-1 text-[#e53e3e] hover:text-[#f56565]"
                       >
                         ↗
                       </Link>

@@ -420,8 +420,8 @@ export default function NewsletterPage() {
     <div className="space-y-6">
       <div className="print:hidden">
         <p className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
-          <span className="inline-block h-px w-8 bg-[#1ec997]" />
-          <span className="text-[#1ec997]">Distribute</span>
+          <span className="inline-block h-px w-8 bg-[#e53e3e]" />
+          <span className="text-[#e53e3e]">Distribute</span>
         </p>
         <h1 className="mt-4 text-4xl font-light tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-5xl">
           Newsletter
@@ -441,7 +441,7 @@ export default function NewsletterPage() {
             disabled={loading}
             className={`rounded-full px-3.5 py-1.5 text-sm transition disabled:opacity-50 ${
               selectedShow === s.slug
-                ? "bg-[#1ec997] font-medium text-[#06160f]"
+                ? "bg-[#e53e3e] font-medium text-[#ffffff]"
                 : "border border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-100"
             }`}
           >
@@ -477,7 +477,7 @@ export default function NewsletterPage() {
               type="button"
               onClick={() => setShowMarkdown(false)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                !showMarkdown ? "bg-[#1ec997] text-[#06160f]" : "bg-white/[0.06] text-zinc-300 hover:bg-white/10"
+                !showMarkdown ? "bg-[#e53e3e] text-[#ffffff]" : "bg-white/[0.06] text-zinc-300 hover:bg-white/10"
               }`}
             >
               Preview
@@ -486,7 +486,7 @@ export default function NewsletterPage() {
               type="button"
               onClick={() => setShowMarkdown(true)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                showMarkdown ? "bg-[#1ec997] text-[#06160f]" : "bg-white/[0.06] text-zinc-300 hover:bg-white/10"
+                showMarkdown ? "bg-[#e53e3e] text-[#ffffff]" : "bg-white/[0.06] text-zinc-300 hover:bg-white/10"
               }`}
             >
               Markdown
@@ -497,7 +497,7 @@ export default function NewsletterPage() {
                 onClick={openEmail}
                 className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
                   showEmail
-                    ? "border-[#1ec997]/40 bg-[#1ec997] text-[#06160f]"
+                    ? "border-[#e53e3e]/40 bg-[#e53e3e] text-[#ffffff]"
                     : "border-white/15 bg-white/[0.06] text-zinc-200 hover:bg-white/10"
                 }`}
               >
@@ -525,21 +525,21 @@ export default function NewsletterPage() {
                 value={emailSubject}
                 onChange={(e) => setEmailSubject(e.target.value)}
                 placeholder="Subject"
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-[#1ec997]/50 focus:outline-none focus:ring-1 focus:ring-[#1ec997]/30"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-[#e53e3e]/50 focus:outline-none focus:ring-1 focus:ring-[#e53e3e]/30"
               />
               <textarea
                 value={recipients}
                 onChange={(e) => setRecipients(e.target.value)}
                 placeholder="Recipients (comma-separated emails)"
                 rows={2}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-mono text-zinc-100 placeholder-zinc-500 focus:border-[#1ec997]/50 focus:outline-none focus:ring-1 focus:ring-[#1ec997]/30"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-mono text-zinc-100 placeholder-zinc-500 focus:border-[#e53e3e]/50 focus:outline-none focus:ring-1 focus:ring-[#e53e3e]/30"
               />
               <div className="flex items-center gap-3">
                 <button
                   type="button"
                   onClick={handleSend}
                   disabled={sendStatus === "sending"}
-                  className="rounded-lg bg-[#1ec997] px-4 py-2 text-sm font-medium text-[#06160f] hover:bg-[#34d6a8] disabled:opacity-50 transition-colors"
+                  className="rounded-lg bg-[#e53e3e] px-4 py-2 text-sm font-medium text-[#ffffff] hover:bg-[#f56565] disabled:opacity-50 transition-colors"
                 >
                   {sendStatus === "sending" ? "Sending…" : "Send"}
                 </button>

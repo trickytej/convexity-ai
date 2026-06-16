@@ -37,7 +37,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="space-y-6">
-      <Link href="/episodes" className="text-sm text-[#1ec997] transition hover:text-[#34d6a8]">
+      <Link href="/episodes" className="text-sm text-[#e53e3e] transition hover:text-[#f56565]">
         ← All episodes
       </Link>
 
@@ -60,7 +60,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
               href={e.episode_url}
               target="_blank"
               rel="noreferrer"
-              className="text-sm text-[#1ec997] transition hover:text-[#34d6a8]"
+              className="text-sm text-[#e53e3e] transition hover:text-[#f56565]"
             >
               source ↗
             </a>
@@ -70,7 +70,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
               href={e.audio_url}
               target="_blank"
               rel="noreferrer"
-              className="text-sm text-[#1ec997] transition hover:text-[#34d6a8]"
+              className="text-sm text-[#e53e3e] transition hover:text-[#f56565]"
             >
               audio ↗
             </a>

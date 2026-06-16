@@ -69,8 +69,8 @@ export default function ShowGrid({ initialShows }: { initialShows: Show[] }) {
     <>
       <header>
         <p className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
-          <span className="inline-block h-px w-8 bg-[#1ec997]" />
-          <span className="text-[#1ec997]">Sources</span>
+          <span className="inline-block h-px w-8 bg-[#e53e3e]" />
+          <span className="text-[#e53e3e]">Sources</span>
         </p>
         <h1 className="mt-4 text-4xl font-light tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-5xl">
           Podcasts
@@ -84,11 +84,11 @@ export default function ShowGrid({ initialShows }: { initialShows: Show[] }) {
         {shows.map((s) => (
           <div
             key={s.slug}
-            className="group flex flex-col rounded-xl border border-white/[0.08] bg-[#0b0c10]/70 pl-5 pr-5 pt-5 pb-4 transition-all hover:border-[#1ec997]/30 hover:bg-[#0e1016]/85"
-            style={{ borderLeft: "3px solid #1ec997" }}
+            className="group flex flex-col rounded-xl border border-white/[0.08] bg-[#0b0c10]/70 pl-5 pr-5 pt-5 pb-4 transition-all hover:border-[#e53e3e]/30 hover:bg-[#0e1016]/85"
+            style={{ borderLeft: "3px solid #e53e3e" }}
           >
             <Link href={`/episodes?show=${s.slug}`} className="flex-1">
-              <h2 className="text-base font-medium leading-snug tracking-tight text-zinc-100 transition-colors group-hover:text-[#1ec997]">
+              <h2 className="text-base font-medium leading-snug tracking-tight text-zinc-100 transition-colors group-hover:text-[#e53e3e]">
                 {s.name}
               </h2>
             </Link>

@@ -92,8 +92,8 @@ export default function TranscribeButton({ episodeId, initialStatus }: { episode
             : phase === "error"
             ? "bg-rose-500/10 text-rose-300 ring-rose-500/25 cursor-pointer"
             : isRunning
-            ? "bg-[#1ec997]/10 text-[#1ec997] ring-[#1ec997]/25"
-            : "bg-white/[0.06] text-zinc-300 ring-white/10 hover:bg-[#1ec997]/10 hover:text-[#1ec997] hover:ring-[#1ec997]/30 cursor-pointer"
+            ? "bg-[#e53e3e]/10 text-[#e53e3e] ring-[#e53e3e]/25"
+            : "bg-white/[0.06] text-zinc-300 ring-white/10 hover:bg-[#e53e3e]/10 hover:text-[#e53e3e] hover:ring-[#e53e3e]/30 cursor-pointer"
         }`}
       >
         {isRunning && (
