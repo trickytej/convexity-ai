@@ -4,11 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV = [
-  { href: "/insights", label: "Insights", match: (p: string) => p === "/insights" || p === "/preview" },
-  { href: "/report", label: "Report", match: (p: string) => p.startsWith("/report") },
-  { href: "/newsletter", label: "Newsletter", match: (p: string) => p.startsWith("/newsletter") },
-  { href: "/episodes", label: "Episodes", match: (p: string) => p.startsWith("/episode") },
+  { href: "/insights", label: "Home", match: (p: string) => p === "/insights" || p === "/preview" },
   { href: "/", label: "Podcasts", match: (p: string) => p === "/" },
+  { href: "/newsletter", label: "Newsletter", match: (p: string) => p.startsWith("/newsletter") },
+  { href: "/report", label: "Report", match: (p: string) => p.startsWith("/report") },
+  { href: "/episodes", label: "Episodes", match: (p: string) => p.startsWith("/episode") },
 ];
 
 export default function SiteHeader() {
