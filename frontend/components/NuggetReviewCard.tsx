@@ -79,7 +79,7 @@ export function NuggetReviewCard({
 
       {/* Quote */}
       {nugget.quote && (
-        <blockquote className="border-l-2 border-[#e53e3e]/40 pl-3 text-sm text-zinc-400 italic">
+        <blockquote className="border-l-2 border-[#00d4ff]/40 pl-3 text-sm text-zinc-400 italic">
           {nugget.quote}
           {nugget.speaker_name && (
             <span className="not-italic text-zinc-500"> — {nugget.speaker_name}</span>
@@ -87,7 +87,7 @@ export function NuggetReviewCard({
           {nugget.start_ms != null && (
             <a
               href={`/episode/${episodeId}?t=${nugget.start_ms}`}
-              className="ml-2 text-xs text-[#e53e3e] hover:text-[#f56565] not-italic"
+              className="ml-2 text-xs text-[#00d4ff] hover:text-[#33ddff] not-italic"
             >
               {fmtMs(nugget.start_ms)} ↗
             </a>
@@ -146,8 +146,8 @@ export function NuggetReviewCard({
               }}
               className={`w-6 h-6 rounded-full text-xs font-semibold transition-colors ${
                 curation.curator_rank === r
-                  ? "bg-[#e53e3e] text-[#ffffff]"
-                  : "bg-white/[0.06] text-zinc-400 hover:bg-[#e53e3e]/15 hover:text-[#e53e3e]"
+                  ? "bg-[#00d4ff] text-[#001a26]"
+                  : "bg-white/[0.06] text-zinc-400 hover:bg-[#00d4ff]/15 hover:text-[#00d4ff]"
               }`}
             >
               {r}
@@ -165,7 +165,7 @@ export function NuggetReviewCard({
               setCuration((c) => ({ ...c, contradicts_consensus: v }));
               save({ contradicts_consensus: v });
             }}
-            className="rounded accent-[#e53e3e]"
+            className="rounded accent-[#00d4ff]"
           />
           contradicts consensus
         </label>
@@ -179,7 +179,7 @@ export function NuggetReviewCard({
         onChange={(e) => {
           save({ note: e.target.value });
         }}
-        className="w-full rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#e53e3e]/40 resize-none"
+        className="w-full rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#00d4ff]/40 resize-none"
       />
     </div>
   );

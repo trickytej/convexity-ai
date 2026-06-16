@@ -34,8 +34,8 @@ export default async function EpisodesPage({
       <div className="flex items-end justify-between gap-4">
         <div>
           <p className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
-            <span className="inline-block h-px w-8 bg-[#e53e3e]" />
-            <span className="text-[#e53e3e]">Library</span>
+            <span className="inline-block h-px w-8 bg-[#00d4ff]" />
+            <span className="text-[#00d4ff]">Library</span>
           </p>
           <h1 className="mt-4 text-4xl font-light tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-5xl">
             Episodes
@@ -53,7 +53,7 @@ export default async function EpisodesPage({
           href="/episodes"
           className={`rounded-full px-3.5 py-1.5 text-sm transition ${
             !show
-              ? "bg-[#e53e3e] font-medium text-[#ffffff]"
+              ? "bg-[#00d4ff] font-medium text-[#001a26]"
               : "border border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-100"
           }`}
         >
@@ -65,7 +65,7 @@ export default async function EpisodesPage({
             href={`/episodes?show=${s.slug}`}
             className={`rounded-full px-3.5 py-1.5 text-sm transition ${
               show === s.slug
-                ? "bg-[#e53e3e] font-medium text-[#ffffff]"
+                ? "bg-[#00d4ff] font-medium text-[#001a26]"
                 : "border border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-100"
             }`}
           >
@@ -98,7 +98,7 @@ export default async function EpisodesPage({
                 <div key={e.id} className="flex items-center justify-between gap-4 px-4 py-3.5 transition hover:bg-white/[0.02]">
                   <div className="min-w-0 flex-1">
                     {isTranscribed ? (
-                      <Link href={`/episode/${e.id}`} className="transition-colors hover:text-[#e53e3e]">
+                      <Link href={`/episode/${e.id}`} className="transition-colors hover:text-[#00d4ff]">
                         <p className="truncate font-medium text-zinc-100">{e.title}</p>
                       </Link>
                     ) : (

@@ -14,7 +14,7 @@ function highlight(text: string, query: string) {
   const parts = text.split(new RegExp(`(${escapeRegExp(query)})`, "ig"));
   return parts.map((part, i) =>
     part.toLowerCase() === query ? (
-      <mark key={i} className="rounded bg-[#e53e3e]/30 px-0.5 text-zinc-50">
+      <mark key={i} className="rounded bg-[#00d4ff]/30 px-0.5 text-zinc-50">
         {part}
       </mark>
     ) : (
@@ -55,7 +55,7 @@ export default function TranscriptView({
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Search this transcript…"
-        className="mb-6 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:border-[#e53e3e]/50 focus:ring-2 focus:ring-[#e53e3e]/20"
+        className="mb-6 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:border-[#00d4ff]/50 focus:ring-2 focus:ring-[#00d4ff]/20"
       />
       {query && (
         <p className="mb-4 text-sm text-zinc-500">

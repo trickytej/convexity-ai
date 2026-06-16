@@ -21,7 +21,7 @@ function typeLabel(t: string): string {
 export function NuggetCard({ n }: { n: ReportNugget }) {
   const href = `/episode/${n.episode_id}${n.start_ms != null ? `#t-${n.start_ms}` : ""}`;
   return (
-    <div className="group rounded-xl border border-white/[0.08] bg-[#0b0c10]/75 p-4 transition hover:border-[#e53e3e]/30 hover:bg-[#0e1016]/85">
+    <div className="group rounded-xl border border-white/[0.08] bg-[#0b0c10]/75 p-4 transition hover:border-[#00d4ff]/30 hover:bg-[#0e1016]/85">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Badge tone={TYPE_TONE[n.type] ?? "zinc"}>{typeLabel(n.type)}</Badge>
@@ -38,7 +38,7 @@ export function NuggetCard({ n }: { n: ReportNugget }) {
       <p className="text-[15px] font-medium leading-snug text-zinc-100">{n.claim}</p>
 
       {n.quote && (
-        <blockquote className="mt-2 border-l-2 border-[#e53e3e]/40 pl-3 text-sm italic leading-relaxed text-zinc-500">
+        <blockquote className="mt-2 border-l-2 border-[#00d4ff]/40 pl-3 text-sm italic leading-relaxed text-zinc-500">
           “{n.quote}”
         </blockquote>
       )}
@@ -50,7 +50,7 @@ export function NuggetCard({ n }: { n: ReportNugget }) {
           <span className="font-[family-name:var(--font-mono)]">{n.show_slug}</span> · {fmtDate(n.published_at)}
           {!n.quote_verified && <span className="text-zinc-600"> · unverified</span>}
         </span>
-        <Link href={href} className="shrink-0 font-medium text-[#e53e3e] transition hover:text-[#f56565]">
+        <Link href={href} className="shrink-0 font-medium text-[#00d4ff] transition hover:text-[#33ddff]">
           in context →
         </Link>
       </div>

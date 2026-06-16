@@ -34,7 +34,7 @@ export function GenerateEpisodeDigestButton({
         type="button"
         onClick={run}
         disabled={busy}
-        className="rounded-lg bg-[#e53e3e] px-4 py-2 text-sm font-medium text-[#ffffff] transition hover:bg-[#f56565] disabled:opacity-50"
+        className="rounded-lg bg-[#00d4ff] px-4 py-2 text-sm font-medium text-[#001a26] transition hover:bg-[#33ddff] disabled:opacity-50"
       >
         {busy ? "Generating… (~a minute)" : label}
       </button>

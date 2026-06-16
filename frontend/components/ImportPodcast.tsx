@@ -39,13 +39,13 @@ export default function ImportPodcast() {
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://feeds.example.com/podcast.rss"
-          className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-[#e53e3e]/50 focus:outline-none focus:ring-1 focus:ring-[#e53e3e]/30"
+          className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-[#00d4ff]/50 focus:outline-none focus:ring-1 focus:ring-[#00d4ff]/30"
           disabled={status === "loading"}
         />
         <button
           type="submit"
           disabled={status === "loading" || !url.trim()}
-          className="rounded-lg bg-[#e53e3e] px-4 py-2 text-sm font-medium text-[#ffffff] transition hover:bg-[#f56565] disabled:opacity-40"
+          className="rounded-lg bg-[#00d4ff] px-4 py-2 text-sm font-medium text-[#001a26] transition hover:bg-[#33ddff] disabled:opacity-40"
         >
           {status === "loading" ? "Adding…" : "Add"}
         </button>

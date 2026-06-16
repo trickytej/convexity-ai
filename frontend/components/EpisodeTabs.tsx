@@ -27,7 +27,7 @@ export function EpisodeTabs({
 
   const tabCls = (active: boolean) =>
     `-mb-px border-b-2 pb-2 transition ${
-      active ? "border-[#e53e3e] text-zinc-100" : "border-transparent text-zinc-500 hover:text-zinc-200"
+      active ? "border-[#00d4ff] text-zinc-100" : "border-transparent text-zinc-500 hover:text-zinc-200"
     }`;
 
   return (

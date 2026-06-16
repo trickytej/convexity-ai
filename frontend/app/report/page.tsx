@@ -18,8 +18,8 @@ export default async function ReportPage() {
     return (
       <div>
         <p className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
-          <span className="inline-block h-px w-8 bg-[#e53e3e]" />
-          <span className="text-[#e53e3e]">Weekly Report</span>
+          <span className="inline-block h-px w-8 bg-[#00d4ff]" />
+          <span className="text-[#00d4ff]">Weekly Report</span>
         </p>
         <h1 className="mt-4 text-4xl font-light tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-5xl">
           Generate this week&apos;s report
@@ -33,7 +33,7 @@ export default async function ReportPage() {
         </div>
         <p className="mt-4 text-xs text-zinc-500">
           Tip: mark insights “Relevant” on the{" "}
-          <Link href="/insights" className="text-[#e53e3e] transition hover:text-[#f56565]">
+          <Link href="/insights" className="text-[#00d4ff] transition hover:text-[#33ddff]">
             Weekly insights
           </Link>{" "}
           page first to curate what the report covers (otherwise it uses the top insights by
@@ -49,8 +49,8 @@ export default async function ReportPage() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
-              <span className="inline-block h-px w-8 bg-[#e53e3e]" />
-              <span className="text-[#e53e3e]">Weekly Report</span>
+              <span className="inline-block h-px w-8 bg-[#00d4ff]" />
+              <span className="text-[#00d4ff]">Weekly Report</span>
               <span className="text-zinc-700">•</span>
               <span className="text-zinc-500">
                 {fmtDate(report.since)} – {fmtDate(report.until)}

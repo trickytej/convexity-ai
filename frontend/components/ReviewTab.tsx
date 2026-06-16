@@ -35,7 +35,7 @@ export function ReviewTab({
           </p>
           <div className="h-1.5 w-48 rounded-full bg-white/10">
             <div
-              className="h-1.5 rounded-full bg-[#e53e3e] transition-all"
+              className="h-1.5 rounded-full bg-[#00d4ff] transition-all"
               style={{ width: total > 0 ? `${(reviewed / total) * 100}%` : "0%" }}
             />
           </div>
@@ -46,7 +46,7 @@ export function ReviewTab({
             type="checkbox"
             checked={keptOnly}
             onChange={(e) => setKeptOnly(e.target.checked)}
-            className="rounded accent-[#e53e3e]"
+            className="rounded accent-[#00d4ff]"
           />
           Show kept only
         </label>
