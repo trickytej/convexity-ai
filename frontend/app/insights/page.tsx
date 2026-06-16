@@ -130,7 +130,7 @@ export default async function InsightsPage() {
     newsletter;
 
   const tiles = [
-    { label: "Kept", value: kept_count },
+    { label: "Nuggets", value: kept_count },
     { label: "Episodes", value: episode_count },
     { label: "Stocks", value: stock_readthrough.length },
   ];
