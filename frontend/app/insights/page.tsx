@@ -1,48 +1,127 @@
 import Link from "next/link";
-import { getInsights } from "@/lib/api";
+import { getNewsletter } from "@/lib/api";
 import { fmtDate } from "@/lib/format";
-import { NuggetCard } from "@/components/NuggetCard";
+import type { NewsletterNugget, StockMention } from "@/lib/api";
+import { Badge } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
-const PER_SECTION = 15;
+const TYPE_TONE: Record<string, "zinc" | "green" | "blue" | "amber" | "indigo"> = {
+  thesis: "indigo",
+  prediction: "amber",
+  data_point: "blue",
+  company_move: "green",
+  contrarian: "amber",
+  mental_model: "zinc",
+  watch_item: "zinc",
+};
 
-function anchorId(sector: string): string {
-  return "sec-" + sector.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+function typeLabel(t: string) {
+  return t.replace(/_/g, " ");
 }
 
-const VIEWS = [
-  { id: undefined, label: "All" },
-  { id: "pending", label: "To review" },
-  { id: "relevant", label: "Important" },
-] as const;
+function KeptNuggetCard({ n }: { n: NewsletterNugget }) {
+  const href = `/episode/${n.episode_id}${n.start_ms != null ? `#t-${n.start_ms}` : ""}`;
+  return (
+    <div className="group rounded-xl border border-white/[0.08] bg-[#0b0c10]/75 p-4 transition hover:border-[#00d4ff]/30 hover:bg-[#0e1016]/85">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <Badge tone={TYPE_TONE[n.type] ?? "zinc"}>{typeLabel(n.type)}</Badge>
+        {n.curator_rank != null && (
+          <Badge tone="amber">{"★".repeat(n.curator_rank)}</Badge>
+        )}
+      </div>
 
-export default async function InsightsPage({
-  searchParams,
+      <p className="text-[15px] font-medium leading-snug text-zinc-100">{n.claim}</p>
+
+      {n.quote && (
+        <blockquote className="mt-2 border-l-2 border-[#00d4ff]/40 pl-3 text-sm italic leading-relaxed text-zinc-500">
+          "{n.quote}"
+        </blockquote>
+      )}
+
+      {n.curation_note && (
+        <p className="mt-2 text-xs italic text-[#00d4ff]/70">{n.curation_note}</p>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
+        <span className="min-w-0 truncate">
+          {n.speaker_name ? (
+            <span className="font-medium text-zinc-300">{n.speaker_name}</span>
+          ) : null}
+          {" · "}
+          <span className="font-[family-name:var(--font-mono)]">{n.show_slug}</span>
+          {" · "}
+          {fmtDate(n.episode_published_at)}
+        </span>
+        <Link href={href} className="shrink-0 font-medium text-[#00d4ff] transition hover:text-[#33ddff]">
+          in context →
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+const STANCE_TONE: Record<string, "green" | "amber" | "zinc"> = {
+  bullish: "green",
+  bearish: "amber",
+  neutral: "zinc",
+};
+
+function StockCard({ s }: { s: StockMention }) {
+  return (
+    <div className="rounded-xl border border-white/[0.08] bg-[#0b0c10]/75 p-4 transition hover:border-[#00d4ff]/30 hover:bg-[#0e1016]/85">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <span className="text-sm font-semibold text-zinc-100">{s.company}</span>
+        {s.tickers.length > 0 && (
+          <span className="font-[family-name:var(--font-mono)] text-xs text-zinc-500">
+            {s.tickers.join(" · ")}
+          </span>
+        )}
+        <Badge tone={STANCE_TONE[s.stance] ?? "zinc"}>{s.stance}</Badge>
+        <span className="ml-auto font-[family-name:var(--font-mono)] text-xs text-zinc-600">
+          {s.mention_count} mention{s.mention_count !== 1 ? "s" : ""}
+        </span>
+      </div>
+      <p className="text-sm leading-relaxed text-zinc-400">{s.summary}</p>
+    </div>
+  );
+}
+
+function SectionHeader({
+  index,
+  title,
+  count,
 }: {
-  searchParams: Promise<{ days?: string; triage?: string }>;
+  index: string;
+  title: string;
+  count: number;
 }) {
-  const { days, triage } = await searchParams;
-  const window = days ? Math.max(1, parseInt(days, 10) || 7) : 7;
-  const view = triage === "pending" || triage === "relevant" ? triage : undefined;
-  const report = await getInsights(window, PER_SECTION, view);
-  const { stats } = report;
-  const triageCounts = (stats.triage ?? {}) as Record<string, number>;
-  const maxShows = Math.max(1, ...report.top_entities.map((e) => e.shows.length));
+  return (
+    <div className="mb-6 flex items-baseline justify-between border-b border-white/[0.08] pb-4">
+      <div className="flex items-baseline gap-3">
+        <span className="rounded-[5px] border border-[#00d4ff]/40 px-1.5 py-1 font-[family-name:var(--font-mono)] text-[11px] leading-none text-[#00d4ff]">
+          {index}
+        </span>
+        <h2 className="text-2xl font-light tracking-tight text-zinc-50 [font-family:var(--font-display)]">
+          {title}
+        </h2>
+      </div>
+      <span className="font-[family-name:var(--font-mono)] text-xs tabular-nums text-zinc-500">
+        {count}
+      </span>
+    </div>
+  );
+}
 
-  const qs = (t?: string) => {
-    const q = new URLSearchParams();
-    if (days) q.set("days", days);
-    if (t) q.set("triage", t);
-    const s = q.toString();
-    return s ? `/insights?${s}` : "/insights";
-  };
+export default async function InsightsPage() {
+  const newsletter = await getNewsletter({});
+  const { lead, good_to_know, stock_readthrough, kept_count, episode_count, from_date, to_date } =
+    newsletter;
 
   const tiles = [
-    { label: "Insights", value: stats.nuggets },
-    { label: "Episodes", value: stats.episodes },
-    { label: "Shows", value: stats.shows },
-    { label: "Verified", value: stats.verified },
+    { label: "Kept", value: kept_count },
+    { label: "Episodes", value: episode_count },
+    { label: "Stocks", value: stock_readthrough.length },
   ];
 
   return (
@@ -51,20 +130,24 @@ export default async function InsightsPage({
       <p className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
         <span className="inline-block h-px w-8 bg-[#00d4ff]" />
         <span className="text-[#00d4ff]">Weekly Insights</span>
-        <span className="text-zinc-700">•</span>
-        <span className="text-zinc-500">
-          {fmtDate(report.since)} – {fmtDate(report.until)}
-        </span>
+        {(from_date || to_date) && (
+          <>
+            <span className="text-zinc-700">•</span>
+            <span className="text-zinc-500">
+              {fmtDate(from_date)} – {fmtDate(to_date)}
+            </span>
+          </>
+        )}
       </p>
+
       <h1 className="mt-5 max-w-3xl text-5xl font-light leading-[1.04] tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-6xl">
         What <span className="text-[#00d4ff]">moved the conversation</span> this week.
       </h1>
+
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-zinc-400">
-        {stats.nuggets} quote-verified insights, ranked by signal and classified across{" "}
-        {report.sections.length} sectors — distilled from {stats.episodes} episodes. Mark what
-        matters, then{" "}
-        <Link href="/report" className="text-[#00d4ff] transition hover:text-[#33ddff]">
-          generate the report
+        {kept_count} curated insights from {episode_count} episodes. Ready to{" "}
+        <Link href="/newsletter" className="text-[#00d4ff] transition hover:text-[#33ddff]">
+          send the newsletter
         </Link>
         .
       </p>
@@ -76,113 +159,58 @@ export default async function InsightsPage({
             <div className="font-[family-name:var(--font-mono)] text-4xl font-medium tabular-nums text-[#00d4ff]">
               {t.value}
             </div>
-            <div className="mt-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">{t.label}</div>
+            <div className="mt-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+              {t.label}
+            </div>
           </div>
         ))}
       </div>
 
-      {/* triage views */}
-      <div className="mt-10 flex flex-wrap items-center gap-2">
-        {VIEWS.map((v) => {
-          const active = view === v.id;
-          const count =
-            v.id === "relevant"
-              ? triageCounts.relevant ?? 0
-              : v.id === "pending"
-                ? triageCounts.pending ?? 0
-                : undefined;
-          return (
-            <Link
-              key={v.label}
-              href={qs(v.id)}
-              className={`rounded-full px-3.5 py-1.5 text-sm transition ${
-                active
-                  ? "bg-[#00d4ff] font-medium text-[#001a26]"
-                  : "border border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-100"
-              }`}
-            >
-              {v.label}
-              {count !== undefined ? <span className="opacity-60"> {count}</span> : null}
-            </Link>
-          );
-        })}
-      </div>
+      {/* empty state */}
+      {kept_count === 0 && (
+        <p className="mt-14 rounded-xl border border-white/[0.08] bg-[#0b0c10]/75 px-4 py-10 text-center text-zinc-500">
+          No kept insights yet — review nuggets in the{" "}
+          <Link href="/episodes" className="text-[#00d4ff]">
+            Episodes
+          </Link>{" "}
+          tab and mark what matters.
+        </p>
+      )}
 
-      {/* most-discussed screener */}
-      {report.top_entities.length > 0 && (
-        <div className="mt-12 rounded-2xl border border-white/[0.08] bg-[#0b0c10]/75 p-6 backdrop-blur-md">
-          <p className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.2em] text-[#00d4ff]">
-            <span className="inline-block h-px w-6 bg-[#00d4ff]" />
-            Signal
-            <span className="text-zinc-700">•</span>
-            <span className="text-zinc-500">Most discussed across shows</span>
-          </p>
-          <div className="mt-6 space-y-2.5">
-            {report.top_entities.slice(0, 10).map((e) => (
-              <div key={e.name} className="flex items-center gap-4" title={e.shows.join(", ")}>
-                <span className="w-40 shrink-0 truncate text-sm font-medium text-zinc-200">{e.name}</span>
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
-                  <div
-                    className="h-full rounded-full bg-[#00d4ff]/70"
-                    style={{ width: `${(e.shows.length / maxShows) * 100}%` }}
-                  />
-                </div>
-                <span className="w-16 shrink-0 text-right font-[family-name:var(--font-mono)] text-xs tabular-nums text-zinc-500">
-                  {e.shows.length} shows
-                </span>
-              </div>
+      {/* lead */}
+      {lead.length > 0 && (
+        <section className="mt-14 scroll-mt-20">
+          <SectionHeader index="01" title="Top Picks" count={lead.length} />
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {lead.map((n) => (
+              <KeptNuggetCard key={n.id} n={n} />
             ))}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* section quick-nav */}
-      {report.sections.length > 0 && (
-        <nav className="mt-12 flex flex-wrap gap-x-4 gap-y-2 border-y border-white/[0.08] py-3 text-sm">
-          {report.sections.map((s) => (
-            <a
-              key={s.sector}
-              href={`#${anchorId(s.sector)}`}
-              className="text-zinc-400 transition hover:text-[#00d4ff]"
-            >
-              {s.sector} <span className="text-zinc-600">{s.count}</span>
-            </a>
-          ))}
-        </nav>
+      {/* good to know */}
+      {good_to_know.length > 0 && (
+        <section className="mt-16 scroll-mt-20">
+          <SectionHeader index="02" title="Good to Know" count={good_to_know.length} />
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {good_to_know.map((n) => (
+              <KeptNuggetCard key={n.id} n={n} />
+            ))}
+          </div>
+        </section>
       )}
 
-      {/* sections */}
-      <div className="mt-14 space-y-16">
-        {report.sections.map((section, i) => (
-          <section key={section.sector} id={anchorId(section.sector)} className="scroll-mt-20">
-            <div className="mb-6 flex items-baseline justify-between border-b border-white/[0.08] pb-4">
-              <div className="flex items-baseline gap-3">
-                <span className="rounded-[5px] border border-[#00d4ff]/40 px-1.5 py-1 font-[family-name:var(--font-mono)] text-[11px] leading-none text-[#00d4ff]">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                <h2 className="text-2xl font-light tracking-tight text-zinc-50 [font-family:var(--font-display)]">
-                  {section.sector}
-                </h2>
-              </div>
-              <span className="font-[family-name:var(--font-mono)] text-xs tabular-nums text-zinc-500">
-                top {section.nuggets.length}
-                {section.count > section.nuggets.length ? ` of ${section.count}` : ""}
-              </span>
-            </div>
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-              {section.nuggets.map((n) => (
-                <NuggetCard key={n.id} n={n} />
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
-
-      {report.sections.length === 0 && (
-        <p className="mt-14 rounded-xl border border-white/[0.08] bg-[#0b0c10]/75 px-4 py-10 text-center text-zinc-500">
-          No insights in this window yet. Run{" "}
-          <code className="font-[family-name:var(--font-mono)] text-zinc-300">digest insights</code> first.
-        </p>
+      {/* stock read-through */}
+      {stock_readthrough.length > 0 && (
+        <section className="mt-16 scroll-mt-20">
+          <SectionHeader index="03" title="Stock Read-Through" count={stock_readthrough.length} />
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {stock_readthrough.map((s) => (
+              <StockCard key={s.company} s={s} />
+            ))}
+          </div>
+        </section>
       )}
     </div>
   );
