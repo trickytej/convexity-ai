@@ -45,6 +45,12 @@ git add -A && git commit -m "your change" && git push origin main
 ```
 Only code/design changes need this — the content edits in step 1 do not.
 
+> **Set a valid git identity first**, or Vercel blocks the deploy with *"commit author email is not a valid email address"* (the default `name@hostname.local` is rejected, so the push never goes live). One‑time per machine:
+> ```bash
+> git config --global user.email "<id>+<login>@users.noreply.github.com"   # your GitHub no-reply, from GitHub → Settings → Emails
+> git config --global user.name "Your Name"
+> ```
+
 > Secrets live in the hosting dashboards, never in the repo: **Vercel** (`SITE_USER`, `SITE_PASSWORD`, `API_BASE_URL`, `DIGEST_API_KEY`), **Render** (`TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `DIGEST_API_KEY`, `ANTHROPIC_API_KEY`), **GitHub Actions** (`TURSO_*`, `ASSEMBLYAI_API_KEY`, `ANTHROPIC_API_KEY`). Full deploy steps: [`docs/deployment.md`](docs/deployment.md).
 
 ---
