@@ -1,0 +1,29 @@
+name: deploy-frontend
+
+# Vercel (Hobby) only auto-deploys commits whose author is a member of the Vercel
+# account, so collaborator (e.g. Tejas) pushes get "Deployment was blocked". This
+# workflow pings a Vercel Deploy Hook on every push to main, which triggers a
+# production deploy regardless of commit author — no paid Vercel team required.
+#
+# One-time setup (David): Vercel → Project → Settings → Git → Deploy Hooks →
+# create a hook for branch `main`, copy the URL, then add it as the GitHub repo
+# secret VERCEL_DEPLOY_HOOK_URL (Settings → Secrets and variables → Actions).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  vercel-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Vercel production deploy
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "VERCEL_DEPLOY_HOOK_URL is not set — skipping. Add the secret to enable author-agnostic deploys."
+            exit 0
+          fi
+          curl -fsS -X POST "$HOOK" >/dev/null && echo "Triggered Vercel production deploy."
