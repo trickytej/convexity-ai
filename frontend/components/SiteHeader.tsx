@@ -6,10 +6,9 @@ import { usePathname } from "next/navigation";
 const NAV = [
   { href: "/insights", label: "Home", match: (p: string) => p === "/insights" || p === "/preview" },
   { href: "/securities", label: "Securities", match: (p: string) => p.startsWith("/securities") },
-  { href: "/", label: "Podcasts", match: (p: string) => p === "/" },
+  { href: "/", label: "Podcasts", match: (p: string) => p === "/" || p.startsWith("/?") },
   { href: "/newsletter", label: "Newsletter", match: (p: string) => p.startsWith("/newsletter") },
   { href: "/report", label: "Report", match: (p: string) => p.startsWith("/report") },
-  { href: "/episodes", label: "Episodes", match: (p: string) => p.startsWith("/episode") },
 ];
 
 export default function SiteHeader() {
