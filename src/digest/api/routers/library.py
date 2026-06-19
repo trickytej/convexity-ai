@@ -298,16 +298,19 @@ def _run_process(episode_id: int) -> None:
             p = _Path(path)
             return p.exists() and _is_valid_audio_file(p)
 
+        is_newsletter = show.format == "newsletter" or show.transcript_source == "rss_text"
+
         needs_acquire = ep.status not in (EpisodeStatus.ACQUIRED, EpisodeStatus.TRANSCRIBED) or (
-            ep.status == EpisodeStatus.ACQUIRED and not _audio_is_valid(ep.audio_path)
+            ep.status == EpisodeStatus.ACQUIRED and (
+                is_newsletter or not _audio_is_valid(ep.audio_path)
+            )
         )
         if needs_acquire:
             acquire_episode(conn, ep, show, settings)
             ep = repo.get_episode(conn, episode_id)
             if ep is None:
                 return
-
-        if ep.status == EpisodeStatus.ACQUIRED:
+        if ep.status == EpisodeStatus.ACQUIRED and not is_newsletter:
             result = transcribe_episode(conn, ep, show, glossary, settings)
             if not result.ok:
                 return
