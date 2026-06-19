@@ -6,8 +6,8 @@ import { processEpisode, getEpisodeStatus } from "@/lib/api";
 
 type Phase = "idle" | "starting" | "acquiring" | "transcribing" | "insights" | "done" | "error";
 
-const PHASE_LABEL: Record<Phase, string> = {
-  idle:        "Transcribe",
+const PHASE_LABEL_BASE: Record<Phase, string> = {
+  idle:        "__IDLE__",
   starting:    "Starting…",
   acquiring:   "Downloading…",
   transcribing:"Transcribing…",
@@ -16,7 +16,15 @@ const PHASE_LABEL: Record<Phase, string> = {
   error:       "Failed",
 };
 
-export default function TranscribeButton({ episodeId, initialStatus }: { episodeId: number; initialStatus?: string | null }) {
+export default function TranscribeButton({
+  episodeId,
+  initialStatus,
+  idleLabel = "Transcribe",
+}: {
+  episodeId: number;
+  initialStatus?: string | null;
+  idleLabel?: string;
+}) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMsg, setErrorMsg] = useState("");
@@ -77,6 +85,7 @@ export default function TranscribeButton({ episodeId, initialStatus }: { episode
   }
 
   const isRunning = ["starting", "acquiring", "transcribing", "insights"].includes(phase);
+  const PHASE_LABEL = { ...PHASE_LABEL_BASE, idle: idleLabel };
   const label = PHASE_LABEL[phase];
 
   return (

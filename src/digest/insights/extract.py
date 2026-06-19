@@ -12,6 +12,10 @@ from ..registry import Show
 from ..store.models import Episode, Nugget
 from ..transcribe import llm
 from . import taxonomy
+from .taxonomy import (
+    NEWSLETTER_SYSTEM_PROMPT,
+    build_newsletter_user_prompt,
+)
 
 log = logging.getLogger(__name__)
 
@@ -54,6 +58,16 @@ def _render_chunk(chunk: list[dict]) -> str:
         speaker = s.get("speaker_name") or "?"
         lines.append(f"[#{s.get('idx')} {speaker} {_ms_to_mmss(s.get('start_ms'))}] {s.get('text')}")
     return "\n".join(lines)
+
+
+def _render_newsletter_chunk(chunk: list[dict]) -> str:
+    """Render article paragraphs with simple paragraph numbers (no speakers/timestamps)."""
+    lines = []
+    for s in chunk:
+        text = (s.get("text") or "").strip()
+        if text:
+            lines.append(f"[{s.get('idx', '')}] {text}")
+    return "\n\n".join(lines)
 
 
 def _find_segment(quote: str, chunk: list[dict]) -> tuple[dict | None, bool]:
@@ -154,16 +168,26 @@ def extract_nuggets(
         return []
 
     client = llm.get_client(settings)  # raises LLMError if no key
-    speakers = sorted({s.get("speaker_name") for s in segments if s.get("speaker_name")})
     model = settings.anthropic_model
+    is_newsletter = getattr(show, "format", "interview") == "newsletter"
+
+    if is_newsletter:
+        system_prompt = NEWSLETTER_SYSTEM_PROMPT
+    else:
+        system_prompt = taxonomy.SYSTEM_PROMPT
+
+    speakers = sorted({s.get("speaker_name") for s in segments if s.get("speaker_name")})
 
     candidates: list[Nugget] = []
     for chunk in _chunk_segments(segments):
-        user = taxonomy.build_user_prompt(show.name, episode.title, speakers, _render_chunk(chunk))
+        if is_newsletter:
+            user = build_newsletter_user_prompt(show.name, episode.title, _render_newsletter_chunk(chunk))
+        else:
+            user = taxonomy.build_user_prompt(show.name, episode.title, speakers, _render_chunk(chunk))
         try:
             raw = llm.complete(
                 client,
-                system=taxonomy.SYSTEM_PROMPT,
+                system=system_prompt,
                 user=user,
                 model=model,
                 max_tokens=8192,

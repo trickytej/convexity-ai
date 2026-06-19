@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getShows, getEpisodes } from "@/lib/api";
 import { fmtDate } from "@/lib/format";
 import ImportNewsletter from "@/components/ImportNewsletter";
+import TranscribeButton from "@/components/TranscribeButton";
 
 export const dynamic = "force-dynamic";
 
@@ -125,15 +126,18 @@ export default async function NewslettersPage({
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    {isTranscribed && ep.nugget_count > 0 && (
+                    {isTranscribed && ep.nugget_count > 0 ? (
                       <span className="rounded-full bg-indigo-500/10 px-2.5 py-0.5 text-xs font-medium text-indigo-300 ring-1 ring-inset ring-indigo-500/25">
                         {ep.nugget_count} nuggets
                       </span>
-                    )}
-                    {ep.status && !isTranscribed && (
-                      <span className="rounded-full bg-white/[0.05] px-2.5 py-0.5 text-xs font-medium text-zinc-400 ring-1 ring-inset ring-white/10">
-                        {ep.status}
-                      </span>
+                    ) : isTranscribed ? (
+                      <TranscribeButton
+                        episodeId={ep.id}
+                        initialStatus={ep.status}
+                        idleLabel="Extract insights"
+                      />
+                    ) : (
+                      <TranscribeButton episodeId={ep.id} initialStatus={ep.status} />
                     )}
                     {ep.episode_url && (
                       <a
