@@ -10,7 +10,7 @@ const PHASE_LABEL_BASE: Record<Phase, string> = {
   idle:        "__IDLE__",
   starting:    "Starting…",
   acquiring:   "Downloading…",
-  transcribing:"Transcribing…",
+  transcribing:"__ACQUIRED__",
   insights:    "Extracting insights…",
   done:        "Done",
   error:       "Failed",
@@ -20,10 +20,12 @@ export default function TranscribeButton({
   episodeId,
   initialStatus,
   idleLabel = "Transcribe",
+  acquiredLabel = "Transcribing…",
 }: {
   episodeId: number;
   initialStatus?: string | null;
   idleLabel?: string;
+  acquiredLabel?: string;
 }) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("idle");
@@ -85,7 +87,7 @@ export default function TranscribeButton({
   }
 
   const isRunning = ["starting", "acquiring", "transcribing", "insights"].includes(phase);
-  const PHASE_LABEL = { ...PHASE_LABEL_BASE, idle: idleLabel };
+  const PHASE_LABEL = { ...PHASE_LABEL_BASE, idle: idleLabel, transcribing: acquiredLabel };
   const label = PHASE_LABEL[phase];
 
   return (

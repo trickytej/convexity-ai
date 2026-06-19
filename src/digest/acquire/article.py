@@ -45,10 +45,13 @@ def _extract_paragraphs(html: str, url: str) -> list[str]:
     return paragraphs
 
 
-def fetch_article(url: str, timeout: int = 30) -> ParsedTranscript:
+def fetch_article(url: str) -> ParsedTranscript:
     """Fetch *url* and return its text as a ParsedTranscript."""
     if not url:
         raise TranscriptUnavailable("no article URL")
+
+    # Explicit per-phase timeouts: connect quickly, allow up to 20s to read the body.
+    timeout = httpx.Timeout(connect=8.0, read=20.0, write=5.0, pool=5.0)
 
     try:
         resp = httpx.get(
@@ -58,6 +61,12 @@ def fetch_article(url: str, timeout: int = 30) -> ParsedTranscript:
             headers={"User-Agent": "Mozilla/5.0 (compatible; research-digest/1.0)"},
         )
         resp.raise_for_status()
+    except httpx.TimeoutException as exc:
+        raise TranscriptUnavailable(f"timed out fetching {url}") from exc
+    except httpx.HTTPStatusError as exc:
+        raise TranscriptUnavailable(
+            f"HTTP {exc.response.status_code} fetching {url}"
+        ) from exc
     except httpx.HTTPError as exc:
         raise TranscriptUnavailable(f"HTTP error fetching {url}: {exc}") from exc
 

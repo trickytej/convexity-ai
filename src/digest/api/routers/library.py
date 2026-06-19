@@ -260,6 +260,10 @@ def _load_glossary(settings) -> Glossary:
         return Glossary()
 
 
+import logging as _logging
+_log = _logging.getLogger(__name__)
+
+
 def _run_process(episode_id: int) -> None:
     """Background: acquire → transcribe → extract insights for one episode."""
     settings = get_settings()
@@ -313,6 +317,15 @@ def _run_process(episode_id: int) -> None:
 
         if ep.status == EpisodeStatus.TRANSCRIBED:
             generate_insights(conn, ep, show, settings)
+    except Exception as exc:
+        _log.error("unhandled error processing episode %s: %s", episode_id, exc, exc_info=True)
+        try:
+            ep = repo.get_episode(conn, episode_id)
+            if ep is not None and ep.status not in (EpisodeStatus.TRANSCRIBED, EpisodeStatus.FAILED):
+                repo.set_status(conn, episode_id, EpisodeStatus.FAILED,
+                                error=f"{type(exc).__name__}: {exc}")
+        except Exception:
+            pass
     finally:
         conn.close()
 

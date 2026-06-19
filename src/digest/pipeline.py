@@ -165,6 +165,8 @@ def acquire_episode(
     if show.format == "newsletter":
         url = episode.episode_url or episode.audio_url
         try:
+            # Mark as in-progress so the UI polling can transition away from "Downloading…"
+            repo.set_status(conn, episode.id, EpisodeStatus.ACQUIRED)
             parsed = fetch_article(url or "")
             if not parsed.non_empty():
                 raise TranscriptUnavailable("empty article")

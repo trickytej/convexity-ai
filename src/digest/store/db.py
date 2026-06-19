@@ -325,9 +325,14 @@ def connect(db_path: Path) -> _Conn:
 
 def _migrate(conn: _Conn) -> None:
     """Idempotent column additions for existing databases."""
-    cols = {row[1] for row in conn.execute("PRAGMA table_info(nuggets)").fetchall()}
-    if "primary_sector" not in cols:
+    nugget_cols = {row[1] for row in conn.execute("PRAGMA table_info(nuggets)").fetchall()}
+    if "primary_sector" not in nugget_cols:
         conn.execute("ALTER TABLE nuggets ADD COLUMN primary_sector TEXT")
+
+    show_cols = {row[1] for row in conn.execute("PRAGMA table_info(shows)").fetchall()}
+    if "format" not in show_cols:
+        conn.execute("ALTER TABLE shows ADD COLUMN format TEXT")
+
     conn.commit()
 
 

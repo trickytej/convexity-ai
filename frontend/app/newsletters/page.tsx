@@ -135,9 +135,15 @@ export default async function NewslettersPage({
                         episodeId={ep.id}
                         initialStatus={ep.status}
                         idleLabel="Extract insights"
+                        acquiredLabel="Extracting…"
                       />
                     ) : (
-                      <TranscribeButton episodeId={ep.id} initialStatus={ep.status} />
+                      <TranscribeButton
+                        episodeId={ep.id}
+                        initialStatus={ep.status}
+                        idleLabel="Fetch article"
+                        acquiredLabel="Fetching article…"
+                      />
                     )}
                     {ep.episode_url && (
                       <a
