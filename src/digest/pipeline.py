@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 from pathlib import Path
 
+from .acquire.article import fetch_article
 from .acquire.audio import download_audio
 from .acquire.base import ParsedTranscript, TranscriptSegment, TranscriptUnavailable
 from .acquire.official import get_official_fetcher
@@ -156,9 +157,34 @@ def acquire_episode(
 ) -> AcquireResult:
     """Tier A: fetch the official transcript (fall back to audio if unavailable).
     Tier B: download the audio enclosure for later ASR.
+    Newsletter shows: fetch article text directly and mark TRANSCRIBED.
     """
     settings = settings or get_settings()
     assert episode.id is not None
+
+    if show.format == "newsletter":
+        url = episode.episode_url or episode.audio_url
+        try:
+            parsed = fetch_article(url or "")
+            if not parsed.non_empty():
+                raise TranscriptUnavailable("empty article")
+            persist_parsed_transcript(
+                conn, episode, parsed, TranscriptSource.OFFICIAL, settings
+            )
+            repo.set_status(conn, episode.id, EpisodeStatus.TRANSCRIBED)
+            return AcquireResult(
+                episode.id,
+                "article",
+                f"{len(parsed.segments)} paragraphs, {parsed.word_count()} words",
+            )
+        except TranscriptUnavailable as exc:
+            msg = str(exc)
+            repo.set_status(conn, episode.id, EpisodeStatus.FAILED, error=msg)
+            return AcquireResult(episode.id, "failed", error=msg)
+        except Exception as exc:
+            msg = f"{type(exc).__name__}: {exc}"
+            repo.set_status(conn, episode.id, EpisodeStatus.FAILED, error=msg)
+            return AcquireResult(episode.id, "failed", error=msg)
 
     if show.uses_official_transcript:
         fetcher = get_official_fetcher(show.transcript_source)

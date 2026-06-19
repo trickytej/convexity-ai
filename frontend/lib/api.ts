@@ -29,6 +29,7 @@ export interface Show {
   homepage?: string | null;
   hosts: string[];
   tier: string;
+  format: string;
   active: boolean;
   total: number;
   transcribed: number;
@@ -86,8 +87,11 @@ async function getJSON<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-export function getShows(): Promise<Show[]> {
-  return getJSON<Show[]>("/api/shows");
+export function getShows(params: { format?: string } = {}): Promise<Show[]> {
+  const q = new URLSearchParams();
+  if (params.format) q.set("format", params.format);
+  const qs = q.toString();
+  return getJSON<Show[]>(`/api/shows${qs ? `?${qs}` : ""}`);
 }
 
 export function getEpisodes(
@@ -456,6 +460,19 @@ export async function importEpisode(url: string, title?: string): Promise<Import
 
 export async function importPodcast(url: string): Promise<ImportResult> {
   const res = await apiFetch(`/api/shows/import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `Import failed: ${res.status}`);
+  }
+  return (await res.json()) as ImportResult;
+}
+
+export async function importNewsletter(url: string): Promise<ImportResult> {
+  const res = await apiFetch(`/api/newsletters/import`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url }),

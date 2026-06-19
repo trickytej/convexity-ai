@@ -331,6 +331,7 @@ def list_shows_with_counts(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
         """
         SELECT s.slug, s.name, s.network, s.homepage, s.hosts, s.tier, s.active,
+               s.format,
                COUNT(e.id) AS total,
                SUM(CASE WHEN e.status = 'transcribed' THEN 1 ELSE 0 END) AS transcribed
         FROM shows s

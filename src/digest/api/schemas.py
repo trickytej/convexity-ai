@@ -15,6 +15,7 @@ class ShowOut(BaseModel):
     homepage: str | None = None
     hosts: list[str] = []
     tier: str
+    format: str = "interview"
     active: bool
     total: int
     transcribed: int

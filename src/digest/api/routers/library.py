@@ -72,7 +72,13 @@ def _episode_out(ep: Episode, transcript: sqlite3.Row | None, nugget_count: int)
 
 
 @router.get("/shows", response_model=list[ShowOut])
-def list_shows(db: sqlite3.Connection = Depends(get_db)) -> list[ShowOut]:
+def list_shows(
+    format: str | None = Query(None),
+    db: sqlite3.Connection = Depends(get_db),
+) -> list[ShowOut]:
+    rows = repo.list_shows_with_counts(db)
+    if format:
+        rows = [r for r in rows if (r["format"] or "interview") == format]
     return [
         ShowOut(
             slug=r["slug"],
@@ -81,11 +87,12 @@ def list_shows(db: sqlite3.Connection = Depends(get_db)) -> list[ShowOut]:
             homepage=r["homepage"],
             hosts=_json_list(r["hosts"]),
             tier=r["tier"],
+            format=r["format"] or "interview",
             active=bool(r["active"]),
             total=r["total"] or 0,
             transcribed=r["transcribed"] or 0,
         )
-        for r in repo.list_shows_with_counts(db)
+        for r in rows
     ]
 
 
@@ -214,6 +221,7 @@ def _show_from_db(db: sqlite3.Connection, slug: str) -> Show:
         tier=row["tier"],
         transcript_source=row["transcript_source"] or "asr",
         hosts=_json_list(row["hosts"]),
+        format=row["format"] or "interview",
         active=bool(row["active"]),
     )
 
@@ -272,6 +280,7 @@ def _run_process(episode_id: int) -> None:
             tier=show_row["tier"],
             transcript_source=show_row["transcript_source"] or "asr",
             hosts=json.loads(show_row["hosts"]) if show_row["hosts"] else [],
+            format=show_row["format"] or "interview",
             active=bool(show_row["active"]),
         )
         glossary = _load_glossary(settings)
@@ -409,6 +418,74 @@ def import_podcast(body: ImportPodcastIn, db: sqlite3.Connection = Depends(get_d
         repo.upsert_episode(db, ep)
 
     return ImportPodcastOut(slug=slug, name=name, episode_count=len(episodes), created=created)
+
+
+# --- newsletter RSS import -----------------------------------------------
+
+
+class ImportNewsletterOut(BaseModel):
+    slug: str
+    name: str
+    episode_count: int
+    created: bool
+
+
+@router.post("/newsletters/import", response_model=ImportNewsletterOut)
+def import_newsletter(body: ImportPodcastIn, db: sqlite3.Connection = Depends(get_db)) -> ImportNewsletterOut:
+    """Register a newsletter RSS feed and import its articles as episodes."""
+    url = body.url.strip()
+    if not url:
+        raise HTTPException(status_code=422, detail="url is required")
+
+    try:
+        raw = fetch_bytes(url, timeout=20)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not fetch URL: {exc}") from exc
+
+    parsed = feedparser.parse(raw)
+    feed_title = (parsed.feed.get("title") or "").strip()
+    if not feed_title and not parsed.entries:
+        raise HTTPException(status_code=400, detail="URL does not appear to be a valid RSS/Atom feed")
+
+    name = feed_title or url
+    base_slug = _slugify(name) or "newsletter"
+
+    # Check if this RSS URL is already registered
+    existing_by_url = db.execute("SELECT slug FROM shows WHERE rss_url = ?", (url,)).fetchone()
+    created = existing_by_url is None
+
+    if existing_by_url:
+        slug = existing_by_url["slug"]
+        name = db.execute("SELECT name FROM shows WHERE slug = ?", (slug,)).fetchone()["name"]
+    else:
+        existing_slugs = {r["slug"] for r in db.execute("SELECT slug FROM shows").fetchall()}
+        slug = base_slug
+        suffix = 2
+        while slug in existing_slugs:
+            slug = f"{base_slug}-{suffix}"
+            suffix += 1
+
+        show = Show(
+            slug=slug,
+            name=name,
+            rss_url=url,
+            tier="B",
+            transcript_source="rss_text",
+            format="newsletter",
+            active=True,
+        )
+        repo.sync_shows(db, [show])
+
+    show_obj = Show(slug=slug, name=name, rss_url=url, tier="B", transcript_source="rss_text", format="newsletter")
+    try:
+        episodes = parse_feed(show_obj, raw)
+    except Exception:
+        episodes = []
+
+    for ep in episodes:
+        repo.upsert_episode(db, ep)
+
+    return ImportNewsletterOut(slug=slug, name=name, episode_count=len(episodes), created=created)
 
 
 # --- single episode / interview import -----------------------------------
