@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { processEpisode, getEpisodeStatus } from "@/lib/api";
+import { processEpisode, getEpisodeStatus, resetEpisode } from "@/lib/api";
 
 type Phase = "idle" | "starting" | "acquiring" | "transcribing" | "insights" | "done" | "error";
 
@@ -15,6 +15,8 @@ const PHASE_LABEL_BASE: Record<Phase, string> = {
   done:        "Done",
   error:       "Failed",
 };
+
+const STALE_ACQUIRED_MS = 5 * 60 * 1000; // 5 min with no DB update → job is dead
 
 export default function TranscribeButton({
   episodeId,
@@ -31,6 +33,7 @@ export default function TranscribeButton({
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollCountRef = useRef(0);
 
   // If already being processed on mount (e.g. page refresh mid-job), start polling
   useEffect(() => {
@@ -45,9 +48,22 @@ export default function TranscribeButton({
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
   }
 
+  function markStuck(msg = "Timed out — click to retry") {
+    setPhase("error");
+    setErrorMsg(msg);
+    stopPolling();
+  }
+
   function startPolling() {
     stopPolling();
+    pollCountRef.current = 0;
     pollRef.current = setInterval(async () => {
+      pollCountRef.current += 1;
+      // Hard timeout: 150 polls × 4 s = 10 min. If still acquired, job died.
+      if (pollCountRef.current > 150) {
+        markStuck();
+        return;
+      }
       try {
         const s = await getEpisodeStatus(episodeId);
         if (s.status === "transcribed" && s.nugget_count > 0) {
@@ -57,6 +73,15 @@ export default function TranscribeButton({
         } else if (s.status === "transcribed") {
           setPhase("insights");
         } else if (s.status === "acquired") {
+          // Fast-detect dead job: if updated_at is > 5 min ago and we're on the first poll,
+          // the job was killed before we even started polling this session.
+          if (pollCountRef.current === 1 && s.updated_at) {
+            const age = Date.now() - new Date(s.updated_at).getTime();
+            if (age > STALE_ACQUIRED_MS) {
+              markStuck("Job interrupted — click to retry");
+              return;
+            }
+          }
           setPhase("transcribing");
         } else if (s.status === "failed") {
           setPhase("error");
@@ -72,6 +97,12 @@ export default function TranscribeButton({
     setPhase("starting");
     setErrorMsg("");
     try {
+      // If the episode is stuck at ACQUIRED (dead job), reset it first so the
+      // backend re-runs acquire rather than skipping straight to transcribe
+      // with a potentially corrupt / incomplete audio file.
+      if (phase === "error") {
+        try { await resetEpisode(episodeId); } catch { /* non-fatal */ }
+      }
       const res = await processEpisode(episodeId);
       if (res.status === "already_done") {
         setPhase("done");

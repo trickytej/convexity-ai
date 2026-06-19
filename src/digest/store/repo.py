@@ -237,7 +237,9 @@ def list_episodes(
 
 
 def insert_transcript(conn: sqlite3.Connection, t: Transcript) -> int:
-    cur = conn.execute(
+    # libsql does not allow conn.commit() while any cursor from RETURNING is still
+    # alive, so we split into an upsert + a plain SELECT to get the id.
+    conn.execute(
         """
         INSERT INTO transcripts (episode_id, source, provider, language,
                                  has_diarization, corrected, word_count,
@@ -251,7 +253,6 @@ def insert_transcript(conn: sqlite3.Connection, t: Transcript) -> int:
             raw_path=excluded.raw_path,
             normalized_path=excluded.normalized_path,
             meta=excluded.meta
-        RETURNING id
         """,
         (
             t.episode_id,
@@ -267,7 +268,11 @@ def insert_transcript(conn: sqlite3.Connection, t: Transcript) -> int:
             _now_iso(),
         ),
     )
-    transcript_id = int(cur.fetchone()[0])
+    row = conn.execute(
+        "SELECT id FROM transcripts WHERE episode_id = ? AND source = ? AND provider = ?",
+        (t.episode_id, t.source.value, t.provider),
+    ).fetchone()
+    transcript_id = int(row[0])
 
     # Replace any existing segments for an idempotent re-run.
     conn.execute("DELETE FROM segments WHERE transcript_id = ?", (transcript_id,))

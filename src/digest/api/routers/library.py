@@ -355,7 +355,20 @@ def get_episode_status(episode_id: int, db: sqlite3.Connection = Depends(get_db)
     if ep is None:
         raise HTTPException(status_code=404, detail="episode not found")
     nugget_count = sum(repo.nugget_type_counts(db, episode_id).values())
-    return {"status": ep.status, "error": ep.error, "nugget_count": nugget_count}
+    row = db.execute("SELECT updated_at FROM episodes WHERE id = ?", (episode_id,)).fetchone()
+    updated_at = row["updated_at"] if row else None
+    return {"status": ep.status, "error": ep.error, "nugget_count": nugget_count, "updated_at": updated_at}
+
+
+@router.post("/episodes/{episode_id}/reset")
+def reset_episode(episode_id: int, db: sqlite3.Connection = Depends(get_db)) -> dict:
+    """Reset a stuck ACQUIRED or FAILED episode back to discovered so it can be reprocessed."""
+    ep = repo.get_episode(db, episode_id)
+    if ep is None:
+        raise HTTPException(status_code=404, detail="episode not found")
+    repo.set_status(db, episode_id, EpisodeStatus.DISCOVERED, error=None)
+    db.commit()
+    return {"status": "discovered"}
 
 
 # --- podcast URL import --------------------------------------------------

@@ -147,8 +147,13 @@ export async function processEpisode(id: number): Promise<{ status: string }> {
   return res.json();
 }
 
-export async function getEpisodeStatus(id: number): Promise<{ status: string; error?: string; nugget_count: number }> {
+export async function getEpisodeStatus(id: number): Promise<{ status: string; error?: string; nugget_count: number; updated_at?: string | null }> {
   return getJSON(`/api/episodes/${id}/status`);
+}
+
+export async function resetEpisode(id: number): Promise<void> {
+  const res = await apiFetch(`/api/episodes/${id}/reset`, { method: "POST" });
+  if (!res.ok) throw new Error(`reset failed: ${res.status}`);
 }
 
 export function getTranscript(id: number | string): Promise<Transcript> {
