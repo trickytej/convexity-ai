@@ -333,16 +333,16 @@ def insight(
     req: InsightRequest, db: duckdb.DuckDBPyConnection = Depends(get_db)
 ) -> InsightOut:
     """Grounded AI attribution for a single move (cached; pass regenerate to refresh)."""
-    symbol = req.symbol.upper()
-    key = insight_key(symbol, req.timeframe, req.start_time, req.end_time)
-    cache = cache_connect()
     try:
-        if not req.regenerate:
-            cached = get_cached(cache, key)
-            if cached:
-                cached["cached"] = True
-                return InsightOut(**cached)
+        symbol = req.symbol.upper()
+        key = insight_key(symbol, req.timeframe, req.start_time, req.end_time)
+        cache = cache_connect()
         try:
+            if not req.regenerate:
+                cached = get_cached(cache, key)
+                if cached:
+                    cached["cached"] = True
+                    return InsightOut(**cached)
             payload = attribute_move(
                 db,
                 symbol=symbol,
@@ -352,13 +352,21 @@ def insight(
                 direction=req.direction,
                 pct_change=req.pct_change,
             )
-        except LLMError as exc:
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
-        put_cached(cache, key, payload)
-        payload["cached"] = False
-        return InsightOut(**payload)
-    finally:
-        cache.close()
+            put_cached(cache, key, payload)
+            payload["cached"] = False
+            return InsightOut(**payload)
+        finally:
+            cache.close()
+    except HTTPException:
+        raise
+    except LLMError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        import logging
+        import traceback
+
+        logging.getLogger("moves.api").warning("insight failed: %s\n%s", exc, traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
 @router.post("/investigate", response_model=InsightOut)
