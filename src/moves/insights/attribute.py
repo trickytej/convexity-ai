@@ -339,7 +339,10 @@ def attribute_move(
             thinking=settings.anthropic_thinking,
         )
         data = llm.extract_json(raw)
-    except llm.LLMError:
+    except Exception as exc:  # provider/parse errors -> graceful low-confidence result, never 500
+        import logging
+
+        logging.getLogger(__name__).warning("move attribution LLM failed: %s", exc)
         data = {}
 
     if isinstance(data, dict):

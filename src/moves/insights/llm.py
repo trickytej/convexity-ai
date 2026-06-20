@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 
 import anthropic
@@ -16,9 +17,12 @@ class LLMError(Exception):
 
 def get_client(settings: Settings | None = None) -> anthropic.Anthropic:
     settings = settings or get_settings()
-    if not settings.anthropic_api_key:
-        raise LLMError("MOVES_ANTHROPIC_API_KEY is not set")
-    return anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    # Reuse research-digest's Anthropic key when a moves-specific one isn't set, so
+    # the merged backend needs only one Anthropic credential.
+    key = settings.anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY", "")
+    if not key:
+        raise LLMError("MOVES_ANTHROPIC_API_KEY (or ANTHROPIC_API_KEY) is not set")
+    return anthropic.Anthropic(api_key=key)
 
 
 def complete(
