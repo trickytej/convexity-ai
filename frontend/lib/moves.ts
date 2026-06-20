@@ -1,7 +1,7 @@
-// Client for the market-moves API (price series + detected moves + AI attribution).
-// Base URL is server-side only; defaults to local dev, override with MOVES_API_URL.
+// Price series + detected moves + AI attribution, served by research-digest's own
+// API under /api/moves (the market-moves engine is vendored into the backend).
 
-export const MOVES_API_URL = process.env.MOVES_API_URL ?? "http://127.0.0.1:8001";
+import { apiFetch } from "@/lib/api";
 
 export interface MoveBar {
   time: number; // unix seconds
@@ -77,7 +77,7 @@ export async function getSeries(symbol: string, opts: SeriesOpts = {}): Promise<
     q.set("start", start);
   }
   try {
-    const res = await fetch(`${MOVES_API_URL}/api/series?${q.toString()}`, { cache: "no-store" });
+    const res = await apiFetch(`/api/moves/series?${q.toString()}`);
     if (!res.ok) return null;
     return (await res.json()) as MoveSeries;
   } catch {

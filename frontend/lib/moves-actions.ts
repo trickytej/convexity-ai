@@ -1,6 +1,7 @@
 "use server";
 
-import { MOVES_API_URL, type MoveInsight } from "@/lib/moves";
+import { apiFetch } from "@/lib/api";
+import type { MoveInsight } from "@/lib/moves";
 
 export interface MoveInsightRequest {
   symbol: string;
@@ -13,14 +14,13 @@ export interface MoveInsightRequest {
 
 export type MoveInsightResult = MoveInsight | { error: string };
 
-/** Server action: ask market-moves for a grounded attribution of one move (cached server-side). */
+/** Server action: ask the backend for a grounded attribution of one move (cached server-side). */
 export async function getMoveInsight(req: MoveInsightRequest): Promise<MoveInsightResult> {
   try {
-    const res = await fetch(`${MOVES_API_URL}/api/insight`, {
+    const res = await apiFetch(`/api/moves/insight`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(req),
-      cache: "no-store",
     });
     if (!res.ok) {
       const detail = await res

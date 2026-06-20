@@ -26,6 +26,12 @@ dependencies = [
     "uvicorn[standard]>=0.29",
     "yt-dlp>=2025.1.1",
     "libsql>=0.1.11",
+    # market-moves (vendored): price series, move detection, grounded attribution
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "duckdb>=1.1",
+    "pyarrow>=16.0",
+    "polygon-api-client>=1.14",
 ]
 
 [project.scripts]

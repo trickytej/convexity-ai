@@ -1,5 +1,6 @@
 # Keep the API image lean — never ship local data (audio is ~880MB) or the frontend.
 data/
+!data/moves.duckdb
 frontend/
 .venv/
 venv/

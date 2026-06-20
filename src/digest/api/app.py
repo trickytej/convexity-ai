@@ -57,6 +57,17 @@ def create_app() -> FastAPI:
     app.include_router(curation.router, prefix="/api")
     app.include_router(newsletter.router, prefix="/api")
 
+    # market-moves (vendored): price series + move detection + grounded attribution.
+    # Guarded so a missing optional dep/data never takes down the core digest API.
+    try:
+        from moves.api.routers import market as moves_market
+
+        app.include_router(moves_market.router, prefix="/api/moves")
+    except Exception as exc:  # pragma: no cover
+        import logging
+
+        logging.getLogger(__name__).warning("moves router unavailable: %s", exc)
+
     @app.get("/api/health")
     def health() -> dict[str, str]:
         return {"status": "ok", "version": __version__}

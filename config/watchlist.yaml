@@ -1,0 +1,57 @@
+# Curated US watchlist. A focused universe (tens to ~hundreds of names) keeps
+# real-time streaming cheap and the move/insight pipeline fast.
+#
+# group: free-text bucket used for peer-group / sector-rerating analysis.
+# Add/remove tickers freely; the ingestion + move detection key off `ticker`.
+
+instruments:
+  - ticker: NVDA
+    name: NVIDIA Corporation
+    group: semiconductors
+  - ticker: AMD
+    name: Advanced Micro Devices
+    group: semiconductors
+  - ticker: AVGO
+    name: Broadcom Inc.
+    group: semiconductors
+  - ticker: MU
+    name: Micron Technology
+    group: memory
+  - ticker: STX
+    name: Seagate Technology
+    group: memory
+  - ticker: WDC
+    name: Western Digital
+    group: memory
+  - ticker: TSM
+    name: Taiwan Semiconductor
+    group: semiconductors
+  - ticker: ASML
+    name: ASML Holding
+    group: semi-equipment
+
+  - ticker: AAPL
+    name: Apple Inc.
+    group: mega-cap-tech
+  - ticker: MSFT
+    name: Microsoft Corporation
+    group: mega-cap-tech
+  - ticker: GOOGL
+    name: Alphabet Inc.
+    group: mega-cap-tech
+  - ticker: AMZN
+    name: Amazon.com Inc.
+    group: mega-cap-tech
+  - ticker: META
+    name: Meta Platforms Inc.
+    group: mega-cap-tech
+
+  - ticker: SPY
+    name: SPDR S&P 500 ETF
+    group: benchmark
+  - ticker: QQQ
+    name: Invesco QQQ Trust
+    group: benchmark
+  - ticker: SMH
+    name: VanEck Semiconductor ETF
+    group: benchmark
