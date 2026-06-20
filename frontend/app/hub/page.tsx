@@ -1,5 +1,7 @@
 import { getNewsletter } from "@/lib/api";
 import type { NewsletterNugget } from "@/lib/api";
+import { getSeries } from "@/lib/moves";
+import MovesPanel from "@/components/MovesPanel";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -400,6 +402,8 @@ export default async function HubPage({
   searchParams: Promise<{ ticker?: string }>;
 }) {
   const { ticker } = await searchParams;
+  const series = ticker ? await getSeries(ticker, { days: 730, threshold: 0.07 }) : null;
+  const meta = TICKERS.find((t) => t.symbol === ticker);
 
   return (
     <div className="space-y-8">
@@ -414,26 +418,28 @@ export default async function HubPage({
         </div>
       </div>
 
-      {/* empty state or model */}
       {!ticker ? (
         <div className="flex min-h-[55vh] flex-col items-center justify-center text-center">
           <p className="text-2xl font-light tracking-tight text-zinc-600 [font-family:var(--font-display)]">
             Select a security to begin
           </p>
           <p className="mt-3 text-sm text-zinc-700">
-            Choose a ticker above to load the financial model.
+            Choose a ticker above to load the financial model and market‑moving events.
           </p>
         </div>
-      ) : ticker === "MU" ? (
-        <MuModel />
       ) : (
-        <div className="flex min-h-[55vh] flex-col items-center justify-center text-center">
-          <p className="text-2xl font-light tracking-tight text-zinc-600 [font-family:var(--font-display)]">
-            {ticker} model coming soon
-          </p>
-          <p className="mt-3 text-sm text-zinc-700">
-            Only MU is modeled right now. More securities to follow.
-          </p>
+        <div className="space-y-12">
+          {ticker === "MU" ? (
+            <MuModel />
+          ) : (
+            <div className="flex flex-wrap items-end gap-6">
+              <h1 className="text-4xl font-light tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-5xl">
+                <span className="text-[#00d4ff]">{ticker}</span>
+                {meta && <span className="ml-3 text-zinc-400">/ {meta.name}</span>}
+              </h1>
+            </div>
+          )}
+          <MovesPanel series={series} symbol={ticker} />
         </div>
       )}
     </div>
