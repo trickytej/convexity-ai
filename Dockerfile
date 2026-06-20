@@ -11,7 +11,9 @@ ENV PYTHONUNBUFFERED=1 \
 
 # Copy source (see .dockerignore — data/* excluded except the bundled moves.duckdb).
 COPY . .
-RUN pip install --upgrade pip && pip install .
+# Editable install so the vendored `moves` package resolves its REPO_ROOT to /app
+# (it reads config/watchlist.yaml + data/moves.duckdb relative to the repo root).
+RUN pip install --upgrade pip && pip install -e .
 
 EXPOSE 8000
 
