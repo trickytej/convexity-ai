@@ -1,5 +1,6 @@
 # Keep the API image lean — never ship local data (audio is ~880MB) or the frontend.
-data/
+# `data/*` (not `data/`) so the re-include below actually applies under BuildKit.
+data/*
 !data/moves.duckdb
 frontend/
 .venv/

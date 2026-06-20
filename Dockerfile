@@ -6,9 +6,10 @@ FROM python:3.12-slim
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    MOVES_DATA_DIR=/app/data
 
-# Copy source (see .dockerignore — data/, frontend/, venv excluded) and install.
+# Copy source (see .dockerignore — data/* excluded except the bundled moves.duckdb).
 COPY . .
 RUN pip install --upgrade pip && pip install .
 
