@@ -95,15 +95,23 @@ export function getShows(params: { format?: string } = {}): Promise<Show[]> {
 }
 
 export function getEpisodes(
-  params: { show?: string; days?: number; all?: boolean; limit?: number; offset?: number } = {},
+  params: { show?: string; days?: number; since?: string; until?: string; all?: boolean; limit?: number; offset?: number } = {},
 ): Promise<EpisodeList> {
   const q = new URLSearchParams();
   if (params.show) q.set("show", params.show);
-  if (params.days) q.set("days", String(params.days));
+  if (params.since) q.set("since", params.since);
+  else if (params.days) q.set("days", String(params.days));
+  if (params.until) q.set("until", params.until);
   if (params.all) q.set("all", "true");
   q.set("limit", String(params.limit ?? 50));
   q.set("offset", String(params.offset ?? 0));
   return getJSON<EpisodeList>(`/api/episodes?${q.toString()}`);
+}
+
+export async function pollAllShows(): Promise<{ shows_polled: number; new_episodes: number }> {
+  const res = await apiFetch("/api/shows/poll-all", { method: "POST" });
+  if (!res.ok) throw new Error(`poll-all failed: ${res.status}`);
+  return res.json();
 }
 
 export async function deleteEpisode(id: number): Promise<void> {

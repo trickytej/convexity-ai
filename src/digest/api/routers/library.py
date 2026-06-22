@@ -100,15 +100,33 @@ def list_shows(
 def list_episodes(
     show: str | None = None,
     days: int | None = None,
+    since: str | None = None,   # ISO date e.g. "2026-06-01"
+    until: str | None = None,   # ISO date e.g. "2026-06-21"
     all: bool = Query(False, alias="all"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: sqlite3.Connection = Depends(get_db),
 ) -> EpisodeListOut:
-    since = datetime.now(timezone.utc) - timedelta(days=days) if days else None
+    published_since: datetime | None = None
+    published_until: datetime | None = None
+    if since:
+        try:
+            published_since = datetime.fromisoformat(since).replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+    elif days:
+        published_since = datetime.now(timezone.utc) - timedelta(days=days)
+    if until:
+        try:
+            # include the full "until" day by pushing to end of day
+            published_until = datetime.fromisoformat(until).replace(
+                hour=23, minute=59, second=59, tzinfo=timezone.utc
+            )
+        except ValueError:
+            pass
     transcript_only = not all
-    rows = repo.browse_episodes(db, show_slug=show, published_since=since, with_transcript_only=transcript_only, limit=limit, offset=offset)
-    total = repo.count_episodes(db, show_slug=show, published_since=since, with_transcript_only=transcript_only)
+    rows = repo.browse_episodes(db, show_slug=show, published_since=published_since, published_until=published_until, with_transcript_only=transcript_only, limit=limit, offset=offset)
+    total = repo.count_episodes(db, show_slug=show, published_since=published_since, published_until=published_until, with_transcript_only=transcript_only)
     return EpisodeListOut(
         total=total,
         limit=limit,
@@ -251,6 +269,31 @@ def poll_show(slug: str, db: sqlite3.Connection = Depends(get_db)) -> dict:
     if result.error:
         raise HTTPException(status_code=502, detail=result.error)
     return {"new": result.new, "seen": result.seen, "total": result.total_in_feed}
+
+
+@router.post("/shows/poll-all")
+def poll_all_shows(db: sqlite3.Connection = Depends(get_db)) -> dict:
+    """Poll every active show and newsletter for new episodes."""
+    rows = db.execute("SELECT * FROM shows WHERE active = 1").fetchall()
+    results = []
+    total_new = 0
+    for row in rows:
+        if not row["rss_url"]:
+            continue
+        show = Show(
+            slug=row["slug"],
+            name=row["name"],
+            rss_url=row["rss_url"] or "",
+            tier=row["tier"],
+            transcript_source=row["transcript_source"] or "asr",
+            hosts=_json_list(row["hosts"]),
+            format=row["format"] or "interview",
+            active=bool(row["active"]),
+        )
+        result = discover_show(db, show)
+        total_new += result.new
+        results.append({"slug": show.slug, "new": result.new, "error": result.error})
+    return {"shows_polled": len(results), "new_episodes": total_new, "results": results}
 
 
 def _load_glossary(settings) -> Glossary:

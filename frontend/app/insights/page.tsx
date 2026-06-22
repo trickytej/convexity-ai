@@ -152,15 +152,11 @@ export default async function InsightsPage() {
       </p>
 
       <h1 className="mt-5 max-w-3xl text-5xl font-light leading-[1.04] tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-6xl">
-        What <span className="text-[#00d4ff]">moved the conversation</span> this week.
+        Hunt for signal <span className="text-[#00d4ff]">before the crowd.</span>
       </h1>
 
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-zinc-400">
-        {kept_count} curated insights from {episode_count} episodes. Ready to{" "}
-        <Link href="/newsletter" className="text-[#00d4ff] transition hover:text-[#33ddff]">
-          send the newsletter
-        </Link>
-        .
+        {kept_count} curated insights from {episode_count} episodes.
       </p>
 
       {/* stat row */}

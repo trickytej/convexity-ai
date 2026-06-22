@@ -8,6 +8,7 @@ import ImportEpisode from "@/components/ImportEpisode";
 import TranscribeButton from "@/components/TranscribeButton";
 import PollButton from "@/components/PollButton";
 import ImportedEpisodeList from "@/components/ImportedEpisodeList";
+import DateRangeRefresh from "@/components/DateRangeRefresh";
 
 export const dynamic = "force-dynamic";
 
@@ -18,16 +19,29 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   failed:      { label: "Failed",      cls: "bg-rose-500/10 text-rose-300 ring-rose-500/25" },
 };
 
+function defaultFrom() {
+  const d = new Date();
+  d.setDate(d.getDate() - 7);
+  return d.toISOString().slice(0, 10);
+}
+
+function defaultTo() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ show?: string }>;
+  searchParams: Promise<{ show?: string; from?: string; to?: string }>;
 }) {
-  const { show } = await searchParams;
+  const { show, from, to } = await searchParams;
+
+  const since = from || defaultFrom();
+  const until = to || defaultTo();
 
   const [shows, list] = await Promise.all([
     getShows(),
-    getEpisodes({ show, limit: 200, all: !!show }),
+    getEpisodes({ show, since, until, limit: 200, all: !!show }),
   ]);
 
   const active = shows.filter((s) => s.active);
@@ -39,6 +53,9 @@ export default async function Home({
       <ShowGrid initialShows={active} />
       <ImportPodcast />
       <ImportEpisode />
+
+      {/* ── Date range + refresh ── */}
+      <DateRangeRefresh initialFrom={since} initialTo={until} />
 
       {/* ── Episodes ── */}
       <div>
@@ -52,7 +69,7 @@ export default async function Home({
               Episodes
             </h2>
             <p className="mt-3 text-[15px] text-zinc-400">
-              {show ? `${list.total} episodes` : `${list.total} transcribed episodes`}
+              {list.total} episode{list.total !== 1 ? "s" : ""} from {since} to {until}
             </p>
           </div>
           {show && <PollButton slug={show} />}

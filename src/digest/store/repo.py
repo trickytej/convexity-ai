@@ -351,6 +351,7 @@ def _browse_where(
     show_slug: str | None,
     published_since: datetime | None,
     with_transcript_only: bool,
+    published_until: datetime | None = None,
 ) -> tuple[str, list[object]]:
     clauses: list[str] = []
     params: list[object] = []
@@ -360,6 +361,9 @@ def _browse_where(
     if published_since is not None:
         clauses.append("e.published_at >= ?")
         params.append(_dt_to_iso(published_since))
+    if published_until is not None:
+        clauses.append("e.published_at <= ?")
+        params.append(_dt_to_iso(published_until))
     if with_transcript_only:
         clauses.append("EXISTS (SELECT 1 FROM transcripts t WHERE t.episode_id = e.id)")
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
@@ -370,11 +374,12 @@ def browse_episodes(
     conn: sqlite3.Connection,
     show_slug: str | None = None,
     published_since: datetime | None = None,
+    published_until: datetime | None = None,
     with_transcript_only: bool = True,
     limit: int = 50,
     offset: int = 0,
 ) -> list[sqlite3.Row]:
-    where, params = _browse_where(show_slug, published_since, with_transcript_only)
+    where, params = _browse_where(show_slug, published_since, with_transcript_only, published_until)
     sql = f"""
         SELECT e.*,
             (SELECT source FROM transcripts t WHERE t.episode_id = e.id
@@ -396,9 +401,10 @@ def count_episodes(
     conn: sqlite3.Connection,
     show_slug: str | None = None,
     published_since: datetime | None = None,
+    published_until: datetime | None = None,
     with_transcript_only: bool = True,
 ) -> int:
-    where, params = _browse_where(show_slug, published_since, with_transcript_only)
+    where, params = _browse_where(show_slug, published_since, with_transcript_only, published_until)
     row = conn.execute(f"SELECT COUNT(*) AS n FROM episodes e {where}", params).fetchone()
     return int(row["n"]) if row else 0
 
