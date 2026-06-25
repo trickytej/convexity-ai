@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { getNewsletter } from "@/lib/api";
+import { getNewsletter, getEpisodes } from "@/lib/api";
 import { fmtDate } from "@/lib/format";
 import type { NewsletterNugget, StockMention } from "@/lib/api";
 import { Badge } from "@/components/ui";
 import RefreshFeedsButton from "@/components/RefreshFeedsButton";
+import EpisodeWorkflowPanel from "@/components/EpisodeWorkflowPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -124,8 +125,28 @@ function SectionHeader({
   );
 }
 
-export default async function InsightsPage() {
-  const newsletter = await getNewsletter({});
+function defaultFrom() {
+  const d = new Date();
+  d.setDate(d.getDate() - 7);
+  return d.toISOString().slice(0, 10);
+}
+function defaultTo() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export default async function InsightsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ from?: string; to?: string }>;
+}) {
+  const params = await searchParams;
+  const since = params?.from || defaultFrom();
+  const until = params?.to || defaultTo();
+
+  const [newsletter, episodeList] = await Promise.all([
+    getNewsletter({ from: since, to: until }),
+    getEpisodes({ since, until, limit: 200, all: true }),
+  ]);
   const { lead, good_to_know, stock_readthrough, kept_count, episode_count, from_date, to_date } =
     newsletter;
 
@@ -189,6 +210,28 @@ export default async function InsightsPage() {
         <RefreshFeedsButton />
       </div>
 
+      {/* episode list for date range */}
+      <section className="mt-12 scroll-mt-20">
+        <div className="mb-6 flex items-baseline justify-between border-b border-white/[0.08] pb-4">
+          <div className="flex items-baseline gap-3">
+            <span className="rounded-[5px] border border-[#00d4ff]/40 px-1.5 py-1 font-[family-name:var(--font-mono)] text-[11px] leading-none text-[#00d4ff]">
+              00
+            </span>
+            <h2 className="text-2xl font-light tracking-tight text-zinc-50 [font-family:var(--font-display)]">
+              Episodes
+            </h2>
+          </div>
+          <span className="font-[family-name:var(--font-mono)] text-xs tabular-nums text-zinc-500">
+            {episodeList.total}
+          </span>
+        </div>
+        <EpisodeWorkflowPanel
+          episodes={episodeList.episodes}
+          since={since}
+          until={until}
+        />
+      </section>
+
       {/* lead */}
       {lead.length > 0 && (
         <section className="mt-14 scroll-mt-20">
@@ -204,7 +247,7 @@ export default async function InsightsPage() {
       {/* good to know */}
       {good_to_know.length > 0 && (
         <section className="mt-16 scroll-mt-20">
-          <SectionHeader index="02" title="Good to Know" count={good_to_know.length} />
+          <SectionHeader index="02" title="Relevant Insights" count={good_to_know.length} />
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {good_to_know.map((n) => (
               <KeptNuggetCard key={n.id} n={n} />

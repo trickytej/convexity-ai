@@ -30,10 +30,12 @@ def _row_to_report(row: sqlite3.Row) -> dict:
 @router.post("/report/generate")
 def generate(
     days: int = Query(7, ge=1, le=90),
+    since: str | None = Query(None),
+    until: str | None = Query(None),
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     try:
-        return generate_report(db, days=days)
+        return generate_report(db, days=days, since_iso=since, until_iso=until)
     except LLMError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

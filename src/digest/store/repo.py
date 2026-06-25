@@ -548,6 +548,7 @@ def list_nuggets(
 def nuggets_in_window(
     conn: sqlite3.Connection,
     since: datetime | None = None,
+    until: datetime | None = None,
     min_signal: float = 0.0,
 ) -> list[sqlite3.Row]:
     """Nuggets joined to their episode + show, for the weekly report."""
@@ -556,6 +557,9 @@ def nuggets_in_window(
     if since is not None:
         clauses.append("e.published_at >= ?")
         params.append(_dt_to_iso(since))
+    if until is not None:
+        clauses.append("e.published_at <= ?")
+        params.append(_dt_to_iso(until))
     if min_signal:
         clauses.append("n.signal_score >= ?")
         params.append(min_signal)

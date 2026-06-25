@@ -160,6 +160,8 @@ def generate_report(
     conn: sqlite3.Connection,
     days: int = 7,
     *,
+    since_iso: str | None = None,
+    until_iso: str | None = None,
     per_section_limit: int = 60,
     settings: Settings | None = None,
 ) -> dict:
@@ -170,13 +172,14 @@ def generate_report(
     """
     settings = settings or get_settings()
     client = llm.get_client(settings)  # raises LLMError if no key
-    base = build_weekly_report(conn, days=days)
+    kw = dict(since_iso=since_iso, until_iso=until_iso)
+    base = build_weekly_report(conn, days=days, **kw)
     relevant_n = int((base.stats.get("triage") or {}).get("relevant", 0) or 0)
     if relevant_n > 0:
-        agg = build_weekly_report(conn, days=days, triage="relevant")
+        agg = build_weekly_report(conn, days=days, triage="relevant", **kw)
         source_mode = "relevant"
     else:
-        agg = build_weekly_report(conn, days=days, per_section_limit=per_section_limit)
+        agg = build_weekly_report(conn, days=days, per_section_limit=per_section_limit, **kw)
         source_mode = "top_signal"
 
     exec_summary, sections_out = _synthesize_report(client, settings, agg)

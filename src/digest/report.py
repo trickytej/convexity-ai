@@ -137,13 +137,19 @@ def build_weekly_report(
     conn: sqlite3.Connection,
     days: int = 7,
     *,
+    since_iso: str | None = None,
+    until_iso: str | None = None,
     min_signal: float = 0.0,
     per_section_limit: int | None = None,
     triage: str | None = None,
 ) -> WeeklyReport:
     until = datetime.now(timezone.utc)
     since = until - timedelta(days=days) if days else None
-    rows = repo.nuggets_in_window(conn, since=since, min_signal=min_signal)
+    if since_iso:
+        since = datetime.fromisoformat(since_iso).replace(tzinfo=timezone.utc)
+    if until_iso:
+        until = datetime.fromisoformat(until_iso).replace(tzinfo=timezone.utc)
+    rows = repo.nuggets_in_window(conn, since=since, until=until, min_signal=min_signal)
 
     nuggets: list[ReportNugget] = []
     company_shows: dict[str, set[str]] = defaultdict(set)

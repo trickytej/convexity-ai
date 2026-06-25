@@ -6,9 +6,13 @@ import { generateReport } from "@/lib/api";
 
 export function GenerateReportButton({
   days = 7,
+  since,
+  until,
   label = "Generate report",
 }: {
   days?: number;
+  since?: string;
+  until?: string;
   label?: string;
 }) {
   const router = useRouter();
@@ -19,7 +23,7 @@ export function GenerateReportButton({
     setBusy(true);
     setError(null);
     try {
-      await generateReport(days);
+      await generateReport({ days, since, until });
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "generation failed");

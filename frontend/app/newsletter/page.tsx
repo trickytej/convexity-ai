@@ -590,7 +590,7 @@ export default function NewsletterPage() {
                 )}
                 {g2k.length > 0 && (
                   <SortableSection
-                    title="Good to Know"
+                    title="Relevant Insights"
                     items={g2k}
                     onReorder={setG2k}
                     onEdit={editNugget}

@@ -28,13 +28,10 @@ export default function RefreshFeedsButton() {
       const data = await pollAllShows();
       setResult(data);
       setStatus("done");
+      router.push(`/insights?from=${from}&to=${to}`);
     } catch {
       setStatus("error");
     }
-  }
-
-  function goToPodcasts() {
-    router.push(`/?from=${from}&to=${to}`);
   }
 
   return (
@@ -89,18 +86,10 @@ export default function RefreshFeedsButton() {
         </button>
 
         {status === "done" && result && (
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-zinc-400">
-              <span className="text-emerald-400">+{result.new_episodes} new</span>
-              {" "}from {result.shows_polled} shows
-            </span>
-            <button
-              onClick={goToPodcasts}
-              className="rounded-lg border border-[#00d4ff]/30 px-3 py-1.5 text-sm text-[#00d4ff] transition hover:border-[#00d4ff]/60 hover:bg-[#00d4ff]/5"
-            >
-              View episodes →
-            </button>
-          </div>
+          <span className="text-sm text-zinc-400">
+            <span className="text-emerald-400">+{result.new_episodes} new</span>
+            {" "}from {result.shows_polled} shows
+          </span>
         )}
         {status === "error" && (
           <span className="text-sm text-rose-400">Refresh failed — check the backend</span>
