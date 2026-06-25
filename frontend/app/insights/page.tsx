@@ -173,10 +173,14 @@ export default async function InsightsPage({
       </p>
 
       <h1 className="mt-5 max-w-3xl text-5xl font-light leading-[1.04] tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-6xl">
-        Hunt for signal <span className="text-[#00d4ff]">before the crowd.</span>
+        Uncover narratives. Sharpen theses.<br /><span className="text-[#00d4ff]">Real time.</span>
       </h1>
 
-      <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-zinc-400">
+      <p className="mt-4 max-w-2xl text-xl font-light text-zinc-300">
+        Structured realtime insights integrated with your research.
+      </p>
+
+      <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-zinc-400">
         {kept_count} curated insights from {episode_count} episodes.
       </p>
 
