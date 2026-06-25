@@ -20,6 +20,10 @@ data/*.db
 data/*.db-journal
 data/*.db-wal
 data/*.db-shm
+# moves insight cache (local artifact; the bundled data/moves.duckdb stays tracked)
+data/*.sqlite
+data/*.sqlite-wal
+data/*.sqlite-shm
 
 # Tooling
 .ruff_cache/
