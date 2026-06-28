@@ -32,29 +32,32 @@ export default function DateRangeRefresh({ initialFrom, initialTo }: Props) {
     setResult(null);
     setIngest(null);
     setIngestNote(null);
+
+    // 1) Primary: kick off download + transcribe + extract in the background.
+    try {
+      const d = await dispatchIngest({ since: from });
+      if (d) setIngest(d);
+      else setIngestNote("Background transcription isn't configured yet (set GITHUB_DISPATCH_TOKEN on the API).");
+    } catch (e) {
+      setIngestNote(e instanceof Error ? e.message : "couldn't start transcription — check the backend");
+    }
+
+    // 2) Best-effort instant discovery; never block the refresh on it.
     try {
       const data = await pollAllShows();
       setResult(data);
-      // Kick off download + transcribe + extract in the background.
-      try {
-        const d = await dispatchIngest({ since: from });
-        if (d) setIngest(d);
-        else setIngestNote("Background transcription isn't configured yet (set GITHUB_DISPATCH_TOKEN on the API).");
-      } catch (e) {
-        setIngestNote(e instanceof Error ? e.message : "couldn't start transcription");
-      }
-      setStatus("done");
-      // Refresh the page content with the new date range after polling
-      startTransition(() => {
-        const params = new URLSearchParams();
-        if (from) params.set("from", from);
-        if (to) params.set("to", to);
-        router.push(`/podcasts?${params.toString()}`);
-        router.refresh();
-      });
     } catch {
-      setStatus("error");
+      /* ignored — discovery also happens inside the dispatched run */
     }
+
+    setStatus("done");
+    startTransition(() => {
+      const params = new URLSearchParams();
+      if (from) params.set("from", from);
+      if (to) params.set("to", to);
+      router.push(`/podcasts?${params.toString()}`);
+      router.refresh();
+    });
   }
 
   return (

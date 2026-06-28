@@ -28,23 +28,29 @@ export default function RefreshFeedsButton() {
     setResult(null);
     setIngest(null);
     setIngestNote(null);
+
+    // 1) Primary action: kick off download + transcribe + extract in the
+    //    background. This is fast (one dispatch call) and does its own polling.
     try {
-      // 1) Discover immediately so new episodes show up right away.
+      const d = await dispatchIngest({ since: from });
+      if (d) setIngest(d);
+      else setIngestNote("Background transcription isn't configured yet (set GITHUB_DISPATCH_TOKEN on the API).");
+    } catch (e) {
+      setIngestNote(e instanceof Error ? e.message : "couldn't start transcription — check the backend");
+    }
+
+    // 2) Best-effort instant discovery. Never block the refresh on it: polling
+    //    every feed can exceed the proxy timeout, and the dispatched run
+    //    discovers the same episodes anyway.
+    try {
       const data = await pollAllShows();
       setResult(data);
-      // 2) Kick off download + transcribe + extract in the background.
-      try {
-        const d = await dispatchIngest({ since: from });
-        if (d) setIngest(d);
-        else setIngestNote("Background transcription isn't configured yet (set GITHUB_DISPATCH_TOKEN on the API).");
-      } catch (e) {
-        setIngestNote(e instanceof Error ? e.message : "couldn't start transcription");
-      }
-      setStatus("done");
-      router.push(`/insights?from=${from}&to=${to}`);
     } catch {
-      setStatus("error");
+      /* ignored — discovery also happens inside the dispatched run */
     }
+
+    setStatus("done");
+    router.push(`/insights?from=${from}&to=${to}`);
   }
 
   return (

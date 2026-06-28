@@ -6,6 +6,9 @@ import { apiFetch } from "@/lib/api";
 // key never reaches the client and there is no cross-origin CORS to manage.
 
 export const dynamic = "force-dynamic";
+// Some backend calls (e.g. polling every feed) take longer than the default
+// function limit; allow up to 60s so the proxy doesn't 504 mid-request.
+export const maxDuration = 60;
 
 async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }): Promise<Response> {
   const { path } = await ctx.params;
