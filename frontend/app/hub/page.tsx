@@ -380,7 +380,7 @@ async function MuModel() {
         {muNuggets.length === 0 ? (
           <p className="mt-5 text-sm text-zinc-600">
             No kept nuggets mentioning Micron yet — mark relevant ones in the{" "}
-            <Link href="/" className="text-[#00d4ff]">Episodes</Link> tab.
+            <Link href="/podcasts" className="text-[#00d4ff]">Episodes</Link> tab.
           </p>
         ) : (
           <div className="mt-5 grid gap-3 sm:grid-cols-2">

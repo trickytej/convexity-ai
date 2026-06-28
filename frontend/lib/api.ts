@@ -114,6 +114,37 @@ export async function pollAllShows(): Promise<{ shows_polled: number; new_episod
   return res.json();
 }
 
+export interface IngestDispatch {
+  dispatched: boolean;
+  days: number;
+  repo: string;
+  workflow: string;
+  run_url: string;
+}
+
+/**
+ * Kick off background ingestion (download + transcribe + extract) for everything
+ * published since `since`. Runs on a GitHub Actions runner; results stream into
+ * the database over the next few minutes. Resolves with `null` when the backend
+ * has no dispatch token configured (so callers can fall back to discovery-only).
+ */
+export async function dispatchIngest(params: {
+  since?: string;
+  days?: number;
+}): Promise<IngestDispatch | null> {
+  const res = await apiFetch("/api/ingest/dispatch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (res.status === 503) return null; // not configured — caller decides what to show
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `ingest dispatch failed: ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function deleteEpisode(id: number): Promise<void> {
   const res = await apiFetch(`/api/episodes/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`Delete failed: ${res.status}`);

@@ -10,7 +10,16 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from .. import __version__
-from .routers import curation, digests, insights, library, newsletter, nuggets, report
+from .routers import (
+    curation,
+    digests,
+    ingest,
+    insights,
+    library,
+    newsletter,
+    nuggets,
+    report,
+)
 
 # Open paths that never require the API key (health check + CORS preflight).
 _OPEN_PATHS = {"/api/health"}
@@ -56,6 +65,7 @@ def create_app() -> FastAPI:
     app.include_router(digests.router, prefix="/api")
     app.include_router(curation.router, prefix="/api")
     app.include_router(newsletter.router, prefix="/api")
+    app.include_router(ingest.router, prefix="/api")
 
     # market-moves (vendored): price series + move detection + grounded attribution.
     # Guarded so a missing optional dep/data never takes down the core digest API.

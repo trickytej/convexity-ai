@@ -74,6 +74,22 @@ Repo → **Settings → Secrets and variables → Actions** → add:
 (**Actions → ingest → Run workflow**). It transcribes new episodes and writes
 insights straight to Turso. Audio is downloaded on the runner and discarded.
 
+### 5a. "Refresh Feeds" button → background transcription
+
+The **Refresh Feeds** button on the site discovers new episodes instantly, then
+dispatches the `ingest` workflow above for the selected look-back window (so the
+heavy download + transcribe + extract runs on the runner, not the web dyno). To
+enable it:
+
+1. Create a **GitHub fine-grained PAT** (Settings → Developer settings → Fine-grained
+   tokens) scoped to the repo with **Actions: Read and write**.
+2. Add it to the **Render** API service as `GITHUB_DISPATCH_TOKEN`. `GITHUB_REPO`
+   defaults to `dav-s-git/research-digest` (override if forked).
+3. Ensure the Action secrets in step 5 exist (`ASSEMBLYAI_API_KEY`, `ANTHROPIC_API_KEY`,
+   `TURSO_*`) — the dispatched run uses them to transcribe.
+
+Without `GITHUB_DISPATCH_TOKEN` the button stays discovery-only and shows a note.
+
 ---
 
 ## Environment variable reference
@@ -84,6 +100,8 @@ insights straight to Turso. Audio is downloaded on the runner and discarded.
 | API | `DIGEST_API_KEY` | require `X-API-Key` on `/api/*` (open if unset) |
 | API | `ANTHROPIC_API_KEY` | on-demand report/digest/newsletter LLM calls |
 | API | `DIGEST_CORS_ORIGINS` | allowed browser origins (optional with the proxy) |
+| API | `GITHUB_DISPATCH_TOKEN` | PAT (Actions: write) so "Refresh Feeds" can trigger ingestion |
+| API | `GITHUB_REPO` | `owner/name` for dispatch (default `dav-s-git/research-digest`) |
 | Frontend | `API_BASE_URL` | backend base URL (server fetch + proxy target) |
 | Frontend | `DIGEST_API_KEY` | sent to API by the server-side proxy (never to browser) |
 | Frontend | `SITE_USER` / `SITE_PASSWORD` | Basic Auth gate for the whole site |

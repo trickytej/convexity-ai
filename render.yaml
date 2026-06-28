@@ -23,3 +23,10 @@ services:
         sync: false # e.g. https://your-app.vercel.app
       - key: DIGEST_SYNTHESIS_MODEL
         value: claude-opus-4-8
+      # Background ingestion: "Refresh Feeds" dispatches the GitHub `ingest` workflow
+      # (which has ffmpeg + the AssemblyAI/Anthropic/Turso secrets) to download +
+      # transcribe + extract for the chosen range. Requires a fine-grained PAT.
+      - key: GITHUB_DISPATCH_TOKEN
+        sync: false # GitHub fine-grained PAT with "Actions: write" on the repo
+      - key: GITHUB_REPO
+        value: dav-s-git/research-digest

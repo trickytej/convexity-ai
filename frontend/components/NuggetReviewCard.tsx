@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import type { CurationPatch, NuggetWithCuration } from "@/lib/api";
+import { useState } from "react";
+import type { Curation, CurationPatch, NuggetWithCuration } from "@/lib/api";
 import { patchCuration } from "@/lib/api";
 import { Badge } from "@/components/ui";
 
@@ -16,6 +16,15 @@ function fmtMs(ms: number | null | undefined): string {
     : `${m}:${String(sec).padStart(2, "0")}`;
 }
 
+function sameCuration(a: Curation, b: Curation): boolean {
+  return (
+    a.decision === b.decision &&
+    a.curator_rank === b.curator_rank &&
+    a.contradicts_consensus === b.contradicts_consensus &&
+    (a.note ?? "") === (b.note ?? "")
+  );
+}
+
 export function NuggetReviewCard({
   nugget,
   episodeId,
@@ -23,29 +32,42 @@ export function NuggetReviewCard({
   nugget: NuggetWithCuration;
   episodeId: number;
 }) {
-  const [curation, setCuration] = useState(nugget.curation);
+  // `saved` is the last persisted state; `draft` is the working copy the
+  // curator edits. Nothing hits the API until they press Submit.
+  const [saved, setSaved] = useState<Curation>(nugget.curation);
+  const [draft, setDraft] = useState<Curation>(nugget.curation);
   const [saving, setSaving] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const save = useCallback(
-    (patch: CurationPatch) => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(async () => {
-        setSaving(true);
-        try {
-          const updated = await patchCuration(nugget.id, patch);
-          setCuration(updated);
-        } finally {
-          setSaving(false);
-        }
-      }, 400);
-    },
-    [nugget.id],
-  );
-
-  const decision = curation.decision;
+  const dirty = !sameCuration(draft, saved);
+  const decision = draft.decision;
   const isKept = decision === "kept";
   const isKilled = decision === "killed";
+
+  async function submit() {
+    setSaving(true);
+    setError(null);
+    try {
+      const patch: CurationPatch = {
+        decision: draft.decision,
+        curator_rank: draft.curator_rank,
+        contradicts_consensus: draft.contradicts_consensus,
+        note: draft.note ?? "",
+      };
+      const updated = await patchCuration(nugget.id, patch);
+      setSaved(updated);
+      setDraft(updated);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function revisit() {
+    setDraft(saved);
+    setError(null);
+  }
 
   const tickers = nugget.entities?.tickers ?? [];
   const companies = nugget.entities?.companies ?? [];
@@ -57,7 +79,11 @@ export function NuggetReviewCard({
       : "bg-[#0b0c10]/75 border-white/[0.08]";
 
   return (
-    <div className={`rounded-lg border p-4 space-y-3 transition-colors ${cardBg}`}>
+    <div
+      className={`rounded-lg border p-4 space-y-3 transition-colors ${cardBg} ${
+        dirty ? "ring-1 ring-amber-400/40" : ""
+      }`}
+    >
       {/* Header row */}
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex flex-wrap gap-1.5">
@@ -71,7 +97,6 @@ export function NuggetReviewCard({
             signal {nugget.signal_score.toFixed(2)} · suggest rank {nugget.suggested_rank}
           </span>
         </div>
-        {saving && <span className="text-xs text-zinc-500">saving…</span>}
       </div>
 
       {/* Claim */}
@@ -106,11 +131,12 @@ export function NuggetReviewCard({
         <div className="flex rounded-md overflow-hidden border border-white/15 text-xs font-medium">
           <button
             type="button"
-            onClick={() => {
-              const next = isKept ? "unreviewed" : "kept";
-              setCuration((c) => ({ ...c, decision: next }));
-              save({ decision: next });
-            }}
+            onClick={() =>
+              setDraft((c) => ({
+                ...c,
+                decision: c.decision === "kept" ? "unreviewed" : "kept",
+              }))
+            }
             className={`px-3 py-1.5 transition-colors ${
               isKept ? "bg-emerald-500 text-[#05140e]" : "bg-white/[0.04] text-zinc-300 hover:bg-emerald-500/10 hover:text-emerald-300"
             }`}
@@ -119,11 +145,12 @@ export function NuggetReviewCard({
           </button>
           <button
             type="button"
-            onClick={() => {
-              const next = isKilled ? "unreviewed" : "killed";
-              setCuration((c) => ({ ...c, decision: next }));
-              save({ decision: next });
-            }}
+            onClick={() =>
+              setDraft((c) => ({
+                ...c,
+                decision: c.decision === "killed" ? "unreviewed" : "killed",
+              }))
+            }
             className={`px-3 py-1.5 border-l border-white/15 transition-colors ${
               isKilled ? "bg-zinc-600 text-white" : "bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08]"
             }`}
@@ -139,13 +166,14 @@ export function NuggetReviewCard({
             <button
               key={r}
               type="button"
-              onClick={() => {
-                const next = curation.curator_rank === r ? null : r;
-                setCuration((c) => ({ ...c, curator_rank: next }));
-                save({ curator_rank: next ?? undefined });
-              }}
+              onClick={() =>
+                setDraft((c) => ({
+                  ...c,
+                  curator_rank: c.curator_rank === r ? null : r,
+                }))
+              }
               className={`w-6 h-6 rounded-full text-xs font-semibold transition-colors ${
-                curation.curator_rank === r
+                draft.curator_rank === r
                   ? "bg-[#00d4ff] text-[#001a26]"
                   : "bg-white/[0.06] text-zinc-400 hover:bg-[#00d4ff]/15 hover:text-[#00d4ff]"
               }`}
@@ -159,12 +187,10 @@ export function NuggetReviewCard({
         <label className="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer select-none">
           <input
             type="checkbox"
-            checked={curation.contradicts_consensus}
-            onChange={(e) => {
-              const v = e.target.checked;
-              setCuration((c) => ({ ...c, contradicts_consensus: v }));
-              save({ contradicts_consensus: v });
-            }}
+            checked={draft.contradicts_consensus}
+            onChange={(e) =>
+              setDraft((c) => ({ ...c, contradicts_consensus: e.target.checked }))
+            }
             className="rounded accent-[#00d4ff]"
           />
           contradicts consensus
@@ -175,12 +201,45 @@ export function NuggetReviewCard({
       <textarea
         rows={2}
         placeholder="Why it matters (curator note)…"
-        defaultValue={curation.note ?? ""}
-        onChange={(e) => {
-          save({ note: e.target.value });
-        }}
+        value={draft.note ?? ""}
+        onChange={(e) => setDraft((c) => ({ ...c, note: e.target.value }))}
         className="w-full rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#00d4ff]/40 resize-none"
       />
+
+      {/* Submit / Revisit */}
+      <div className="flex items-center justify-between gap-3 pt-1">
+        <span className="text-xs">
+          {saving ? (
+            <span className="text-zinc-500">saving…</span>
+          ) : error ? (
+            <span className="text-rose-400">{error}</span>
+          ) : dirty ? (
+            <span className="text-amber-300">unsaved changes</span>
+          ) : saved.updated_at ? (
+            <span className="text-zinc-500">saved</span>
+          ) : (
+            <span className="text-zinc-600">not reviewed</span>
+          )}
+        </span>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={revisit}
+            disabled={!dirty || saving}
+            className="rounded-md border border-white/15 px-3 py-1.5 text-xs font-medium text-zinc-300 transition-colors enabled:hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Revisit
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!dirty || saving}
+            className="rounded-md bg-[#00d4ff] px-3 py-1.5 text-xs font-semibold text-[#001a26] transition-colors enabled:hover:bg-[#33ddff] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {saving ? "Submitting…" : "Submit"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

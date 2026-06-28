@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { pollAllShows } from "@/lib/api";
+import { dispatchIngest, pollAllShows, type IngestDispatch } from "@/lib/api";
 
 interface Props {
   initialFrom: string;
@@ -15,29 +15,41 @@ export default function DateRangeRefresh({ initialFrom, initialTo }: Props) {
   const [to, setTo] = useState(initialTo);
   const [status, setStatus] = useState<"idle" | "polling" | "done" | "error">("idle");
   const [result, setResult] = useState<{ new_episodes: number; shows_polled: number } | null>(null);
+  const [ingest, setIngest] = useState<IngestDispatch | null>(null);
+  const [ingestNote, setIngestNote] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function applyRange() {
     const params = new URLSearchParams();
     if (from) params.set("from", from);
     if (to) params.set("to", to);
-    router.push(`/?${params.toString()}`);
+    router.push(`/podcasts?${params.toString()}`);
   }
 
   async function handleRefresh() {
     if (status === "polling") return;
     setStatus("polling");
     setResult(null);
+    setIngest(null);
+    setIngestNote(null);
     try {
       const data = await pollAllShows();
       setResult(data);
+      // Kick off download + transcribe + extract in the background.
+      try {
+        const d = await dispatchIngest({ since: from });
+        if (d) setIngest(d);
+        else setIngestNote("Background transcription isn't configured yet (set GITHUB_DISPATCH_TOKEN on the API).");
+      } catch (e) {
+        setIngestNote(e instanceof Error ? e.message : "couldn't start transcription");
+      }
       setStatus("done");
       // Refresh the page content with the new date range after polling
       startTransition(() => {
         const params = new URLSearchParams();
         if (from) params.set("from", from);
         if (to) params.set("to", to);
-        router.push(`/?${params.toString()}`);
+        router.push(`/podcasts?${params.toString()}`);
         router.refresh();
       });
     } catch {
@@ -52,7 +64,8 @@ export default function DateRangeRefresh({ initialFrom, initialTo }: Props) {
         <span className="text-[#00d4ff]">Date Range</span>
       </p>
       <p className="mt-2 text-sm text-zinc-400">
-        Set a window to refresh feeds and filter what&apos;s shown below.
+        Set a window to refresh feeds and filter what&apos;s shown below. New episodes
+        are downloaded and transcribed in the background.
       </p>
 
       <div className="mt-4 flex flex-wrap items-end gap-3">
@@ -114,6 +127,30 @@ export default function DateRangeRefresh({ initialFrom, initialTo }: Props) {
           <p className="text-sm text-rose-400">Refresh failed — check the backend</p>
         )}
       </div>
+
+      {(ingest || ingestNote) && (
+        <p className="mt-3 text-sm text-zinc-400">
+          {ingest ? (
+            <>
+              <span className="text-[#00d4ff]">
+                Transcribing the last {ingest.days} day{ingest.days !== 1 ? "s" : ""} in the background.
+              </span>{" "}
+              Transcripts and nuggets will appear over the next few minutes —{" "}
+              <a
+                href={ingest.run_url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[#00d4ff] underline-offset-2 hover:underline"
+              >
+                view run ↗
+              </a>
+              .
+            </>
+          ) : (
+            <span className="text-amber-300">{ingestNote}</span>
+          )}
+        </p>
+      )}
     </div>
   );
 }

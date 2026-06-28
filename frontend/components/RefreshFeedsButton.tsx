@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { pollAllShows } from "@/lib/api";
+import { dispatchIngest, pollAllShows, type IngestDispatch } from "@/lib/api";
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -19,14 +19,27 @@ export default function RefreshFeedsButton() {
   const [to, setTo] = useState(todayISO());
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [result, setResult] = useState<{ new_episodes: number; shows_polled: number } | null>(null);
+  const [ingest, setIngest] = useState<IngestDispatch | null>(null);
+  const [ingestNote, setIngestNote] = useState<string | null>(null);
 
   async function handleRefresh() {
     if (status === "loading") return;
     setStatus("loading");
     setResult(null);
+    setIngest(null);
+    setIngestNote(null);
     try {
+      // 1) Discover immediately so new episodes show up right away.
       const data = await pollAllShows();
       setResult(data);
+      // 2) Kick off download + transcribe + extract in the background.
+      try {
+        const d = await dispatchIngest({ since: from });
+        if (d) setIngest(d);
+        else setIngestNote("Background transcription isn't configured yet (set GITHUB_DISPATCH_TOKEN on the API).");
+      } catch (e) {
+        setIngestNote(e instanceof Error ? e.message : "couldn't start transcription");
+      }
       setStatus("done");
       router.push(`/insights?from=${from}&to=${to}`);
     } catch {
@@ -41,7 +54,8 @@ export default function RefreshFeedsButton() {
         <span className="text-[#00d4ff]">Refresh Feeds</span>
       </p>
       <p className="mt-2 text-sm text-zinc-400">
-        Set a date range, refresh all feeds, then view the episodes that came in.
+        Set a date range and refresh. New episodes are discovered immediately, then
+        downloaded and transcribed in the background.
       </p>
 
       <div className="mt-4 flex flex-wrap items-end gap-3">
@@ -95,6 +109,30 @@ export default function RefreshFeedsButton() {
           <span className="text-sm text-rose-400">Refresh failed — check the backend</span>
         )}
       </div>
+
+      {(ingest || ingestNote) && (
+        <p className="mt-3 text-sm text-zinc-400">
+          {ingest ? (
+            <>
+              <span className="text-[#00d4ff]">
+                Transcribing the last {ingest.days} day{ingest.days !== 1 ? "s" : ""} in the background.
+              </span>{" "}
+              Transcripts and nuggets will appear here over the next few minutes —{" "}
+              <a
+                href={ingest.run_url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[#00d4ff] underline-offset-2 hover:underline"
+              >
+                view run ↗
+              </a>
+              .
+            </>
+          ) : (
+            <span className="text-amber-300">{ingestNote}</span>
+          )}
+        </p>
+      )}
     </div>
   );
 }

@@ -313,7 +313,14 @@ export default function EpisodeWorkflowPanel({
     setGenError(null);
     setReport(null);
     try {
-      const result = await getNewsletter({ from: since, to: until });
+      // Scope the report to the episodes the user ticked above; fall back to the
+      // whole date range only when nothing is selected.
+      const episodeIds = [...selectedIds];
+      const result = await getNewsletter(
+        episodeIds.length > 0
+          ? { episode_ids: episodeIds }
+          : { from: since, to: until },
+      );
       setReport(result);
       setReportOpen(true);
     } catch (e) {
@@ -389,7 +396,20 @@ export default function EpisodeWorkflowPanel({
             <span className="text-[#00d4ff]">Generate Report</span>
           </p>
           <p className="mt-2 text-sm text-zinc-400">
-            Build a report from kept nuggets in this date range ({since} – {until}).
+            {selectedIds.size > 0 ? (
+              <>
+                Build a report from kept nuggets in the{" "}
+                <span className="font-medium text-[#00d4ff]">
+                  {selectedIds.size} selected episode{selectedIds.size !== 1 ? "s" : ""}
+                </span>
+                .
+              </>
+            ) : (
+              <>
+                Tick episodes above to scope the report, or generate from all kept
+                nuggets in this date range ({since} – {until}).
+              </>
+            )}
           </p>
           <div className="mt-4 flex items-center gap-3">
             <button
