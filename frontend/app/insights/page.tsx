@@ -147,6 +147,7 @@ export default async function InsightsPage({
     getNewsletter({ from: since, to: until }),
     getEpisodes({ since, until, limit: 200, all: true }),
   ]);
+  const trackedEpisodes = episodeList.episodes.filter(e => e.show_slug !== "scout");
   const { lead, good_to_know, stock_readthrough, kept_count, episode_count, from_date, to_date } =
     newsletter;
 
@@ -226,11 +227,11 @@ export default async function InsightsPage({
             </h2>
           </div>
           <span className="font-[family-name:var(--font-mono)] text-xs tabular-nums text-zinc-500">
-            {episodeList.total}
+            {trackedEpisodes.length}
           </span>
         </div>
         <EpisodeWorkflowPanel
-          episodes={episodeList.episodes}
+          episodes={trackedEpisodes}
           since={since}
           until={until}
         />

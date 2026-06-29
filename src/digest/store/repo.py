@@ -789,6 +789,7 @@ def list_kept_nuggets_for_newsletter(
     to_iso: str | None = None,
     episode_ids: list[int] | None = None,
     show_slug: str | None = None,
+    exclude_show_slugs: list[str] | None = None,
 ) -> list[sqlite3.Row]:
     """Kept nuggets ordered rank ASC then signal DESC. All filters are optional."""
     clauses = ["nc.decision = 'kept'"]
@@ -806,6 +807,10 @@ def list_kept_nuggets_for_newsletter(
     if show_slug:
         clauses.append("e.show_slug = ?")
         params.append(show_slug)
+    if exclude_show_slugs:
+        placeholders = ",".join("?" * len(exclude_show_slugs))
+        clauses.append(f"e.show_slug NOT IN ({placeholders})")
+        params.extend(exclude_show_slugs)
     where = " AND ".join(clauses)
     return conn.execute(
         f"""

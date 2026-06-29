@@ -216,7 +216,8 @@ def get_newsletter(
         raise HTTPException(status_code=422, detail="'from' must be before 'to'")
 
     rows = repo.list_kept_nuggets_for_newsletter(
-        db, from_iso, to_iso, episode_ids or None, show_slug=show
+        db, from_iso, to_iso, episode_ids or None, show_slug=show,
+        exclude_show_slugs=["scout"] if not show and not episode_ids else None,
     )
 
     lead = [_nugget_out(r) for r in rows if r["curator_rank"] == 1]
