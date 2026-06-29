@@ -126,6 +126,22 @@ CREATE TABLE IF NOT EXISTS episode_digests (
     generated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS scout_appearances (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    listennotes_id  TEXT UNIQUE NOT NULL,
+    company         TEXT NOT NULL,
+    episode_title   TEXT NOT NULL,
+    podcast_name    TEXT NOT NULL,
+    episode_url     TEXT,
+    audio_url       TEXT,
+    thumbnail       TEXT,
+    description     TEXT,
+    published_at    TEXT,
+    created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_scout_company   ON scout_appearances(company);
+CREATE INDEX IF NOT EXISTS idx_scout_published ON scout_appearances(published_at DESC);
+
 CREATE TABLE IF NOT EXISTS nugget_curation (
     nugget_id             INTEGER PRIMARY KEY,
     -- Intentionally NO "REFERENCES nuggets(id) ON DELETE CASCADE": curator decisions
@@ -332,6 +348,14 @@ def _migrate(conn: _Conn) -> None:
     show_cols = {row[1] for row in conn.execute("PRAGMA table_info(shows)").fetchall()}
     if "format" not in show_cols:
         conn.execute("ALTER TABLE shows ADD COLUMN format TEXT")
+
+    scout_cols = {row[1] for row in conn.execute("PRAGMA table_info(scout_appearances)").fetchall()}
+    if "person_name" not in scout_cols:
+        conn.execute("ALTER TABLE scout_appearances ADD COLUMN person_name TEXT")
+    if "person_role" not in scout_cols:
+        conn.execute("ALTER TABLE scout_appearances ADD COLUMN person_role TEXT")
+    if "episode_id" not in scout_cols:
+        conn.execute("ALTER TABLE scout_appearances ADD COLUMN episode_id INTEGER")
 
     conn.commit()
 

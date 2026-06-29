@@ -540,6 +540,45 @@ export interface NewsletterSendPayload {
   stocks: Array<{ company: string; stance: string; summary: string }>;
 }
 
+// ─── Scout ───────────────────────────────────────────────────────────────────
+
+export interface ScoutAppearance {
+  id: number;
+  company: string;
+  person_name: string | null;
+  person_role: string | null;
+  episode_id: number | null;
+  episode_title: string;
+  podcast_name: string;
+  episode_url: string | null;
+  thumbnail: string | null;
+  description: string | null;
+  published_at: string | null;
+  created_at: string;
+}
+
+export function getScoutAppearances(params: { company?: string; days?: number } = {}): Promise<ScoutAppearance[]> {
+  const q = new URLSearchParams();
+  if (params.company) q.set("company", params.company);
+  if (params.days)    q.set("days",    String(params.days));
+  return getJSON<ScoutAppearance[]>(`/api/scout/appearances?${q.toString()}`);
+}
+
+export async function refreshScout(days = 30): Promise<{ new: number; skipped: number; errors: string[] }> {
+  const res = await apiFetch(`/api/scout/refresh?days=${days}`, { method: "POST" });
+  if (!res.ok) throw new Error(`scout refresh failed: ${res.status}`);
+  return res.json();
+}
+
+export async function ingestScoutAppearance(appearanceId: number): Promise<{ episode_id: number; created: boolean }> {
+  const res = await apiFetch(`/api/scout/appearances/${appearanceId}/ingest`, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `Ingest failed: ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function sendNewsletter(payload: NewsletterSendPayload): Promise<{ sent: number }> {
   const res = await apiFetch(`/api/newsletter/send`, {
     method: "POST",

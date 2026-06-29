@@ -643,6 +643,34 @@ def newsletter(
 
 
 @app.command()
+def scout(
+    days:    int  = typer.Option(30,    "--days",    "-d", help="Look-back window in days."),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Search Listen Notes for podcast appearances from watchlist companies."""
+    _setup_logging(verbose)
+    settings = get_settings()
+    if not settings.listennotes_api_key:
+        console.print("[yellow]LISTENNOTES_API_KEY not set — nothing to do.[/yellow]")
+        raise typer.Exit(code=1)
+
+    from .scout.pipeline import run_cycle
+    from .store.db import init_db
+
+    console.print(f"[cyan]Scout[/cyan] scanning {days}-day window via Listen Notes…")
+    with get_conn(settings.resolved_db_path) as conn:
+        init_db(conn)
+        result = run_cycle(conn, days=days)
+
+    console.print(
+        f"[green]Done.[/green]  "
+        f"[bold]{result.new}[/bold] new · {result.skipped} already seen"
+    )
+    for err in result.errors:
+        console.print(f"  [red]error:[/red] {err}")
+
+
+@app.command()
 def serve(
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(8000, "--port", help="API port (avoid 8080)."),

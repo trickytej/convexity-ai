@@ -51,6 +51,10 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("ASSEMBLYAI_API_KEY", "DIGEST_ASSEMBLYAI_API_KEY"),
     )
+    listennotes_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("LISTENNOTES_API_KEY", "DIGEST_LISTENNOTES_API_KEY"),
+    )
 
     # High-volume / mechanical work: extraction, correction, speaker-id, sectors.
     anthropic_model: str = "claude-sonnet-4-6"
