@@ -16,6 +16,17 @@ from ..deps import get_db
 
 router = APIRouter(tags=["scout"])
 
+# In-process state for the most recent /scout/refresh background run. Fine as a
+# module-level dict since the API runs as a single uvicorn worker (see Dockerfile).
+_refresh_state: dict = {
+    "status": "idle",  # idle | running | done | error
+    "started_at": None,
+    "finished_at": None,
+    "new": 0,
+    "skipped": 0,
+    "errors": [],
+}
+
 _SCOUT_SHOW_SLUG = "scout"
 _SCOUT_SHOW = Show(
     slug=_SCOUT_SHOW_SLUG,
@@ -31,6 +42,10 @@ _LINE_RE = re.compile(
     r"^\[(\d{2}:\d{2}:\d{2}\.\d+)\s*-->\s*(\d{2}:\d{2}:\d{2}\.\d+)\]\s*"
     r"(?:\[(\w+)\]\s*)?(.+)$"
 )
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _ts_ms(ts: str) -> int:
@@ -111,22 +126,42 @@ def refresh_appearances(
     """Kick off a Podscan scan in the background and return immediately.
 
     The scan queries every tracked person (100+ calls at ~1 s each), so it
-    runs in a background thread to avoid blocking the HTTP response.
+    runs in a background thread to avoid blocking the HTTP response. Poll
+    GET /scout/refresh/status for the real outcome.
     """
     from ...config import get_settings
     from ...store.db import connect as _db_connect
     from ...scout.pipeline import run_cycle
 
+    _refresh_state.update(
+        status="running", started_at=_now_iso(), finished_at=None, new=0, skipped=0, errors=[],
+    )
+
     def _run() -> None:
         settings = get_settings()
         conn = _db_connect(settings.resolved_db_path)
         try:
-            run_cycle(conn, days=days)
+            result = run_cycle(conn, days=days)
+            _refresh_state.update(
+                status="error" if result.errors and not (result.new or result.skipped) else "done",
+                finished_at=_now_iso(),
+                new=result.new,
+                skipped=result.skipped,
+                errors=result.errors[:5],
+            )
+        except Exception as exc:
+            _refresh_state.update(status="error", finished_at=_now_iso(), errors=[str(exc)])
         finally:
             conn.close()
 
     background_tasks.add_task(_run)
-    return {"status": "started", "new": 0, "skipped": 0, "errors": []}
+    return {"status": "started"}
+
+
+@router.get("/scout/refresh/status")
+def refresh_status() -> dict:
+    """Return the state of the most recent (or in-progress) /scout/refresh run."""
+    return _refresh_state
 
 
 def _run_process(episode_id: int) -> None:

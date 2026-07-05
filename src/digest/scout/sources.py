@@ -21,6 +21,15 @@ _REQUEST_DELAY_SECONDS = 1.0
 _RETRY_AFTER_SECONDS = 60     # wait after a 429 before retrying once
 
 
+class PodscanAuthError(Exception):
+    """Raised when PODSCAN_API_KEY is missing or Podscan rejects it (401/403).
+
+    Deliberately not swallowed inside search_episodes: the caller (pipeline.run_cycle)
+    catches this once and aborts the whole cycle instead of silently returning zero
+    results for every one of the 100+ tracked people.
+    """
+
+
 # ── Guest-appearance filter ───────────────────────────────────────────────────
 #
 # Podscan's full-text search returns any episode that mentions a person, not
@@ -106,8 +115,7 @@ def search_episodes(query: str, *, days: int = 30, max_results: int = 10) -> lis
     """
     settings = get_settings()
     if not settings.podscan_api_key:
-        log.warning("PODSCAN_API_KEY not set — skipping search for %r", query)
-        return []
+        raise PodscanAuthError("PODSCAN_API_KEY is not set")
 
     cutoff = _cutoff_dt(days)
     collected: list[dict] = []
@@ -131,6 +139,11 @@ def search_episodes(query: str, *, days: int = 30, max_results: int = 10) -> lis
                     log.warning("Podscan rate limit hit for %r — waiting %ss", query, _RETRY_AFTER_SECONDS)
                     time.sleep(_RETRY_AFTER_SECONDS)
                     resp = client.get(f"{_BASE}/episodes/search", params=params, headers=headers)
+
+                if resp.status_code in (401, 403):
+                    raise PodscanAuthError(
+                        f"Podscan rejected the API key (HTTP {resp.status_code}) — check PODSCAN_API_KEY"
+                    )
 
                 resp.raise_for_status()
                 data = resp.json()
@@ -175,6 +188,8 @@ def search_episodes(query: str, *, days: int = 30, max_results: int = 10) -> lis
 
                 time.sleep(_REQUEST_DELAY_SECONDS)
 
+    except PodscanAuthError:
+        raise
     except Exception as exc:
         log.warning("Podscan search failed for %r: %s", query, exc)
 

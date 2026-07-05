@@ -564,10 +564,23 @@ export function getScoutAppearances(params: { company?: string; days?: number } 
   return getJSON<ScoutAppearance[]>(`/api/scout/appearances?${q.toString()}`);
 }
 
-export async function refreshScout(days = 30): Promise<{ status?: string; new: number; skipped: number; errors: string[] }> {
+export async function refreshScout(days = 30): Promise<{ status?: string }> {
   const res = await apiFetch(`/api/scout/refresh?days=${days}`, { method: "POST" });
   if (!res.ok) throw new Error(`scout refresh failed: ${res.status}`);
   return res.json();
+}
+
+export interface ScoutRefreshStatus {
+  status: "idle" | "running" | "done" | "error";
+  started_at: string | null;
+  finished_at: string | null;
+  new: number;
+  skipped: number;
+  errors: string[];
+}
+
+export function getScoutRefreshStatus(): Promise<ScoutRefreshStatus> {
+  return getJSON<ScoutRefreshStatus>("/api/scout/refresh/status");
 }
 
 export async function ingestScoutAppearance(appearanceId: number): Promise<{ episode_id: number; created: boolean }> {

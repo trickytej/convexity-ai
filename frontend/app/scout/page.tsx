@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Script from "next/script";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getScoutAppearances, refreshScout, ingestScoutAppearance, processEpisode, getEpisodeStatus, type ScoutAppearance } from "@/lib/api";
+import { getScoutAppearances, refreshScout, getScoutRefreshStatus, ingestScoutAppearance, processEpisode, getEpisodeStatus, type ScoutAppearance } from "@/lib/api";
 
 const NeonSphere = dynamic(() => import("@/components/NeonSphere"), { ssr: false });
 
@@ -540,6 +540,7 @@ export default function ScoutPage() {
   const [refreshing,    setRefreshing]    = useState(false);
   const [lastNew,       setLastNew]       = useState<number | null>(null);
   const [bgScan,        setBgScan]        = useState(false);
+  const [scanErrors,    setScanErrors]    = useState<string[]>([]);
   const [filterCompany, setFilterCompany] = useState("");
 
   // Watchlist state — hydrated from localStorage on mount
@@ -630,18 +631,28 @@ export default function ScoutPage() {
   async function handleRefresh() {
     setRefreshing(true);
     setLastNew(null);
-    setBgScan(false);
+    setScanErrors([]);
+    setBgScan(true);
     try {
       await refreshScout(days);
       // Backend returns immediately; the actual Podscan scan runs in the background.
-      // Reload after 90s to pick up new appearances.
-      setBgScan(true);
-      setTimeout(() => {
-        setBgScan(false);
-        load();
-      }, 90_000);
+      // Poll for real completion/errors instead of guessing how long it'll take.
+      const POLL_MS = 4_000;
+      const MAX_POLLS = 90; // ~6 minutes
+      for (let i = 0; i < MAX_POLLS; i++) {
+        await new Promise((r) => setTimeout(r, POLL_MS));
+        const status = await getScoutRefreshStatus();
+        if (status.status === "running") continue;
+        setLastNew(status.new);
+        setScanErrors(status.errors);
+        break;
+      }
     } catch { /* ignore */ }
-    finally  { setRefreshing(false); }
+    finally {
+      setBgScan(false);
+      setRefreshing(false);
+      load();
+    }
   }
 
   const fromDate = new Date(dateFrom);
@@ -701,12 +712,17 @@ export default function ScoutPage() {
             </button>
             {bgScan && (
               <p className="text-[11px] text-[#00d4ff]/60">
-                Scanning Podscan in background — reloads in ~90s
+                Scanning Podscan in background…
               </p>
             )}
-            {!bgScan && lastNew !== null && (
+            {!bgScan && lastNew !== null && scanErrors.length === 0 && (
               <p className="text-[11px] text-[#00d4ff]/60">
                 {lastNew > 0 ? `+${lastNew} new appearances` : "Up to date"}
+              </p>
+            )}
+            {!bgScan && scanErrors.length > 0 && (
+              <p className="max-w-xs text-right text-[11px] text-red-400/80" title={scanErrors.join("\n")}>
+                {scanErrors[0]}
               </p>
             )}
           </div>

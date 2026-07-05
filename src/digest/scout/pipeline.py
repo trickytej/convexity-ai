@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from .roster import COMPANIES
-from .sources import search_episodes
+from .sources import PodscanAuthError, search_episodes
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +36,13 @@ def run_cycle(conn, *, days: int = 7) -> ScoutResult:
             person_name = person["name"]
             person_role = person["role"]
 
-            episodes = search_episodes(person_name, days=days)
+            try:
+                episodes = search_episodes(person_name, days=days)
+            except PodscanAuthError as exc:
+                result.errors.append(str(exc))
+                log.error("aborting scout cycle: %s", exc)
+                return result
+
             for ep in episodes:
                 podscan_id = ep.get("podscan_id") or ""
                 if not podscan_id:
