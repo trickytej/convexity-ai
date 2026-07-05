@@ -539,6 +539,7 @@ export default function ScoutPage() {
   const [loading,       setLoading]       = useState(true);
   const [refreshing,    setRefreshing]    = useState(false);
   const [lastNew,       setLastNew]       = useState<number | null>(null);
+  const [bgScan,        setBgScan]        = useState(false);
   const [filterCompany, setFilterCompany] = useState("");
 
   // Watchlist state — hydrated from localStorage on mount
@@ -629,10 +630,16 @@ export default function ScoutPage() {
   async function handleRefresh() {
     setRefreshing(true);
     setLastNew(null);
+    setBgScan(false);
     try {
-      const res = await refreshScout(7);
-      setLastNew(res.new);
-      await load();
+      await refreshScout(days);
+      // Backend returns immediately; the actual Podscan scan runs in the background.
+      // Reload after 90s to pick up new appearances.
+      setBgScan(true);
+      setTimeout(() => {
+        setBgScan(false);
+        load();
+      }, 90_000);
     } catch { /* ignore */ }
     finally  { setRefreshing(false); }
   }
@@ -692,7 +699,12 @@ export default function ScoutPage() {
               </svg>
               {refreshing ? "Scanning…" : "Refresh"}
             </button>
-            {lastNew !== null && (
+            {bgScan && (
+              <p className="text-[11px] text-[#00d4ff]/60">
+                Scanning Podscan in background — reloads in ~90s
+              </p>
+            )}
+            {!bgScan && lastNew !== null && (
               <p className="text-[11px] text-[#00d4ff]/60">
                 {lastNew > 0 ? `+${lastNew} new appearances` : "Up to date"}
               </p>

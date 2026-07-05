@@ -7,7 +7,7 @@ import re
 import sqlite3
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
 from ...registry import Show
 from ...store import repo
@@ -105,17 +105,28 @@ def list_appearances(
 
 @router.post("/scout/refresh")
 def refresh_appearances(
+    background_tasks: BackgroundTasks,
     days: int = Query(30, description="Look-back window in days"),
-    db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
-    """Search Podscan for all watchlist people and persist confirmed appearances."""
+    """Kick off a Podscan scan in the background and return immediately.
+
+    The scan queries every tracked person (100+ calls at ~1 s each), so it
+    runs in a background thread to avoid blocking the HTTP response.
+    """
+    from ...config import get_settings
+    from ...store.db import connect as _db_connect
     from ...scout.pipeline import run_cycle
-    result = run_cycle(db, days=days)
-    return {
-        "new":     result.new,
-        "skipped": result.skipped,
-        "errors":  result.errors,
-    }
+
+    def _run() -> None:
+        settings = get_settings()
+        conn = _db_connect(settings.resolved_db_path)
+        try:
+            run_cycle(conn, days=days)
+        finally:
+            conn.close()
+
+    background_tasks.add_task(_run)
+    return {"status": "started", "new": 0, "skipped": 0, "errors": []}
 
 
 def _run_process(episode_id: int) -> None:
