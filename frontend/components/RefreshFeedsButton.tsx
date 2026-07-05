@@ -34,9 +34,9 @@ export default function RefreshFeedsButton() {
     try {
       const d = await dispatchIngest({ since: from });
       if (d) setIngest(d);
-      else setIngestNote("Background transcription isn't configured yet (set GITHUB_DISPATCH_TOKEN on the API).");
-    } catch (e) {
-      setIngestNote(e instanceof Error ? e.message : "couldn't start transcription — check the backend");
+      // no token configured — discovery still runs, silently skip the note
+    } catch {
+      // background transcription unavailable locally — discovery still runs below
     }
 
     // 2) Best-effort instant discovery. Never block the refresh on it: polling

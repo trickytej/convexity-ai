@@ -148,29 +148,15 @@ export default async function InsightsPage({
     getEpisodes({ since, until, limit: 200, all: true }),
   ]);
   const trackedEpisodes = episodeList.episodes.filter(e => e.show_slug !== "scout");
-  const { lead, good_to_know, stock_readthrough, kept_count, episode_count, from_date, to_date } =
+  const { lead, good_to_know, stock_readthrough, kept_count } =
     newsletter;
-
-  const tiles = [
-    { label: "Nuggets", value: kept_count },
-    { label: "Episodes", value: episode_count },
-    { label: "Stocks", value: stock_readthrough.length },
-  ];
 
   return (
     <div>
       {/* masthead */}
       <p className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
         <span className="inline-block h-px w-8 bg-[#00d4ff]" />
-        <span className="text-[#00d4ff]">Weekly Insights</span>
-        {(from_date || to_date) && (
-          <>
-            <span className="text-zinc-700">•</span>
-            <span className="text-zinc-500">
-              {fmtDate(from_date)} – {fmtDate(to_date)}
-            </span>
-          </>
-        )}
+        <span className="text-[#00d4ff]">Insights</span>
       </p>
 
       <h1 className="mt-5 max-w-3xl text-5xl font-light leading-[1.04] tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-6xl">
@@ -180,35 +166,6 @@ export default async function InsightsPage({
       <p className="mt-4 max-w-2xl text-xl font-light text-zinc-300">
         Structured realtime insights integrated with your research.
       </p>
-
-      <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-zinc-400">
-        {kept_count} curated insights from {episode_count} episodes.
-      </p>
-
-      {/* stat row */}
-      <div className="mt-12 flex flex-wrap gap-y-6">
-        {tiles.map((t, i) => (
-          <div key={t.label} className={`pr-10 ${i > 0 ? "border-l border-white/10 pl-10" : ""}`}>
-            <div className="font-[family-name:var(--font-mono)] text-4xl font-medium tabular-nums text-[#00d4ff]">
-              {t.value}
-            </div>
-            <div className="mt-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-              {t.label}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* empty state */}
-      {kept_count === 0 && (
-        <p className="mt-14 rounded-xl border border-white/[0.08] bg-[#0b0c10]/75 px-4 py-10 text-center text-zinc-500">
-          No kept insights yet — review nuggets in the{" "}
-          <Link href="/episodes" className="text-[#00d4ff]">
-            Episodes
-          </Link>{" "}
-          tab and mark what matters.
-        </p>
-      )}
 
       {/* refresh feeds */}
       <div className="mt-12">
@@ -271,6 +228,17 @@ export default async function InsightsPage({
             ))}
           </div>
         </section>
+      )}
+
+      {/* empty state */}
+      {kept_count === 0 && (
+        <p className="mt-14 rounded-xl border border-white/[0.08] bg-[#0b0c10]/75 px-4 py-10 text-center text-zinc-500">
+          No kept insights yet — review nuggets in the{" "}
+          <Link href="/episodes" className="text-[#00d4ff]">
+            Episodes
+          </Link>{" "}
+          tab and mark what matters.
+        </p>
       )}
     </div>
   );

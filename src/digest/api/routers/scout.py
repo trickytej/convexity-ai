@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from datetime import datetime, timezone
 
@@ -10,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ...registry import Show
 from ...store import repo
-from ...store.models import Episode
+from ...store.models import Episode, EpisodeStatus, Segment, Transcript, TranscriptSource
 from ..deps import get_db
 
 router = APIRouter(tags=["scout"])
@@ -23,6 +24,39 @@ _SCOUT_SHOW = Show(
     transcript_source="asr",
     active=True,
 )
+
+# Podscan transcript line format:
+# [HH:MM:SS.mmm --> HH:MM:SS.mmm] [SPEAKER_XX] text...
+_LINE_RE = re.compile(
+    r"^\[(\d{2}:\d{2}:\d{2}\.\d+)\s*-->\s*(\d{2}:\d{2}:\d{2}\.\d+)\]\s*"
+    r"(?:\[(\w+)\]\s*)?(.+)$"
+)
+
+
+def _ts_ms(ts: str) -> int:
+    h, m, s = ts.split(":")
+    return int((int(h) * 3600 + int(m) * 60 + float(s)) * 1000)
+
+
+def _parse_podscan_transcript(text: str) -> list[Segment]:
+    segments = []
+    for i, line in enumerate(text.splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        m = _LINE_RE.match(line)
+        if not m:
+            continue
+        segments.append(
+            Segment(
+                idx=i,
+                start_ms=_ts_ms(m.group(1)),
+                end_ms=_ts_ms(m.group(2)),
+                speaker_label=m.group(3),
+                text=m.group(4).strip(),
+            )
+        )
+    return segments
 
 
 def _row_to_appearance(row: sqlite3.Row) -> dict:
@@ -74,23 +108,25 @@ def refresh_appearances(
     days: int = Query(30, description="Look-back window in days"),
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
-    """Trigger a Listen Notes search for all watchlist people and persist confirmed appearances."""
+    """Search Podscan for all watchlist people and persist confirmed appearances."""
     from ...scout.pipeline import run_cycle
     result = run_cycle(db, days=days)
     return {
-        "new":      result.new,
-        "skipped":  result.skipped,
-        "filtered": result.filtered,
-        "errors":   result.errors,
+        "new":     result.new,
+        "skipped": result.skipped,
+        "errors":  result.errors,
     }
 
 
 def _run_process(episode_id: int) -> None:
-    """Background task: acquire → transcribe → insights."""
+    """Background task: (acquire →) transcribe → insights.
+
+    If the episode already has a transcript stored (from Podscan), skips straight
+    to insights extraction without hitting AssemblyAI.
+    """
     from ...config import get_settings
     from ...store.db import connect as _db_connect
     from ...pipeline import acquire_episode, generate_insights, transcribe_episode
-    from ...store.models import EpisodeStatus
     from ...registry import Glossary, Registry
     import logging
     log = logging.getLogger(__name__)
@@ -118,6 +154,11 @@ def _run_process(episode_id: int) -> None:
             glossary = Registry.load(settings.shows_file).glossary
         except Exception:
             glossary = Glossary()
+
+        # Already transcribed (e.g. transcript came from Podscan) — go straight to insights.
+        if ep.status == EpisodeStatus.TRANSCRIBED:
+            generate_insights(conn, ep, show, settings)
+            return
 
         def _audio_valid(path: str | None) -> bool:
             if not path:
@@ -166,6 +207,9 @@ def ingest_appearance(
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     """Create an episode record from a Scout appearance and kick off transcription.
+
+    If the appearance has a Podscan transcript, it is stored directly and the
+    episode is marked TRANSCRIBED so the background task skips AssemblyAI.
 
     Idempotent: if the appearance already has an episode_id, returns it immediately.
     """
@@ -219,6 +263,21 @@ def ingest_appearance(
         published_at=pub_at,
     )
     episode_id, _ = repo.upsert_episode(db, ep)
+
+    # Store Podscan transcript directly if available — skips AssemblyAI entirely.
+    transcript_text = row["transcript"] if "transcript" in row.keys() else None
+    if transcript_text:
+        segments = _parse_podscan_transcript(transcript_text)
+        t = Transcript(
+            episode_id=episode_id,
+            source=TranscriptSource.ASR,
+            provider="podscan",
+            has_diarization=True,
+            word_count=len(transcript_text.split()),
+            segments=segments,
+        )
+        repo.insert_transcript(db, t)
+        repo.set_status(db, episode_id, EpisodeStatus.TRANSCRIBED)
 
     db.execute(
         "UPDATE scout_appearances SET episode_id = ? WHERE id = ?",

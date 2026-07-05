@@ -9,78 +9,140 @@ const NeonSphere = dynamic(() => import("@/components/NeonSphere"), { ssr: false
 
 // ─── watchlist data ───────────────────────────────────────────────────────────
 
-type Company  = { name: string; ticker?: string };
+type Person   = { name: string; role: string };
+type Company  = { name: string; ticker?: string; people?: Person[] };
 type Category = { label: string; companies: Company[] };
 
 const WATCHLIST_DEFAULT: Category[] = [
   {
     label: "Privates",
     companies: [
-      { name: "Anthropic"  }, { name: "OpenAI"     }, { name: "Databricks" },
-      { name: "Stripe"     }, { name: "Anduril"    }, { name: "Figure"     },
-      { name: "Perplexity" }, { name: "Sierra"     }, { name: "Crusoe"     },
-      { name: "Groq"       },
+      { name: "Anthropic",  people: [{ name: "Dario Amodei",    role: "CEO & Co-founder" },    { name: "Daniela Amodei", role: "President & Co-founder" }, { name: "Tom Brown",   role: "Co-founder" }, { name: "Chris Olah", role: "Co-founder & Research Scientist" }] },
+      { name: "OpenAI",     people: [{ name: "Sam Altman",      role: "CEO" },                 { name: "Greg Brockman",  role: "Co-founder & President" }, { name: "Jakub Pachocki", role: "Chief Scientist" }, { name: "Brad Lightcap", role: "COO" }] },
+      { name: "xAI",        people: [{ name: "Elon Musk",       role: "Founder & CEO" }] },
+      { name: "Databricks", people: [{ name: "Ali Ghodsi",      role: "CEO & Co-founder" },    { name: "Ion Stoica",     role: "Co-founder & Executive Chairman" }, { name: "Matei Zaharia", role: "Co-founder & CTO" }] },
+      { name: "Stripe",     people: [{ name: "Patrick Collison", role: "CEO & Co-founder" },   { name: "John Collison",  role: "President & Co-founder" }] },
+      { name: "Anduril",    people: [{ name: "Palmer Luckey",   role: "Founder" },             { name: "Brian Schimpf",  role: "CEO & Co-founder" }] },
+      { name: "Figure",     people: [{ name: "Brett Adcock",    role: "CEO & Founder" }] },
+      { name: "Perplexity", people: [{ name: "Aravind Srinivas", role: "CEO & Co-founder" }] },
+      { name: "Sierra",     people: [{ name: "Bret Taylor",     role: "CEO & Co-founder" },    { name: "Clay Bavor",     role: "Co-founder" }] },
+      { name: "Crusoe",     people: [{ name: "Chase Lochmiller", role: "CEO & Co-founder" }] },
+      { name: "Groq",       people: [{ name: "Jonathan Ross",   role: "CEO & Founder" }] },
+      { name: "Cohere",     people: [{ name: "Aidan Gomez",     role: "CEO & Co-founder" },    { name: "Nick Frosst",    role: "Co-founder" }] },
+      { name: "Mistral",    people: [{ name: "Arthur Mensch",   role: "CEO & Co-founder" },    { name: "Guillaume Lample", role: "Co-founder" }] },
+      { name: "Scale AI",   people: [{ name: "Alexandr Wang",   role: "CEO & Founder" }] },
+      { name: "Waymo",      people: [{ name: "Dmitri Dolgov",   role: "CEO & Co-founder" },    { name: "Tekedra Mawakana", role: "Co-CEO" }] },
+      { name: "SpaceX",     people: [{ name: "Gwynne Shotwell", role: "President & COO" }] },
     ],
   },
   {
     label: "Semiconductors",
     companies: [
-      { name: "Nvidia",            ticker: "NVDA" }, { name: "TSMC",              ticker: "TSM"  },
-      { name: "Broadcom",          ticker: "AVGO" }, { name: "Micron",            ticker: "MU"   },
-      { name: "AMD",               ticker: "AMD"  }, { name: "ASML",              ticker: "ASML" },
-      { name: "Intel",             ticker: "INTC" }, { name: "ARM",               ticker: "ARM"  },
-      { name: "Lam Research",      ticker: "LRCX" }, { name: "SK Hynix",          ticker: "000660.KS" },
-      { name: "Applied Materials", ticker: "AMAT" }, { name: "KLA",               ticker: "KLAC" },
-      { name: "Texas Instruments", ticker: "TXN"  }, { name: "Marvell",           ticker: "MRVL" },
-      { name: "Qualcomm",          ticker: "QCOM" }, { name: "Analog Devices",    ticker: "ADI"  },
-      { name: "Tokyo Electron",    ticker: "8035.T" }, { name: "Cadence",          ticker: "CDNS" },
-      { name: "Synopsys",          ticker: "SNPS" }, { name: "NXP",               ticker: "NXPI" },
+      { name: "Nvidia",             ticker: "NVDA",      people: [{ name: "Jensen Huang",       role: "CEO & Co-founder" }, { name: "Colette Kress",       role: "CFO" },                  { name: "Bill Dally",         role: "Chief Scientist" }] },
+      { name: "TSMC",               ticker: "TSM",       people: [{ name: "C.C. Wei",           role: "CEO" },              { name: "Morris Chang",        role: "Founder" }] },
+      { name: "Broadcom",           ticker: "AVGO",      people: [{ name: "Hock Tan",           role: "CEO" },              { name: "Kirsten Spears",      role: "CFO" }] },
+      { name: "Micron",             ticker: "MU",        people: [{ name: "Sanjay Mehrotra",    role: "CEO" }] },
+      { name: "AMD",                ticker: "AMD",       people: [{ name: "Lisa Su",            role: "CEO" },              { name: "Mark Papermaster",    role: "CTO" }] },
+      { name: "ASML",               ticker: "ASML",      people: [{ name: "Christophe Fouquet", role: "CEO" },              { name: "Roger Dassen",        role: "CFO" }] },
+      { name: "Intel",              ticker: "INTC",      people: [{ name: "Lip-Bu Tan",         role: "CEO" }] },
+      { name: "ARM",                ticker: "ARM",       people: [{ name: "Rene Haas",          role: "CEO" }] },
+      { name: "Lam Research",       ticker: "LRCX",      people: [{ name: "Tim Archer",         role: "CEO" }] },
+      { name: "Applied Materials",  ticker: "AMAT",      people: [{ name: "Gary Dickerson",     role: "CEO" }] },
+      { name: "KLA",                ticker: "KLAC",      people: [{ name: "Rick Wallace",       role: "CEO" }] },
+      { name: "Texas Instruments",  ticker: "TXN",       people: [{ name: "Haviv Ilan",         role: "CEO" }] },
+      { name: "Marvell",            ticker: "MRVL",      people: [{ name: "Matt Murphy",        role: "CEO" }] },
+      { name: "Qualcomm",           ticker: "QCOM",      people: [{ name: "Cristiano Amon",     role: "CEO" }] },
+      { name: "Analog Devices",     ticker: "ADI",       people: [{ name: "Vincent Roche",      role: "CEO" }] },
+      { name: "Cadence",            ticker: "CDNS",      people: [{ name: "Anirudh Devgan",     role: "CEO" }] },
+      { name: "Synopsys",           ticker: "SNPS",      people: [{ name: "Sassine Ghazi",      role: "CEO" }] },
+      { name: "NXP",                ticker: "NXPI",      people: [{ name: "Kurt Sievers",       role: "CEO" }] },
+      { name: "Mobileye",           ticker: "MBLY",      people: [{ name: "Amnon Shashua",      role: "CEO & Founder" }] },
+      { name: "Lattice Semiconductor", ticker: "LSCC",   people: [{ name: "Ford Tamer",         role: "CEO" }] },
     ],
   },
   {
     label: "Mag 7",
     companies: [
-      { name: "Apple",     ticker: "AAPL"  }, { name: "Alphabet",  ticker: "GOOGL" },
-      { name: "Microsoft", ticker: "MSFT"  }, { name: "Amazon",    ticker: "AMZN"  },
-      { name: "Meta",      ticker: "META"  }, { name: "Tesla",     ticker: "TSLA"  },
-      { name: "Nvidia",    ticker: "NVDA"  },
+      { name: "Apple",     ticker: "AAPL",  people: [{ name: "Tim Cook",          role: "CEO" },              { name: "Jeff Williams",       role: "COO" },                  { name: "Luca Maestri",       role: "CFO" }] },
+      { name: "Alphabet",  ticker: "GOOGL", people: [{ name: "Sundar Pichai",     role: "CEO" },              { name: "Demis Hassabis",      role: "CEO Google DeepMind & Co-founder" }, { name: "Ruth Porat", role: "President & CFO" }, { name: "Sergey Brin", role: "Co-founder" }, { name: "Larry Page", role: "Co-founder" }] },
+      { name: "Microsoft", ticker: "MSFT",  people: [{ name: "Satya Nadella",     role: "CEO" },              { name: "Brad Smith",          role: "President & Vice Chair" }, { name: "Kevin Scott", role: "CTO & EVP AI" }] },
+      { name: "Amazon",    ticker: "AMZN",  people: [{ name: "Andy Jassy",        role: "CEO" },              { name: "Jeff Bezos",          role: "Founder & Executive Chairman" }, { name: "Matt Garman", role: "CEO Amazon Web Services" }] },
+      { name: "Meta",      ticker: "META",  people: [{ name: "Mark Zuckerberg",   role: "CEO & Co-founder" }, { name: "Yann LeCun",          role: "Chief AI Scientist" },    { name: "Andrew Bosworth", role: "CTO" }] },
+      { name: "Tesla",     ticker: "TSLA",  people: [{ name: "Elon Musk",         role: "CEO & Co-founder" }, { name: "Vaibhav Taneja",      role: "CFO" }] },
+      { name: "Nvidia",    ticker: "NVDA",  people: [{ name: "Jensen Huang",      role: "CEO & Co-founder" }, { name: "Colette Kress",       role: "CFO" }] },
     ],
   },
   {
     label: "Software",
     companies: [
-      { name: "Oracle",             ticker: "ORCL" }, { name: "Palantir",           ticker: "PLTR" },
-      { name: "Cisco",              ticker: "CSCO" }, { name: "SAP",                ticker: "SAP"  },
-      { name: "Salesforce",         ticker: "CRM"  }, { name: "IBM",                ticker: "IBM"  },
-      { name: "AppLovin",           ticker: "APP"  }, { name: "ServiceNow",         ticker: "NOW"  },
-      { name: "Intuit",             ticker: "INTU" }, { name: "Adobe",              ticker: "ADBE" },
-      { name: "Shopify",            ticker: "SHOP" }, { name: "Palo Alto Networks", ticker: "PANW" },
-      { name: "CrowdStrike",        ticker: "CRWD" }, { name: "Snowflake",          ticker: "SNOW" },
-      { name: "Fortinet",           ticker: "FTNT" },
+      { name: "Oracle",             ticker: "ORCL", people: [{ name: "Larry Ellison",    role: "Founder & CTO" },    { name: "Safra Catz",         role: "CEO" }] },
+      { name: "Palantir",           ticker: "PLTR", people: [{ name: "Alex Karp",        role: "CEO & Co-founder" }, { name: "Peter Thiel",        role: "Co-founder" }] },
+      { name: "Cisco",              ticker: "CSCO", people: [{ name: "Chuck Robbins",    role: "CEO" }] },
+      { name: "SAP",                ticker: "SAP",  people: [{ name: "Christian Klein",  role: "CEO" }] },
+      { name: "Salesforce",         ticker: "CRM",  people: [{ name: "Marc Benioff",     role: "CEO & Founder" }] },
+      { name: "IBM",                ticker: "IBM",  people: [{ name: "Arvind Krishna",   role: "CEO" }] },
+      { name: "AppLovin",           ticker: "APP",  people: [{ name: "Adam Foroughi",    role: "CEO & Co-founder" }] },
+      { name: "ServiceNow",         ticker: "NOW",  people: [{ name: "Bill McDermott",   role: "CEO" }] },
+      { name: "Intuit",             ticker: "INTU", people: [{ name: "Sasan Goodarzi",   role: "CEO" }] },
+      { name: "Adobe",              ticker: "ADBE", people: [{ name: "Shantanu Narayen", role: "CEO" }] },
+      { name: "Shopify",            ticker: "SHOP", people: [{ name: "Tobi Lütke",       role: "CEO & Founder" },    { name: "Harley Finkelstein", role: "President" }] },
+      { name: "Palo Alto Networks", ticker: "PANW", people: [{ name: "Nikesh Arora",     role: "CEO" }] },
+      { name: "CrowdStrike",        ticker: "CRWD", people: [{ name: "George Kurtz",     role: "CEO & Co-founder" }] },
+      { name: "Snowflake",          ticker: "SNOW", people: [{ name: "Sridhar Ramaswamy", role: "CEO" }] },
+      { name: "Fortinet",           ticker: "FTNT", people: [{ name: "Ken Xie",          role: "CEO & Founder" }] },
+      { name: "Workday",            ticker: "WDAY", people: [{ name: "Carl Eschenbach",  role: "CEO" }] },
+      { name: "Datadog",            ticker: "DDOG", people: [{ name: "Olivier Pomel",    role: "CEO & Co-founder" }] },
+      { name: "MongoDB",            ticker: "MDB",  people: [{ name: "Dev Ittycheria",   role: "CEO" }] },
+      { name: "Cloudflare",         ticker: "NET",  people: [{ name: "Matthew Prince",   role: "CEO & Co-founder" }, { name: "Michelle Zatlyn",    role: "President & COO & Co-founder" }] },
+      { name: "Confluent",          ticker: "CFLT", people: [{ name: "Jay Kreps",        role: "CEO & Co-founder" }] },
+      { name: "HashiCorp",                          people: [{ name: "Armon Dadgar",      role: "Co-founder & CTO" }, { name: "Mitchell Hashimoto", role: "Co-founder" }] },
     ],
   },
   {
     label: "Internet",
     companies: [
-      { name: "Netflix",          ticker: "NFLX" }, { name: "Uber",             ticker: "UBER" },
-      { name: "Booking Holdings", ticker: "BKNG" }, { name: "Spotify",          ticker: "SPOT" },
-      { name: "MercadoLibre",     ticker: "MELI" }, { name: "DoorDash",         ticker: "DASH" },
-      { name: "Sea Ltd",          ticker: "SE"   }, { name: "Airbnb",           ticker: "ABNB" },
-      { name: "PayPal",           ticker: "PYPL" }, { name: "Coupang",          ticker: "CPNG" },
-      { name: "Block",            ticker: "XYZ"  }, { name: "Roblox",           ticker: "RBLX" },
-      { name: "Robinhood",        ticker: "HOOD" }, { name: "Reddit",           ticker: "RDDT" },
-      { name: "Pinterest",        ticker: "PINS" },
+      { name: "Netflix",          ticker: "NFLX", people: [{ name: "Ted Sarandos",    role: "Co-CEO" },              { name: "Greg Peters",      role: "Co-CEO" },               { name: "Reed Hastings",    role: "Co-founder & Executive Chairman" }] },
+      { name: "Uber",             ticker: "UBER", people: [{ name: "Dara Khosrowshahi", role: "CEO" },              { name: "Travis Kalanick",  role: "Co-founder" }] },
+      { name: "Booking Holdings", ticker: "BKNG", people: [{ name: "Glenn Fogel",      role: "CEO" }] },
+      { name: "Spotify",          ticker: "SPOT", people: [{ name: "Daniel Ek",        role: "CEO & Co-founder" }] },
+      { name: "MercadoLibre",     ticker: "MELI", people: [{ name: "Marcos Galperin",  role: "CEO & Founder" }] },
+      { name: "DoorDash",         ticker: "DASH", people: [{ name: "Tony Xu",          role: "CEO & Co-founder" }] },
+      { name: "Sea Ltd",          ticker: "SE",   people: [{ name: "Forrest Li",       role: "CEO & Founder" }] },
+      { name: "Airbnb",           ticker: "ABNB", people: [{ name: "Brian Chesky",     role: "CEO & Co-founder" },    { name: "Joe Gebbia",       role: "Co-founder" },           { name: "Nathan Blecharczyk", role: "Co-founder & Chief Strategy Officer" }] },
+      { name: "PayPal",           ticker: "PYPL", people: [{ name: "Alex Chriss",      role: "CEO" },                 { name: "Peter Thiel",      role: "Co-founder" }] },
+      { name: "Coupang",          ticker: "CPNG", people: [{ name: "Bom Kim",          role: "CEO & Founder" }] },
+      { name: "Block",            ticker: "XYZ",  people: [{ name: "Jack Dorsey",      role: "CEO & Founder" }] },
+      { name: "Roblox",           ticker: "RBLX", people: [{ name: "David Baszucki",   role: "CEO & Founder" }] },
+      { name: "Robinhood",        ticker: "HOOD", people: [{ name: "Vlad Tenev",       role: "CEO & Co-founder" },    { name: "Baiju Bhatt",      role: "Co-founder" }] },
+      { name: "Reddit",           ticker: "RDDT", people: [{ name: "Steve Huffman",    role: "CEO & Co-founder" }] },
+      { name: "Pinterest",        ticker: "PINS", people: [{ name: "Bill Ready",       role: "CEO" },                 { name: "Ben Silbermann",   role: "Co-founder & Executive Chairman" }] },
+      { name: "Lyft",             ticker: "LYFT", people: [{ name: "David Risher",     role: "CEO" }] },
+      { name: "Instacart",        ticker: "CART", people: [{ name: "Fidji Simo",       role: "CEO" }] },
+      { name: "Duolingo",         ticker: "DUOL", people: [{ name: "Luis von Ahn",     role: "CEO & Co-founder" }] },
     ],
   },
 ];
 
-const STORAGE_KEY = "scout-watchlist-v1";
+const STORAGE_KEY = "scout-watchlist-v3";
 
 function loadWatchlist(): Category[] {
   if (typeof window === "undefined") return WATCHLIST_DEFAULT;
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? (JSON.parse(saved) as Category[]) : WATCHLIST_DEFAULT;
+    if (!saved) return WATCHLIST_DEFAULT;
+    const parsed = JSON.parse(saved) as Category[];
+    // Back-fill people from WATCHLIST_DEFAULT for any company that has none saved
+    return parsed.map((cat) => {
+      const defCat = WATCHLIST_DEFAULT.find((c) => c.label === cat.label);
+      return {
+        ...cat,
+        companies: cat.companies.map((co) => {
+          if (co.people && co.people.length > 0) return co;
+          const defCo = defCat?.companies.find((c) => c.name === co.name);
+          return defCo?.people ? { ...co, people: defCo.people } : co;
+        }),
+      };
+    });
   } catch {
     return WATCHLIST_DEFAULT;
   }
@@ -109,36 +171,121 @@ function fmtDate(iso: string | null): string {
 function CompanyRow({
   co,
   onDelete,
+  onAddPerson,
+  seenPeople,
 }: {
   co: Company;
   onDelete: () => void;
+  onAddPerson: (person: Person) => void;
+  seenPeople: Person[];
 }) {
-  const [hovered, setHovered] = useState(false);
+  const [expanded,    setExpanded]    = useState(false);
+  const [hovered,     setHovered]     = useState(false);
+  const [addingPerson,setAddingPerson]= useState(false);
+  const [pName,       setPName]       = useState("");
+  const [pRole,       setPRole]       = useState("");
+  const nameRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (addingPerson) nameRef.current?.focus(); }, [addingPerson]);
+
+  // Merge roster people — always pull from WATCHLIST_DEFAULT as the source of truth,
+  // then layer in any people stored on co (user additions) and seenPeople from appearances.
+  const defaultPeople =
+    WATCHLIST_DEFAULT.flatMap((c) => c.companies)
+      .find((c) => c.name === co.name)?.people ?? [];
+  const savedPeople = co.people ?? [];
+  const rosterPeople: Person[] = [...defaultPeople];
+  for (const p of savedPeople) {
+    if (!rosterPeople.find((r) => r.name === p.name)) rosterPeople.push(p);
+  }
+  const allPeople: Person[] = [...rosterPeople];
+  for (const p of seenPeople) {
+    if (!allPeople.find((r) => r.name === p.name)) allPeople.push(p);
+  }
+
+  function submitPerson() {
+    const n = pName.trim();
+    if (!n) return;
+    onAddPerson({ name: n, role: pRole.trim() });
+    setPName(""); setPRole(""); setAddingPerson(false);
+  }
+
   return (
-    <div
-      className="group flex items-center justify-between border-b border-white/[0.03] py-[7px] last:border-0 px-1 -mx-1 rounded transition hover:bg-white/[0.02]"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="truncate text-[12px] text-zinc-200">{co.name}</span>
+    <div className="border-b border-white/[0.03] last:border-0">
+      {/* row header */}
+      <div
+        className="group flex cursor-pointer items-center justify-between py-[7px] px-1 -mx-1 rounded transition hover:bg-white/[0.02]"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={`text-[9px] transition-transform duration-150 text-zinc-600 ${expanded ? "rotate-90" : ""}`}>▶</span>
+          <span className="truncate text-[13px] text-zinc-200">{co.name}</span>
+        </div>
+        <div className="flex items-center gap-2 ml-2 shrink-0">
+          {co.ticker && !hovered && (
+            <span className="font-[family-name:var(--font-mono)] text-[10px] text-zinc-700">{co.ticker}</span>
+          )}
+          {hovered && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="rounded px-1 text-[11px] text-zinc-600 transition hover:text-red-400"
+              title="Remove"
+            >
+              ×
+            </button>
+          )}
+        </div>
       </div>
-      <div className="flex items-center gap-2 ml-2 shrink-0">
-        {co.ticker && !hovered && (
-          <span className="font-[family-name:var(--font-mono)] text-[10px] text-zinc-700">
-            {co.ticker}
-          </span>
-        )}
-        {hovered && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="rounded px-1 text-[11px] text-zinc-600 transition hover:text-red-400"
-            title="Remove"
-          >
-            ×
-          </button>
-        )}
-      </div>
+
+      {/* expanded people panel */}
+      {expanded && (
+        <div className="mb-2 ml-3 rounded-lg border border-[#00d4ff]/10 bg-[#00d4ff]/[0.03] px-3 py-2.5">
+          {allPeople.length === 0 ? (
+            <p className="text-[11px] text-zinc-700">No people tracked yet</p>
+          ) : (
+            <div className="space-y-1.5 mb-2">
+              {allPeople.map((p) => (
+                <div key={p.name} className="flex items-baseline gap-2">
+                  <span className="text-[12px] font-medium text-zinc-300">{p.name}</span>
+                  {p.role && <span className="text-[11px] text-zinc-600">{p.role}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {addingPerson ? (
+            <div className="mt-2 flex flex-col gap-1.5">
+              <input
+                ref={nameRef}
+                value={pName}
+                onChange={(e) => setPName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") submitPerson(); if (e.key === "Escape") setAddingPerson(false); }}
+                placeholder="Name"
+                className="rounded bg-white/[0.04] px-2 py-1 text-[11px] text-zinc-200 outline-none placeholder:text-zinc-700 focus:ring-1 focus:ring-[#00d4ff]/30"
+              />
+              <input
+                value={pRole}
+                onChange={(e) => setPRole(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") submitPerson(); if (e.key === "Escape") setAddingPerson(false); }}
+                placeholder="Role (e.g. CEO)"
+                className="rounded bg-white/[0.04] px-2 py-1 text-[11px] text-zinc-200 outline-none placeholder:text-zinc-700 focus:ring-1 focus:ring-[#00d4ff]/30"
+              />
+              <div className="flex gap-2">
+                <button onClick={submitPerson}       className="text-[11px] text-[#00d4ff] transition hover:text-[#33ddff]">Add</button>
+                <button onClick={() => setAddingPerson(false)} className="text-[11px] text-zinc-600 transition hover:text-zinc-400">Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={(e) => { e.stopPropagation(); setAddingPerson(true); }}
+              className="mt-1 flex items-center gap-1 text-[11px] text-zinc-700 transition hover:text-[#00d4ff]"
+            >
+              <span className="text-[10px]">+</span> Add person
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -395,8 +542,30 @@ export default function ScoutPage() {
   const [filterCompany, setFilterCompany] = useState("");
 
   // Watchlist state — hydrated from localStorage on mount
-  const [watchlist, setWatchlist] = useState<Category[]>(WATCHLIST_DEFAULT);
-  const [addingTo,  setAddingTo]  = useState<string | null>(null);
+  const [watchlist,      setWatchlist]      = useState<Category[]>(WATCHLIST_DEFAULT);
+  const [addingTo,       setAddingTo]       = useState<string | null>(null);
+  const [watchlistOpen,  setWatchlistOpen]  = useState(false);
+  const watchlistRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (watchlistRef.current && !watchlistRef.current.contains(e.target as Node)) {
+        setWatchlistOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  // Date range — default last 7 days, matching the Insights tab default
+  const [dateFrom, setDateFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().slice(0, 10);
+  });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
+
+  const days = Math.max(1, Math.ceil((Date.now() - new Date(dateFrom).getTime()) / 86400000));
 
   useEffect(() => { setWatchlist(loadWatchlist()); }, []);
 
@@ -427,16 +596,33 @@ export default function ScoutPage() {
     setAddingTo(null);
   }
 
+  function addPersonToCompany(catLabel: string, coName: string, person: Person) {
+    saveWatchlist(
+      watchlist.map((cat) =>
+        cat.label === catLabel
+          ? {
+              ...cat,
+              companies: cat.companies.map((co) =>
+                co.name === coName
+                  ? { ...co, people: [...(co.people ?? []), person] }
+                  : co
+              ),
+            }
+          : cat
+      )
+    );
+  }
+
   const total = watchlist.reduce((s, c) => s + c.companies.length, 0);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getScoutAppearances({ days: 90 });
+      const data = await getScoutAppearances({ days });
       setAppearances(data);
     } catch { /* backend may not be running */ }
     finally  { setLoading(false); }
-  }, []);
+  }, [days]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -451,9 +637,16 @@ export default function ScoutPage() {
     finally  { setRefreshing(false); }
   }
 
-  const filtered = filterCompany
-    ? appearances.filter((a) => a.company === filterCompany)
-    : appearances;
+  const fromDate = new Date(dateFrom);
+  const toDate   = new Date(dateTo + "T23:59:59.999Z");
+
+  const filtered = appearances
+    .filter((a) => {
+      if (!a.published_at) return true;
+      const pub = new Date(a.published_at);
+      return pub >= fromDate && pub <= toDate;
+    })
+    .filter((a) => !filterCompany || a.company === filterCompany);
 
   const uniqueCompanies = [...new Set(appearances.map((a) => a.company))].sort();
 
@@ -479,11 +672,8 @@ export default function ScoutPage() {
               <span className="text-[#00d4ff]">Scout</span>
             </p>
             <h1 className="mt-3 text-5xl font-light leading-[1.04] tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-6xl">
-              On the <span className="text-[#00d4ff]">radar</span>.
+              Listening for <span className="text-[#00d4ff]">Insights</span>.
             </h1>
-            <p className="mt-2.5 text-[13px] text-zinc-600">
-              {total} companies · {watchlist.length} sectors · Founders and Management
-            </p>
           </div>
 
           {/* Refresh */}
@@ -491,7 +681,7 @@ export default function ScoutPage() {
             <button
               onClick={handleRefresh}
               disabled={refreshing}
-              className="flex items-center gap-2 rounded-lg border border-white/[0.1] bg-[#0b0c10]/80 px-4 py-2 text-[13px] font-medium text-zinc-300 shadow-sm transition hover:border-[#00d4ff]/40 hover:text-[#00d4ff] disabled:opacity-40"
+              className="flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-medium transition disabled:opacity-40 bg-[#00d4ff] text-[#001a26] hover:bg-[#00d4ff]/90"
             >
               <svg
                 className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
@@ -510,8 +700,90 @@ export default function ScoutPage() {
           </div>
         </div>
 
+        {/* ── Date range + Watchlist button ── */}
+        <div className="mt-6 flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] uppercase tracking-widest text-zinc-600">From</label>
+            <input
+              type="date"
+              value={dateFrom}
+              max={dateTo}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[13px] text-zinc-300 outline-none focus:border-[#00d4ff]/40 focus:ring-1 focus:ring-[#00d4ff]/20 [color-scheme:dark]"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] uppercase tracking-widest text-zinc-600">To</label>
+            <input
+              type="date"
+              value={dateTo}
+              min={dateFrom}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[13px] text-zinc-300 outline-none focus:border-[#00d4ff]/40 focus:ring-1 focus:ring-[#00d4ff]/20 [color-scheme:dark]"
+            />
+          </div>
+
+          {/* Watchlist button + dropdown */}
+          <div className="relative self-end" ref={watchlistRef}>
+            <button
+              onClick={() => setWatchlistOpen((v) => !v)}
+              className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[13px] font-medium transition ${
+                watchlistOpen
+                  ? "border-[#00d4ff]/40 bg-[#00d4ff]/10 text-[#00d4ff]"
+                  : "border-white/[0.08] bg-white/[0.03] text-zinc-400 hover:border-[#00d4ff]/30 hover:text-zinc-200"
+              }`}
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+                <path strokeLinecap="round" d="M2 4h12M2 8h8M2 12h5" />
+              </svg>
+              Watchlist
+              <span className="rounded-full bg-white/[0.07] px-1.5 py-0.5 text-[10px] tabular-nums text-zinc-500">
+                {watchlist.reduce((s, c) => s + c.companies.length, 0)}
+              </span>
+            </button>
+
+            {watchlistOpen && (
+              <div className="absolute left-0 top-full z-50 mt-2 w-72 rounded-xl border border-white/[0.08] bg-[#0d0e12] shadow-2xl">
+                <div className="max-h-[70vh] overflow-y-auto p-3">
+                  {watchlist.map((cat) => (
+                    <div key={cat.label} className="mb-3 last:mb-0">
+                      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-600">
+                        {cat.label} <span className="text-zinc-700">· {cat.companies.length}</span>
+                      </p>
+                      <div className="space-y-0.5">
+                        {cat.companies.map((co) => {
+                          const people =
+                            WATCHLIST_DEFAULT.flatMap((c) => c.companies)
+                              .find((c) => c.name === co.name)?.people ?? co.people ?? [];
+                          return (
+                            <div key={co.name} className="rounded-lg px-2 py-1.5 transition hover:bg-white/[0.04]">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[13px] text-zinc-200">{co.name}</span>
+                                {co.ticker && (
+                                  <span className="font-[family-name:var(--font-mono)] text-[10px] text-zinc-700">{co.ticker}</span>
+                                )}
+                              </div>
+                              {people.length > 0 && (
+                                <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5">
+                                  {people.map((p) => (
+                                    <span key={p.name} className="text-[11px] text-zinc-600">{p.name}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* ── Three-column layout ── */}
-        <div className="mt-8 grid grid-cols-[240px_1fr_240px] gap-5">
+        <div className="mt-5 grid grid-cols-[240px_1fr_240px] gap-5">
 
           {/* ── Companies ── */}
           <div className="rounded-xl border border-white/[0.05] bg-[#0a0a0c]/60 p-4">
@@ -524,7 +796,7 @@ export default function ScoutPage() {
                 <div key={cat.label}>
                   {/* section header with + button */}
                   <div className="flex items-center justify-between pb-2 pt-1">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-600">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-600">
                       {cat.label}
                     </span>
                     <div className="flex items-center gap-1.5">
@@ -549,13 +821,24 @@ export default function ScoutPage() {
 
                   {/* company rows */}
                   <div>
-                    {cat.companies.map((co) => (
-                      <CompanyRow
-                        key={`${cat.label}-${co.name}`}
-                        co={co}
-                        onDelete={() => deleteCompany(cat.label, co.name)}
-                      />
-                    ))}
+                    {cat.companies.map((co) => {
+                      const seenPeople = [
+                        ...new Map(
+                          appearances
+                            .filter((a) => a.company === co.name && a.person_name)
+                            .map((a) => [a.person_name, { name: a.person_name!, role: a.person_role ?? "" }])
+                        ).values(),
+                      ];
+                      return (
+                        <CompanyRow
+                          key={`${cat.label}-${co.name}`}
+                          co={co}
+                          onDelete={() => deleteCompany(cat.label, co.name)}
+                          onAddPerson={(p) => addPersonToCompany(cat.label, co.name, p)}
+                          seenPeople={seenPeople}
+                        />
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -569,7 +852,7 @@ export default function ScoutPage() {
               <div className="mb-4 flex flex-wrap gap-1.5">
                 <button
                   onClick={() => setFilterCompany("")}
-                  className={`rounded-full border px-2.5 py-0.5 text-[11px] transition ${
+                  className={`rounded-full border px-2.5 py-0.5 text-[12px] transition ${
                     filterCompany === ""
                       ? "border-[#00d4ff]/40 bg-[#00d4ff]/8 text-[#00d4ff]"
                       : "border-white/[0.05] text-zinc-600 hover:border-white/[0.12] hover:text-zinc-400"
@@ -581,7 +864,7 @@ export default function ScoutPage() {
                   <button
                     key={co}
                     onClick={() => setFilterCompany(co === filterCompany ? "" : co)}
-                    className={`rounded-full border px-2.5 py-0.5 text-[11px] transition ${
+                    className={`rounded-full border px-2.5 py-0.5 text-[12px] transition ${
                       filterCompany === co
                         ? "border-[#00d4ff]/40 bg-[#00d4ff]/8 text-[#00d4ff]"
                         : "border-white/[0.05] text-zinc-600 hover:border-white/[0.12] hover:text-zinc-400"

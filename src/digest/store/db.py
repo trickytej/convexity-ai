@@ -356,6 +356,10 @@ def _migrate(conn: _Conn) -> None:
         conn.execute("ALTER TABLE scout_appearances ADD COLUMN person_role TEXT")
     if "episode_id" not in scout_cols:
         conn.execute("ALTER TABLE scout_appearances ADD COLUMN episode_id INTEGER")
+    if "duration_seconds" not in scout_cols:
+        conn.execute("ALTER TABLE scout_appearances ADD COLUMN duration_seconds INTEGER")
+    if "transcript" not in scout_cols:
+        conn.execute("ALTER TABLE scout_appearances ADD COLUMN transcript TEXT")
 
     conn.commit()
 
