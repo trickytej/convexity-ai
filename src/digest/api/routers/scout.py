@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
@@ -26,6 +27,39 @@ _refresh_state: dict = {
     "skipped": 0,
     "errors": [],
 }
+
+# A full scan costs one Podscan request per tracked person (~72) against a
+# 100-requests/day plan quota, so at most one full scan per day is sustainable.
+# Refreshes inside this window return "cooldown" instead of burning the quota.
+_REFRESH_COOLDOWN_HOURS = float(os.environ.get("SCOUT_REFRESH_COOLDOWN_HOURS", "20"))
+
+_META_TABLE_SQL = "CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+
+
+def _meta_get(conn, key: str) -> str | None:
+    conn.execute(_META_TABLE_SQL)
+    row = conn.execute("SELECT value FROM app_meta WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else None
+
+
+def _meta_set(conn, key: str, value: str) -> None:
+    conn.execute(_META_TABLE_SQL)
+    conn.execute(
+        "INSERT INTO app_meta (key, value) VALUES (?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (key, value),
+    )
+    conn.commit()
+
+
+def _meta_datetime(conn, key: str) -> datetime | None:
+    raw = _meta_get(conn, key)
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        return None
 
 _SCOUT_SHOW_SLUG = "scout"
 _SCOUT_SHOW = Show(
@@ -122,16 +156,45 @@ def list_appearances(
 def refresh_appearances(
     background_tasks: BackgroundTasks,
     days: int = Query(30, description="Look-back window in days"),
+    force: bool = Query(False, description="Bypass the scan cooldown"),
+    db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     """Kick off a Podscan scan in the background and return immediately.
 
-    The scan queries every tracked person (100+ calls at ~1 s each), so it
-    runs in a background thread to avoid blocking the HTTP response. Poll
-    GET /scout/refresh/status for the real outcome.
+    The scan queries every tracked person (~72 requests, ≥1 s apart) against a
+    100-requests/day Podscan quota, so it runs in a background thread and at
+    most once per cooldown window. Poll GET /scout/refresh/status for the
+    real outcome.
     """
     from ...config import get_settings
     from ...store.db import connect as _db_connect
     from ...scout.pipeline import run_cycle
+
+    if _refresh_state["status"] == "running":
+        return {"status": "already_running"}
+
+    now = datetime.now(timezone.utc)
+
+    if not force:
+        # Known quota exhaustion from a previous run — refuse until it resets.
+        quota_reset = _meta_datetime(db, "scout_quota_reset_at")
+        if quota_reset and quota_reset > now:
+            return {
+                "status": "cooldown",
+                "reason": "quota",
+                "retry_at": quota_reset.isoformat(),
+            }
+
+        last_scan = _meta_datetime(db, "scout_last_scan_at")
+        if last_scan:
+            next_allowed = last_scan + timedelta(hours=_REFRESH_COOLDOWN_HOURS)
+            if next_allowed > now:
+                return {
+                    "status": "cooldown",
+                    "reason": "recent_scan",
+                    "last_scan_at": last_scan.isoformat(),
+                    "retry_at": next_allowed.isoformat(),
+                }
 
     _refresh_state.update(
         status="running", started_at=_now_iso(), finished_at=None, new=0, skipped=0, errors=[],
@@ -149,6 +212,11 @@ def refresh_appearances(
                 skipped=result.skipped,
                 errors=result.errors[:5],
             )
+            if result.quota_reset_at:
+                _meta_set(conn, "scout_quota_reset_at", result.quota_reset_at)
+            if not result.aborted:
+                # Full pass completed — start the cooldown clock.
+                _meta_set(conn, "scout_last_scan_at", _now_iso())
         except Exception as exc:
             _refresh_state.update(status="error", finished_at=_now_iso(), errors=[str(exc)])
         finally:

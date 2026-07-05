@@ -16,9 +16,10 @@ log = logging.getLogger(__name__)
 _BASE = "https://podscan.fm/api/v1"
 _MIN_DURATION_SECONDS = 300   # ignore sub-5-min clips / news briefs
 
-# Delay between consecutive person searches to stay within Podscan's rate limit.
+# Minimum spacing between consecutive Podscan requests (pages AND persons).
 _REQUEST_DELAY_SECONDS = 1.0
-_RETRY_AFTER_SECONDS = 60     # wait after a 429 before retrying once
+_RETRY_AFTER_SECONDS = 60      # fallback wait after a 429 with no Retry-After header
+_RETRY_MAX_WAIT_SECONDS = 120  # a Retry-After beyond this means the daily quota is gone, not a burst limit
 
 
 class PodscanAuthError(Exception):
@@ -28,6 +29,48 @@ class PodscanAuthError(Exception):
     catches this once and aborts the whole cycle instead of silently returning zero
     results for every one of the 100+ tracked people.
     """
+
+
+class PodscanRateLimitError(Exception):
+    """Raised when the Podscan request quota is exhausted (HTTP 429 that won't
+    clear within _RETRY_MAX_WAIT_SECONDS).
+
+    Like PodscanAuthError, this aborts the whole cycle: the quota is per-key,
+    so every remaining person search would also 429. Carries ``reset_at`` so
+    callers can tell the user exactly when scanning becomes possible again.
+    """
+
+    def __init__(self, message: str, reset_at: datetime | None = None) -> None:
+        super().__init__(message)
+        self.reset_at = reset_at
+
+
+def _quota_error(resp: httpx.Response) -> PodscanRateLimitError:
+    reset_at = None
+    raw = resp.headers.get("x-ratelimit-reset")
+    if raw:
+        try:
+            reset_at = datetime.fromtimestamp(int(raw), tz=timezone.utc)
+        except (ValueError, OverflowError, OSError):
+            pass
+    when = f" — quota resets at {reset_at.strftime('%Y-%m-%d %H:%M UTC')}" if reset_at else ""
+    return PodscanRateLimitError(f"Podscan request quota exhausted (HTTP 429){when}", reset_at)
+
+
+_last_request_at = 0.0
+
+
+def _throttle() -> None:
+    """Keep consecutive Podscan requests ≥ _REQUEST_DELAY_SECONDS apart.
+
+    Module-level so the spacing applies across person searches too, not just
+    between pages within one search.
+    """
+    global _last_request_at
+    wait = _last_request_at + _REQUEST_DELAY_SECONDS - time.monotonic()
+    if wait > 0:
+        time.sleep(wait)
+    _last_request_at = time.monotonic()
 
 
 # ── Guest-appearance filter ───────────────────────────────────────────────────
@@ -133,12 +176,23 @@ def search_episodes(query: str, *, days: int = 30, max_results: int = 10) -> lis
                 }
                 headers = {"Authorization": f"Bearer {settings.podscan_api_key}"}
 
+                _throttle()
                 resp = client.get(f"{_BASE}/episodes/search", params=params, headers=headers)
 
                 if resp.status_code == 429:
-                    log.warning("Podscan rate limit hit for %r — waiting %ss", query, _RETRY_AFTER_SECONDS)
-                    time.sleep(_RETRY_AFTER_SECONDS)
+                    try:
+                        retry_after = int(resp.headers.get("retry-after") or 0)
+                    except ValueError:
+                        retry_after = 0
+                    if retry_after > _RETRY_MAX_WAIT_SECONDS:
+                        raise _quota_error(resp)
+                    wait = retry_after or _RETRY_AFTER_SECONDS
+                    log.warning("Podscan rate limit hit for %r — waiting %ss", query, wait)
+                    time.sleep(wait)
+                    _throttle()
                     resp = client.get(f"{_BASE}/episodes/search", params=params, headers=headers)
+                    if resp.status_code == 429:
+                        raise _quota_error(resp)
 
                 if resp.status_code in (401, 403):
                     raise PodscanAuthError(
@@ -186,9 +240,7 @@ def search_episodes(query: str, *, days: int = 30, max_results: int = 10) -> lis
                     break
                 page += 1
 
-                time.sleep(_REQUEST_DELAY_SECONDS)
-
-    except PodscanAuthError:
+    except (PodscanAuthError, PodscanRateLimitError):
         raise
     except Exception as exc:
         log.warning("Podscan search failed for %r: %s", query, exc)

@@ -564,8 +564,15 @@ export function getScoutAppearances(params: { company?: string; days?: number } 
   return getJSON<ScoutAppearance[]>(`/api/scout/appearances?${q.toString()}`);
 }
 
-export async function refreshScout(days = 30): Promise<{ status?: string }> {
-  const res = await apiFetch(`/api/scout/refresh?days=${days}`, { method: "POST" });
+export interface ScoutRefreshKickoff {
+  status: "started" | "already_running" | "cooldown";
+  reason?: "quota" | "recent_scan";
+  last_scan_at?: string;
+  retry_at?: string;
+}
+
+export async function refreshScout(days = 30, force = false): Promise<ScoutRefreshKickoff> {
+  const res = await apiFetch(`/api/scout/refresh?days=${days}${force ? "&force=true" : ""}`, { method: "POST" });
   if (!res.ok) throw new Error(`scout refresh failed: ${res.status}`);
   return res.json();
 }

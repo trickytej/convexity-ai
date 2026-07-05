@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from .roster import COMPANIES
-from .sources import PodscanAuthError, search_episodes
+from .sources import PodscanAuthError, PodscanRateLimitError, search_episodes
 
 log = logging.getLogger(__name__)
 
@@ -21,6 +21,8 @@ class ScoutResult:
     new: int = 0
     skipped: int = 0
     errors: list[str] = field(default_factory=list)
+    aborted: bool = False                # cycle stopped early (auth / quota) — not a full pass
+    quota_reset_at: str | None = None    # ISO time the Podscan quota resets, when we hit it
 
 
 def run_cycle(conn, *, days: int = 7) -> ScoutResult:
@@ -40,7 +42,17 @@ def run_cycle(conn, *, days: int = 7) -> ScoutResult:
                 episodes = search_episodes(person_name, days=days)
             except PodscanAuthError as exc:
                 result.errors.append(str(exc))
+                result.aborted = True
                 log.error("aborting scout cycle: %s", exc)
+                conn.commit()  # keep appearances found before the abort
+                return result
+            except PodscanRateLimitError as exc:
+                result.errors.append(str(exc))
+                result.aborted = True
+                if exc.reset_at is not None:
+                    result.quota_reset_at = exc.reset_at.isoformat()
+                log.error("aborting scout cycle: %s", exc)
+                conn.commit()
                 return result
 
             for ep in episodes:
