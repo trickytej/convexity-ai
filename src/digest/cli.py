@@ -446,7 +446,7 @@ def insights(
 
 @app.command(name="scout-sync")
 def scout_sync(
-    days: int = typer.Option(2, "--days", "-d", help="Look-back window for the Podscan search."),
+    days: int = typer.Option(7, "--days", "-d", help="Look-back window for the Podscan search."),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """Daily Scout driver: search Podscan for new watchlist appearances, ingest
