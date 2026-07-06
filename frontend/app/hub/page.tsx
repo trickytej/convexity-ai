@@ -64,6 +64,13 @@ async function fmpFetch<T>(path: string, key: string): Promise<T | null> {
 const fmtB  = (n: number | null | undefined) => n == null ? "—" : `$${(n / 1e9).toFixed(2)}B`;
 const fmtPct = (n: number | null | undefined) => n == null ? "—" : `${(n * 100).toFixed(1)}%`;
 const fmtEps = (n: number | null | undefined) => n == null ? "—" : `$${n.toFixed(2)}`;
+const fmtDelta = (n: number | null | undefined) =>
+  n == null ? "—" : `${n >= 0 ? "+" : ""}${(n * 100).toFixed(1)}%`;
+
+function pctChange(curr: number | null | undefined, prev: number | null | undefined): number | null {
+  if (curr == null || prev == null || prev === 0) return null;
+  return curr / prev - 1;
+}
 
 function fmtPeriod(date: string): string {
   const d = new Date(date);
@@ -179,7 +186,7 @@ async function MuModel() {
   if (fmpKey) {
     const [quoteData, incomeData, estimateData] = await Promise.all([
       fmpFetch<FmpQuote[]>(`/quote/MU?`, fmpKey),
-      fmpFetch<FmpIncomeStatement[]>(`/income-statement/MU?period=quarter&limit=6&`, fmpKey),
+      fmpFetch<FmpIncomeStatement[]>(`/income-statement/MU?period=quarter&limit=8&`, fmpKey),
       fmpFetch<FmpAnalystEstimate[]>(`/analyst-estimates/MU?period=quarter&limit=4&`, fmpKey),
     ]);
     quote = quoteData?.[0] ?? null;
@@ -206,6 +213,14 @@ async function MuModel() {
   ];
 
   const histRows = hasLive ? hist : fallback;
+
+  // qoq / yoy revenue deltas, aligned to histRows
+  const qoqDeltas = hasLive
+    ? hist.map((r, i) => pctChange(r.revenue, i === 0 ? actuals[3]?.revenue : hist[i - 1].revenue))
+    : fallback.map((r, i) => pctChange(r.revenue, i === 0 ? null : fallback[i - 1].revenue));
+  const yoyDeltas = hasLive
+    ? hist.map((r, i) => pctChange(r.revenue, actuals[6 - i]?.revenue))
+    : fallback.map(() => null);
 
   return (
     <div className="space-y-10">
@@ -236,15 +251,6 @@ async function MuModel() {
           </div>
         )}
       </div>
-
-      {/* no FMP key notice */}
-      {!fmpKey && (
-        <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-5 py-3 text-sm text-amber-300">
-          Add <code className="font-mono text-amber-200">FMP_API_KEY</code> to{" "}
-          <code className="font-mono text-amber-200">frontend/.env.local</code> for live data.
-          Showing hardcoded actuals below.
-        </p>
-      )}
 
       {/* model table */}
       <div className="overflow-x-auto">
@@ -290,6 +296,26 @@ async function MuModel() {
               <ModelCell value="—" dim />
             </tr>
 
+            <tr className="border-b border-white/[0.04]">
+              <td className="py-3 pr-8 text-xs text-zinc-600">qoq</td>
+              {qoqDeltas.map((d, i) => (
+                <ModelCell key={i} value={fmtDelta(d)} dim />
+              ))}
+              <ModelCell value="—" dim />
+              <ModelCell value="—" dim />
+              <ModelCell value="—" dim />
+            </tr>
+
+            <tr className="border-b border-white/[0.04]">
+              <td className="py-3 pr-8 text-xs text-zinc-600">yoy</td>
+              {yoyDeltas.map((d, i) => (
+                <ModelCell key={i} value={fmtDelta(d)} dim />
+              ))}
+              <ModelCell value="—" dim />
+              <ModelCell value="—" dim />
+              <ModelCell value="—" dim />
+            </tr>
+
             <SectionDivider label="Profitability" />
             <tr className="border-b border-white/[0.04]">
               <td className="py-3 pr-8 text-sm text-zinc-400">Gross Profit</td>
@@ -302,11 +328,12 @@ async function MuModel() {
             </tr>
 
             <tr className="border-b border-white/[0.04]">
-              <td className="py-3 pr-8 text-sm text-zinc-400">Gross Margin</td>
+              <td className="py-3 pr-8 text-xs text-zinc-600">GPM %</td>
               {(hasLive ? hist : fallback).map((r, i) => (
                 <ModelCell
                   key={i}
                   value={r.revenue ? fmtPct(r.grossProfit / r.revenue) : "—"}
+                  dim
                 />
               ))}
               <ModelCell value="~48%+" highlight />
@@ -315,9 +342,23 @@ async function MuModel() {
             </tr>
 
             <tr className="border-b border-white/[0.04]">
-              <td className="py-3 pr-8 text-sm text-zinc-400">Operating Income</td>
+              <td className="py-3 pr-8 text-sm text-zinc-400">Operating Profit</td>
               {(hasLive ? hist : fallback).map((r, i) => (
                 <ModelCell key={i} value={fmtB(r.operatingIncome)} />
+              ))}
+              <ModelCell value="—" dim />
+              <ModelCell value="—" dim />
+              <ModelCell value="—" dim />
+            </tr>
+
+            <tr className="border-b border-white/[0.04]">
+              <td className="py-3 pr-8 text-xs text-zinc-600">OPM %</td>
+              {(hasLive ? hist : fallback).map((r, i) => (
+                <ModelCell
+                  key={i}
+                  value={r.revenue ? fmtPct(r.operatingIncome / r.revenue) : "—"}
+                  dim
+                />
               ))}
               <ModelCell value="—" dim />
               <ModelCell value="—" dim />
@@ -331,6 +372,23 @@ async function MuModel() {
               ))}
               <ModelCell value="—" dim />
               <ModelCell value={fwdEst ? fmtB(fwdEst.estimatedNetIncomeAvg) : "—"} isEst />
+              <ModelCell value="—" dim />
+            </tr>
+
+            <tr className="border-b border-white/[0.04]">
+              <td className="py-3 pr-8 text-xs text-zinc-600">NPM %</td>
+              {(hasLive ? hist : fallback).map((r, i) => (
+                <ModelCell
+                  key={i}
+                  value={r.revenue ? fmtPct(r.netIncome / r.revenue) : "—"}
+                  dim
+                />
+              ))}
+              <ModelCell value="—" dim />
+              <ModelCell
+                value={fwdEst ? fmtPct(fwdEst.estimatedNetIncomeAvg / fwdEst.estimatedRevenueAvg) : "—"}
+                dim
+              />
               <ModelCell value="—" dim />
             </tr>
 
