@@ -12,16 +12,23 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .acquire.article import fetch_article
-from .acquire.audio import download_audio
+from .acquire.audio import _is_valid_audio_file, download_audio
 from .acquire.base import ParsedTranscript, TranscriptSegment, TranscriptUnavailable
 from .acquire.official import get_official_fetcher
 from .config import Settings, get_settings
 from .feeds import fetch_feed
-from .registry import Registry, Show
+from .registry import Glossary, Registry, Show
 from .store import repo
 from .store.models import Episode, EpisodeStatus, Segment, Transcript, TranscriptSource
 
 log = logging.getLogger(__name__)
+
+
+def _load_glossary(settings: Settings) -> Glossary:
+    try:
+        return Registry.load(settings.shows_file).glossary
+    except Exception:
+        return Glossary()
 
 
 @dataclass
@@ -440,6 +447,85 @@ def generate_insights(
         count=len(nuggets),
         detail=f"{len(nuggets)} nuggets ({verified} quote-verified)",
     )
+
+
+def process_episode_pipeline(
+    conn: sqlite3.Connection, episode_id: int, settings: Settings | None = None
+) -> None:
+    """Run whatever's left of acquire -> transcribe -> insights for one episode,
+    picking up from its current status. Persists status/error at every step so
+    the episode never sits in a stage forever (see EpisodeStatus/set_status).
+    """
+    settings = settings or get_settings()
+    try:
+        ep = repo.get_episode(conn, episode_id)
+        if ep is None:
+            return
+        show_row = conn.execute("SELECT * FROM shows WHERE slug = ?", (ep.show_slug,)).fetchone()
+        if show_row is None:
+            return
+        show = Show(
+            slug=show_row["slug"],
+            name=show_row["name"],
+            rss_url=show_row["rss_url"] or "",
+            tier=show_row["tier"],
+            transcript_source=show_row["transcript_source"] or "asr",
+            hosts=json.loads(show_row["hosts"]) if show_row["hosts"] else [],
+            format=show_row["format"] or "interview",
+            active=bool(show_row["active"]),
+        )
+        glossary = _load_glossary(settings)
+
+        # A transcript surviving in the DB (e.g. stored directly from Podscan,
+        # or from an earlier successful run) means acquire/transcribe are done
+        # regardless of what ep.status says — status can read FAILED after a
+        # *later* stage (insights) failed. Re-deriving readiness from status
+        # alone would wrongly re-download audio and re-transcribe on retry.
+        existing_transcript = repo.get_transcript_for_episode(conn, episode_id)
+        has_transcript = bool(existing_transcript and existing_transcript["normalized_path"])
+
+        if not has_transcript:
+            def _audio_is_valid(path: str | None) -> bool:
+                if not path:
+                    return False
+                return Path(path).exists() and _is_valid_audio_file(Path(path))
+
+            is_newsletter = show.format == "newsletter" or show.transcript_source == "rss_text"
+
+            needs_acquire = ep.status not in (EpisodeStatus.ACQUIRED, EpisodeStatus.TRANSCRIBED) or (
+                ep.status == EpisodeStatus.ACQUIRED and (
+                    is_newsletter or not _audio_is_valid(ep.audio_path)
+                )
+            )
+            if needs_acquire:
+                acquire_episode(conn, ep, show, settings)
+                ep = repo.get_episode(conn, episode_id)
+                if ep is None:
+                    return
+            if ep.status == EpisodeStatus.ACQUIRED and not is_newsletter:
+                result = transcribe_episode(conn, ep, show, glossary, settings)
+                if not result.ok:
+                    return
+                ep = repo.get_episode(conn, episode_id)
+                if ep is None:
+                    return
+            has_transcript = ep.status == EpisodeStatus.TRANSCRIBED
+
+        if has_transcript:
+            result = generate_insights(conn, ep, show, settings)
+            if result.ok:
+                repo.set_status(conn, episode_id, EpisodeStatus.INSIGHTS_EXTRACTED)
+            else:
+                repo.set_status(conn, episode_id, EpisodeStatus.FAILED, error=result.error)
+    except Exception as exc:
+        log.error("unhandled error processing episode %s: %s", episode_id, exc, exc_info=True)
+        try:
+            ep = repo.get_episode(conn, episode_id)
+            if ep is not None and ep.status not in (EpisodeStatus.TRANSCRIBED, EpisodeStatus.FAILED):
+                repo.set_status(conn, episode_id, EpisodeStatus.FAILED,
+                                error=f"{type(exc).__name__}: {exc}")
+        except Exception:
+            pass
 
 
 @dataclass

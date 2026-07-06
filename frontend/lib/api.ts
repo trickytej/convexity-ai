@@ -590,6 +590,12 @@ export function getScoutRefreshStatus(): Promise<ScoutRefreshStatus> {
   return getJSON<ScoutRefreshStatus>("/api/scout/refresh/status");
 }
 
+export async function reprocessPendingScout(): Promise<{ queued: number }> {
+  const res = await apiFetch(`/api/scout/reprocess-pending`, { method: "POST" });
+  if (!res.ok) throw new Error(`reprocess-pending failed: ${res.status}`);
+  return res.json();
+}
+
 export async function ingestScoutAppearance(appearanceId: number): Promise<{ episode_id: number; created: boolean }> {
   const res = await apiFetch(`/api/scout/appearances/${appearanceId}/ingest`, { method: "POST" });
   if (!res.ok) {

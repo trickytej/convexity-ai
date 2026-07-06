@@ -11,6 +11,7 @@ class EpisodeStatus(str, Enum):
     DISCOVERED = "discovered"   # found in feed, nothing fetched yet
     ACQUIRED = "acquired"       # audio downloaded or official transcript raw fetched
     TRANSCRIBED = "transcribed" # normalized transcript stored
+    INSIGHTS_EXTRACTED = "insights_extracted"  # nuggets extracted (possibly zero found)
     FAILED = "failed"
 
 

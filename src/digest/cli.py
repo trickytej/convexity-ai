@@ -16,10 +16,12 @@ from .pipeline import (
     discover_show,
     generate_insights,
     ingest_window,
+    process_episode_pipeline,
     remap_speakers,
     transcribe_episode,
 )
 from .registry import load_registry
+from .scout.pipeline import ingest_appearance_row, run_cycle
 from .store import get_conn, init_db
 from .store import repo
 from .store.models import EpisodeStatus
@@ -442,6 +444,65 @@ def insights(
     console.print(f"Extracted [bold green]{total}[/bold green] nugget(s).")
 
 
+@app.command(name="scout-sync")
+def scout_sync(
+    days: int = typer.Option(2, "--days", "-d", help="Look-back window for the Podscan search."),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Daily Scout driver: search Podscan for new watchlist appearances, ingest
+    each one (Podscan transcript if available, else AssemblyAI), and extract
+    insights. Intended to run on a schedule (see .github/workflows/scout.yml).
+    """
+    _setup_logging(verbose)
+    settings = get_settings()
+    settings.ensure_dirs()
+
+    if not settings.podscan_api_key:
+        console.print("[red]PODSCAN_API_KEY is not set.[/red] Add it to .env.")
+        raise typer.Exit(code=1)
+    if not settings.assemblyai_api_key:
+        console.print(
+            "[yellow]ASSEMBLYAI_API_KEY not set; appearances without a Podscan "
+            "transcript will fail to transcribe.[/yellow]"
+        )
+    if not settings.anthropic_api_key:
+        console.print("[red]ANTHROPIC_API_KEY is not set.[/red] Add it to .env.")
+        raise typer.Exit(code=1)
+
+    table = Table(title="Scout sync", header_style="bold")
+    table.add_column("episode", justify="right")
+    table.add_column("appearance")
+    table.add_column("status")
+
+    with get_conn(settings.resolved_db_path) as conn:
+        init_db(conn)
+        with console.status("[bold]Searching Podscan...[/bold]"):
+            result = run_cycle(conn, days=days)
+        console.print(
+            f"Podscan search: [green]{result.new}[/green] new, "
+            f"{result.skipped} already known, {len(result.errors)} error(s)."
+        )
+        for err in result.errors:
+            console.print(f"  [red]error:[/red] {err}")
+
+        rows = conn.execute("SELECT * FROM scout_appearances WHERE episode_id IS NULL").fetchall()
+        with console.status(f"[bold]Ingesting {len(rows)} appearance(s)...[/bold]") as widget:
+            for row in rows:
+                widget.update(f"[bold]Ingesting[/bold] {row['episode_title'][:50]}...")
+                try:
+                    episode_id, _ = ingest_appearance_row(conn, row, settings)
+                except ValueError as exc:
+                    table.add_row("-", row["episode_title"][:50], f"[red]{exc}[/red]")
+                    continue
+                process_episode_pipeline(conn, episode_id, settings)
+                ep = repo.get_episode(conn, episode_id)
+                style = "green" if ep and ep.status == EpisodeStatus.INSIGHTS_EXTRACTED else "red"
+                status = ep.status.value if ep else "unknown"
+                table.add_row(str(episode_id), row["episode_title"][:50], f"[{style}]{status}[/{style}]")
+
+    console.print(table)
+
+
 @app.command()
 def nuggets(
     episode: int = typer.Option(None, "--episode", "-e", help="Filter by episode id."),
@@ -530,6 +591,7 @@ def status() -> None:
     table.add_column("discovered", justify="right")
     table.add_column("acquired", justify="right")
     table.add_column("transcribed", justify="right")
+    table.add_column("insights", justify="right")
     table.add_column("failed", justify="right")
     for r in rows:
         name = r["slug"] if r["active"] else f"[dim]{r['slug']} (off)[/dim]"
@@ -540,6 +602,7 @@ def status() -> None:
             str(r["discovered"] or 0),
             str(r["acquired"] or 0),
             str(r["transcribed"] or 0),
+            str(r["insights_extracted"] or 0),
             str(r["failed"] or 0),
         )
     console.print(table)

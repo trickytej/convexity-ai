@@ -34,7 +34,7 @@ class EpisodeOut(BaseModel):
     provider: str | None = None
     word_count: int | None = None
     nugget_count: int = 0
-    status: str | None = None          # discovered | acquired | transcribed | failed
+    status: str | None = None          # discovered | acquired | transcribed | insights_extracted | failed
     error: str | None = None
 
 

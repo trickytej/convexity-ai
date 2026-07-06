@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-import json
 import os
-import re
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
-from ...registry import Show
-from ...store import repo
-from ...store.models import Episode, EpisodeStatus, Segment, Transcript, TranscriptSource
+from ...config import get_settings
+from ...scout.pipeline import ingest_appearance_row
 from ..deps import get_db
 
 router = APIRouter(tags=["scout"])
@@ -61,51 +58,8 @@ def _meta_datetime(conn, key: str) -> datetime | None:
     except ValueError:
         return None
 
-_SCOUT_SHOW_SLUG = "scout"
-_SCOUT_SHOW = Show(
-    slug=_SCOUT_SHOW_SLUG,
-    name="Scout",
-    tier="B",
-    transcript_source="asr",
-    active=True,
-)
-
-# Podscan transcript line format:
-# [HH:MM:SS.mmm --> HH:MM:SS.mmm] [SPEAKER_XX] text...
-_LINE_RE = re.compile(
-    r"^\[(\d{2}:\d{2}:\d{2}\.\d+)\s*-->\s*(\d{2}:\d{2}:\d{2}\.\d+)\]\s*"
-    r"(?:\[(\w+)\]\s*)?(.+)$"
-)
-
-
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _ts_ms(ts: str) -> int:
-    h, m, s = ts.split(":")
-    return int((int(h) * 3600 + int(m) * 60 + float(s)) * 1000)
-
-
-def _parse_podscan_transcript(text: str) -> list[Segment]:
-    segments = []
-    for i, line in enumerate(text.splitlines()):
-        line = line.strip()
-        if not line:
-            continue
-        m = _LINE_RE.match(line)
-        if not m:
-            continue
-        segments.append(
-            Segment(
-                idx=i,
-                start_ms=_ts_ms(m.group(1)),
-                end_ms=_ts_ms(m.group(2)),
-                speaker_label=m.group(3),
-                text=m.group(4).strip(),
-            )
-        )
-    return segments
 
 
 def _row_to_appearance(row: sqlite3.Row) -> dict:
@@ -232,87 +186,35 @@ def refresh_status() -> dict:
     return _refresh_state
 
 
-def _run_process(episode_id: int) -> None:
-    """Background task: (acquire →) transcribe → insights.
-
-    If the episode already has a transcript stored (from Podscan), skips straight
-    to insights extraction without hitting AssemblyAI.
-    """
-    from ...config import get_settings
+def _reprocess_one(episode_id: int) -> None:
+    from ...pipeline import process_episode_pipeline
     from ...store.db import connect as _db_connect
-    from ...pipeline import acquire_episode, generate_insights, transcribe_episode
-    from ...registry import Glossary, Registry
-    import logging
-    log = logging.getLogger(__name__)
 
     settings = get_settings()
     conn = _db_connect(settings.resolved_db_path)
     try:
-        ep = repo.get_episode(conn, episode_id)
-        if ep is None:
-            return
-        show_row = conn.execute("SELECT * FROM shows WHERE slug = ?", (ep.show_slug,)).fetchone()
-        if show_row is None:
-            return
-        show = Show(
-            slug=show_row["slug"],
-            name=show_row["name"],
-            rss_url=show_row["rss_url"] or "",
-            tier=show_row["tier"],
-            transcript_source=show_row["transcript_source"] or "asr",
-            hosts=json.loads(show_row["hosts"]) if show_row["hosts"] else [],
-            format=show_row["format"] or "interview",
-            active=bool(show_row["active"]),
-        )
-        try:
-            glossary = Registry.load(settings.shows_file).glossary
-        except Exception:
-            glossary = Glossary()
-
-        # Already transcribed (e.g. transcript came from Podscan) — go straight to insights.
-        if ep.status == EpisodeStatus.TRANSCRIBED:
-            generate_insights(conn, ep, show, settings)
-            return
-
-        def _audio_valid(path: str | None) -> bool:
-            if not path:
-                return False
-            from pathlib import Path as _P
-            from ...acquire.audio import _is_valid_audio_file
-            p = _P(path)
-            return p.exists() and _is_valid_audio_file(p)
-
-        needs_acquire = ep.status not in (EpisodeStatus.ACQUIRED, EpisodeStatus.TRANSCRIBED) or (
-            ep.status == EpisodeStatus.ACQUIRED and not _audio_valid(ep.audio_path)
-        )
-        if needs_acquire:
-            acquire_episode(conn, ep, show, settings)
-            ep = repo.get_episode(conn, episode_id)
-            if ep is None:
-                return
-
-        if ep.status == EpisodeStatus.ACQUIRED:
-            result = transcribe_episode(conn, ep, show, glossary, settings)
-            if not result.ok:
-                return
-            ep = repo.get_episode(conn, episode_id)
-            if ep is None:
-                return
-
-        if ep.status == EpisodeStatus.TRANSCRIBED:
-            generate_insights(conn, ep, show, settings)
-    except Exception as exc:
-        log.error("scout process error for episode %s: %s", episode_id, exc, exc_info=True)
-        try:
-            ep = repo.get_episode(conn, episode_id)
-            if ep is not None:
-                from ...store.models import EpisodeStatus as _S
-                if ep.status not in (_S.TRANSCRIBED, _S.FAILED):
-                    repo.set_status(conn, episode_id, _S.FAILED, error=f"{type(exc).__name__}: {exc}")
-        except Exception:
-            pass
+        process_episode_pipeline(conn, episode_id, settings)
     finally:
         conn.close()
+
+
+@router.post("/scout/reprocess-pending")
+def reprocess_pending(background_tasks: BackgroundTasks, db: sqlite3.Connection = Depends(get_db)) -> dict:
+    """Retry insight extraction for appearances already ingested but not yet
+    insights_extracted (e.g. the nightly scout-sync job's LLM call failed, or
+    was interrupted mid-run). Fast: no Podscan/AssemblyAI calls for episodes
+    that already have a transcript — just the LLM extraction step.
+    """
+    rows = db.execute(
+        """
+        SELECT sa.episode_id FROM scout_appearances sa
+        JOIN episodes e ON e.id = sa.episode_id
+        WHERE e.status IN ('transcribed', 'failed')
+        """
+    ).fetchall()
+    for row in rows:
+        background_tasks.add_task(_reprocess_one, row["episode_id"])
+    return {"queued": len(rows)}
 
 
 @router.post("/scout/appearances/{appearance_id}/ingest")
@@ -333,70 +235,9 @@ def ingest_appearance(
     if row is None:
         raise HTTPException(status_code=404, detail="appearance not found")
 
-    # Already ingested — just return the episode id
-    if row["episode_id"]:
-        return {"episode_id": row["episode_id"], "created": False}
+    try:
+        episode_id, created = ingest_appearance_row(db, row, get_settings())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
-    audio_url   = row["audio_url"]   or row["episode_url"] or ""
-    episode_url = row["episode_url"] or ""
-
-    if not audio_url:
-        raise HTTPException(status_code=422, detail="No audio URL available for this appearance")
-
-    # Ensure the scout catch-all show exists
-    if not db.execute("SELECT slug FROM shows WHERE slug = ?", (_SCOUT_SHOW_SLUG,)).fetchone():
-        repo.sync_shows(db, [_SCOUT_SHOW])
-
-    # Idempotent on audio_url
-    existing = db.execute(
-        "SELECT id FROM episodes WHERE audio_url = ? AND show_slug = ?",
-        (audio_url, _SCOUT_SHOW_SLUG),
-    ).fetchone()
-    if existing:
-        episode_id = existing["id"]
-        db.execute(
-            "UPDATE scout_appearances SET episode_id = ? WHERE id = ?",
-            (episode_id, appearance_id),
-        )
-        db.commit()
-        return {"episode_id": episode_id, "created": False}
-
-    pub_at = None
-    if row["published_at"]:
-        try:
-            pub_at = datetime.fromisoformat(row["published_at"])
-        except ValueError:
-            pass
-
-    ep = Episode(
-        show_slug=_SCOUT_SHOW_SLUG,
-        guid=audio_url,
-        title=row["episode_title"],
-        audio_url=audio_url,
-        episode_url=episode_url,
-        published_at=pub_at,
-    )
-    episode_id, _ = repo.upsert_episode(db, ep)
-
-    # Store Podscan transcript directly if available — skips AssemblyAI entirely.
-    transcript_text = row["transcript"] if "transcript" in row.keys() else None
-    if transcript_text:
-        segments = _parse_podscan_transcript(transcript_text)
-        t = Transcript(
-            episode_id=episode_id,
-            source=TranscriptSource.ASR,
-            provider="podscan",
-            has_diarization=True,
-            word_count=len(transcript_text.split()),
-            segments=segments,
-        )
-        repo.insert_transcript(db, t)
-        repo.set_status(db, episode_id, EpisodeStatus.TRANSCRIBED)
-
-    db.execute(
-        "UPDATE scout_appearances SET episode_id = ? WHERE id = ?",
-        (episode_id, appearance_id),
-    )
-    db.commit()
-
-    return {"episode_id": episode_id, "created": True}
+    return {"episode_id": episode_id, "created": created}

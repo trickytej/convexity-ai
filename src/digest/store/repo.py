@@ -338,7 +338,7 @@ def list_shows_with_counts(conn: sqlite3.Connection) -> list[sqlite3.Row]:
         SELECT s.slug, s.name, s.network, s.homepage, s.hosts, s.tier, s.active,
                s.format,
                COUNT(e.id) AS total,
-               SUM(CASE WHEN e.status = 'transcribed' THEN 1 ELSE 0 END) AS transcribed
+               SUM(CASE WHEN e.status IN ('transcribed', 'insights_extracted') THEN 1 ELSE 0 END) AS transcribed
         FROM shows s
         LEFT JOIN episodes e ON e.show_slug = s.slug
         GROUP BY s.slug
@@ -845,8 +845,9 @@ def status_matrix(conn: sqlite3.Connection) -> list[sqlite3.Row]:
                COUNT(e.id) AS total,
                SUM(CASE WHEN e.status = 'discovered'  THEN 1 ELSE 0 END) AS discovered,
                SUM(CASE WHEN e.status = 'acquired'    THEN 1 ELSE 0 END) AS acquired,
-               SUM(CASE WHEN e.status = 'transcribed' THEN 1 ELSE 0 END) AS transcribed,
-               SUM(CASE WHEN e.status = 'failed'      THEN 1 ELSE 0 END) AS failed
+               SUM(CASE WHEN e.status = 'transcribed'        THEN 1 ELSE 0 END) AS transcribed,
+               SUM(CASE WHEN e.status = 'insights_extracted' THEN 1 ELSE 0 END) AS insights_extracted,
+               SUM(CASE WHEN e.status = 'failed'             THEN 1 ELSE 0 END) AS failed
         FROM shows s
         LEFT JOIN episodes e ON e.show_slug = s.slug
         GROUP BY s.slug

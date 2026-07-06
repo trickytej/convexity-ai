@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Script from "next/script";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getScoutAppearances, refreshScout, getScoutRefreshStatus, ingestScoutAppearance, processEpisode, getEpisodeStatus, type ScoutAppearance } from "@/lib/api";
+import { getScoutAppearances, reprocessPendingScout, ingestScoutAppearance, processEpisode, getEpisodeStatus, type ScoutAppearance } from "@/lib/api";
 
 const NeonSphere = dynamic(() => import("@/components/NeonSphere"), { ssr: false });
 
@@ -365,6 +365,7 @@ function AppearanceCard({ a }: { a: ScoutAppearance }) {
           setTxState({ phase: "error", message: s.error ?? "Processing failed" });
         } else {
           setTxState({ phase: "processing", episode_id: a.episode_id! });
+          startPoll(a.episode_id!);
         }
       }).catch(() => {});
     }
@@ -539,9 +540,7 @@ export default function ScoutPage() {
   const [loading,       setLoading]       = useState(true);
   const [refreshing,    setRefreshing]    = useState(false);
   const [lastNew,       setLastNew]       = useState<number | null>(null);
-  const [bgScan,        setBgScan]        = useState(false);
   const [scanErrors,    setScanErrors]    = useState<string[]>([]);
-  const [scanNote,      setScanNote]      = useState<string | null>(null);
   const [filterCompany, setFilterCompany] = useState("");
 
   // Watchlist state — hydrated from localStorage on mount
@@ -630,49 +629,21 @@ export default function ScoutPage() {
   useEffect(() => { load(); }, [load]);
 
   async function handleRefresh() {
+    // Podscan search + transcription now run on a nightly schedule (see
+    // .github/workflows/scout.yml); this just reloads what that job has
+    // already produced and retries insight extraction for anything left
+    // transcribed/failed (fast — no Podscan/AssemblyAI calls).
     setRefreshing(true);
     setLastNew(null);
     setScanErrors([]);
-    setScanNote(null);
-    setBgScan(true);
     try {
-      const kickoff = await refreshScout(days);
-      if (kickoff.status === "cooldown") {
-        // A full scan costs most of the Podscan daily quota, so the backend
-        // allows at most one per cooldown window.
-        const retryAt = kickoff.retry_at
-          ? new Date(kickoff.retry_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-          : "later";
-        setScanNote(
-          kickoff.reason === "quota"
-            ? `Podscan daily quota used up — next scan after ${retryAt}`
-            : `Scanned recently — next scan after ${retryAt}`
-        );
-        return;
-      }
-      // Backend returns immediately; the actual Podscan scan runs in the background.
-      // Poll for real completion/errors instead of guessing how long it'll take.
-      const POLL_MS = 4_000;
-      const MAX_POLLS = 90; // ~6 minutes
-      let finished = false;
-      for (let i = 0; i < MAX_POLLS; i++) {
-        await new Promise((r) => setTimeout(r, POLL_MS));
-        const status = await getScoutRefreshStatus();
-        if (status.status === "running") continue;
-        setLastNew(status.new);
-        setScanErrors(status.errors);
-        finished = true;
-        break;
-      }
-      if (!finished) {
-        setScanNote("Still scanning — results will appear once it finishes. Check back in a few minutes.");
-      }
+      const { queued } = await reprocessPendingScout();
+      setLastNew(queued);
+      await load();
     } catch (err: unknown) {
       setScanErrors([err instanceof Error ? err.message : "Refresh failed"]);
     } finally {
-      setBgScan(false);
       setRefreshing(false);
-      load();
     }
   }
 
@@ -729,24 +700,14 @@ export default function ScoutPage() {
                 <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5" strokeLinecap="round" />
                 <path d="M8 1v3.5H4.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              {refreshing ? "Scanning…" : "Refresh"}
+              {refreshing ? "Refreshing…" : "Refresh"}
             </button>
-            {bgScan && (
+            {!refreshing && lastNew !== null && scanErrors.length === 0 && (
               <p className="text-[11px] text-[#00d4ff]/60">
-                Scanning Podscan in background…
+                {lastNew > 0 ? `Retrying ${lastNew} pending` : "Up to date"}
               </p>
             )}
-            {!bgScan && scanNote && (
-              <p className="max-w-xs text-right text-[11px] text-[#00d4ff]/60">
-                {scanNote}
-              </p>
-            )}
-            {!bgScan && !scanNote && lastNew !== null && scanErrors.length === 0 && (
-              <p className="text-[11px] text-[#00d4ff]/60">
-                {lastNew > 0 ? `+${lastNew} new appearances` : "Up to date"}
-              </p>
-            )}
-            {!bgScan && scanErrors.length > 0 && (
+            {!refreshing && scanErrors.length > 0 && (
               <p className="max-w-xs text-right text-[11px] text-red-400/80" title={scanErrors.join("\n")}>
                 {scanErrors[0]}
               </p>

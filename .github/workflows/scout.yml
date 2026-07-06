@@ -1,0 +1,49 @@
+name: scout
+
+# Scheduled Scout sync: search Podscan for new watchlist appearances, ingest
+# each one (Podscan transcript if available, else AssemblyAI), and extract
+# insights — all against the hosted Turso DB. Runs daily; also runnable on
+# demand from the Actions tab.
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # 00:00 UTC (~8PM ET)
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Look-back window (days) for the Podscan search"
+        required: false
+        default: "2"
+
+concurrency:
+  group: scout
+  cancel-in-progress: false
+
+jobs:
+  scout-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+      PODSCAN_API_KEY: ${{ secrets.PODSCAN_API_KEY }}
+      ASSEMBLYAI_API_KEY: ${{ secrets.ASSEMBLYAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ffmpeg (audio extraction)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
+      - name: Install package
+        run: pip install --upgrade pip && pip install .
+
+      - name: Ensure schema on Turso
+        run: digest init
+
+      - name: Sync Scout appearances
+        run: digest scout-sync --days "${{ github.event.inputs.days || '2' }}" -v

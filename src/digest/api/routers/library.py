@@ -14,8 +14,8 @@ from pydantic import BaseModel
 from ...config import get_settings
 from ...feeds import parse_feed
 from ...net import fetch_bytes
-from ...pipeline import acquire_episode, discover_show, generate_insights, transcribe_episode
-from ...registry import Glossary, Registry, Show
+from ...pipeline import discover_show, process_episode_pipeline
+from ...registry import Show
 from ...store import repo
 from ...store.models import Episode, EpisodeStatus
 from ..deps import get_db
@@ -296,82 +296,14 @@ def poll_all_shows(db: sqlite3.Connection = Depends(get_db)) -> dict:
     return {"shows_polled": len(results), "new_episodes": total_new, "results": results}
 
 
-def _load_glossary(settings) -> Glossary:
-    try:
-        return Registry.load(settings.shows_file).glossary
-    except Exception:
-        return Glossary()
-
-
-import logging as _logging
-_log = _logging.getLogger(__name__)
-
-
 def _run_process(episode_id: int) -> None:
     """Background: acquire → transcribe → extract insights for one episode."""
-    settings = get_settings()
     from ...store.db import connect as _db_connect
 
+    settings = get_settings()
     conn = _db_connect(settings.resolved_db_path)
     try:
-        ep = repo.get_episode(conn, episode_id)
-        if ep is None:
-            return
-        show_row = conn.execute("SELECT * FROM shows WHERE slug = ?", (ep.show_slug,)).fetchone()
-        if show_row is None:
-            return
-        show = Show(
-            slug=show_row["slug"],
-            name=show_row["name"],
-            rss_url=show_row["rss_url"] or "",
-            tier=show_row["tier"],
-            transcript_source=show_row["transcript_source"] or "asr",
-            hosts=json.loads(show_row["hosts"]) if show_row["hosts"] else [],
-            format=show_row["format"] or "interview",
-            active=bool(show_row["active"]),
-        )
-        glossary = _load_glossary(settings)
-
-        # Re-acquire if not yet acquired, or if ACQUIRED but audio file is missing/invalid
-        def _audio_is_valid(path: str | None) -> bool:
-            if not path:
-                return False
-            from pathlib import Path as _Path
-            from ...acquire.audio import _is_valid_audio_file
-            p = _Path(path)
-            return p.exists() and _is_valid_audio_file(p)
-
-        is_newsletter = show.format == "newsletter" or show.transcript_source == "rss_text"
-
-        needs_acquire = ep.status not in (EpisodeStatus.ACQUIRED, EpisodeStatus.TRANSCRIBED) or (
-            ep.status == EpisodeStatus.ACQUIRED and (
-                is_newsletter or not _audio_is_valid(ep.audio_path)
-            )
-        )
-        if needs_acquire:
-            acquire_episode(conn, ep, show, settings)
-            ep = repo.get_episode(conn, episode_id)
-            if ep is None:
-                return
-        if ep.status == EpisodeStatus.ACQUIRED and not is_newsletter:
-            result = transcribe_episode(conn, ep, show, glossary, settings)
-            if not result.ok:
-                return
-            ep = repo.get_episode(conn, episode_id)
-            if ep is None:
-                return
-
-        if ep.status == EpisodeStatus.TRANSCRIBED:
-            generate_insights(conn, ep, show, settings)
-    except Exception as exc:
-        _log.error("unhandled error processing episode %s: %s", episode_id, exc, exc_info=True)
-        try:
-            ep = repo.get_episode(conn, episode_id)
-            if ep is not None and ep.status not in (EpisodeStatus.TRANSCRIBED, EpisodeStatus.FAILED):
-                repo.set_status(conn, episode_id, EpisodeStatus.FAILED,
-                                error=f"{type(exc).__name__}: {exc}")
-        except Exception:
-            pass
+        process_episode_pipeline(conn, episode_id, settings)
     finally:
         conn.close()
 
@@ -386,7 +318,7 @@ def process_episode(
     ep = repo.get_episode(db, episode_id)
     if ep is None:
         raise HTTPException(status_code=404, detail="episode not found")
-    if ep.status == EpisodeStatus.TRANSCRIBED and repo.has_nuggets(db, episode_id):
+    if ep.status == EpisodeStatus.INSIGHTS_EXTRACTED or repo.has_nuggets(db, episode_id):
         return {"status": "already_done"}
     background_tasks.add_task(_run_process, episode_id)
     return {"status": "started"}
