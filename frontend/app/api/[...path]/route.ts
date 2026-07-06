@@ -24,7 +24,16 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
     }
   }
 
-  const res = await apiFetch(target, init);
+  let res: Response;
+  try {
+    res = await apiFetch(target, init);
+  } catch (err: unknown) {
+    // The backend fetch itself failed (network/DNS/timeout) — distinguish this
+    // from a genuine backend error response so it isn't misread as one.
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`proxy fetch to ${target} failed: ${message}`);
+    return Response.json({ detail: `proxy: could not reach backend — ${message}` }, { status: 502 });
+  }
   const buf = await res.arrayBuffer();
   return new Response(buf, {
     status: res.status,

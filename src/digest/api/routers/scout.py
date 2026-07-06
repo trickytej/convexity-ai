@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -12,6 +13,7 @@ from ...config import get_settings
 from ...scout.pipeline import ingest_appearance_row
 from ..deps import get_db
 
+log = logging.getLogger(__name__)
 router = APIRouter(tags=["scout"])
 
 # In-process state for the most recent /scout/refresh background run. Fine as a
@@ -205,16 +207,20 @@ def reprocess_pending(background_tasks: BackgroundTasks, db: sqlite3.Connection 
     was interrupted mid-run). Fast: no Podscan/AssemblyAI calls for episodes
     that already have a transcript — just the LLM extraction step.
     """
-    rows = db.execute(
-        """
-        SELECT sa.episode_id FROM scout_appearances sa
-        JOIN episodes e ON e.id = sa.episode_id
-        WHERE e.status IN ('transcribed', 'failed')
-        """
-    ).fetchall()
-    for row in rows:
-        background_tasks.add_task(_reprocess_one, row["episode_id"])
-    return {"queued": len(rows)}
+    try:
+        rows = db.execute(
+            """
+            SELECT sa.episode_id FROM scout_appearances sa
+            JOIN episodes e ON e.id = sa.episode_id
+            WHERE e.status IN ('transcribed', 'failed')
+            """
+        ).fetchall()
+        for row in rows:
+            background_tasks.add_task(_reprocess_one, row["episode_id"])
+        return {"queued": len(rows)}
+    except Exception as exc:
+        log.error("reprocess-pending failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}")
 
 
 @router.post("/scout/appearances/{appearance_id}/ingest")

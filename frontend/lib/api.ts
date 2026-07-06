@@ -592,7 +592,10 @@ export function getScoutRefreshStatus(): Promise<ScoutRefreshStatus> {
 
 export async function reprocessPendingScout(): Promise<{ queued: number }> {
   const res = await apiFetch(`/api/scout/reprocess-pending`, { method: "POST" });
-  if (!res.ok) throw new Error(`reprocess-pending failed: ${res.status}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `reprocess-pending failed: ${res.status}`);
+  }
   return res.json();
 }
 
