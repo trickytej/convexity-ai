@@ -10,7 +10,9 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
 from ...config import get_settings
+from ...scout import roster
 from ...scout.pipeline import ingest_appearance_row
+from ...store import repo
 from ..deps import get_db
 
 log = logging.getLogger(__name__)
@@ -25,40 +27,26 @@ _refresh_state: dict = {
     "new": 0,
     "skipped": 0,
     "errors": [],
+    "roster_size": 0,
+    "processing_done": 0,
+    "processing_total": 0,
 }
 
-# A full scan costs one Podscan request per tracked person (~72) against a
+# A full scan costs one Podscan request per tracked person against a
 # 100-requests/day plan quota, so at most one full scan per day is sustainable.
 # Refreshes inside this window return "cooldown" instead of burning the quota.
 _REFRESH_COOLDOWN_HOURS = float(os.environ.get("SCOUT_REFRESH_COOLDOWN_HOURS", "20"))
 
-_META_TABLE_SQL = "CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
-
-
-def _meta_get(conn, key: str) -> str | None:
-    conn.execute(_META_TABLE_SQL)
-    row = conn.execute("SELECT value FROM app_meta WHERE key = ?", (key,)).fetchone()
-    return row["value"] if row else None
-
-
-def _meta_set(conn, key: str, value: str) -> None:
-    conn.execute(_META_TABLE_SQL)
-    conn.execute(
-        "INSERT INTO app_meta (key, value) VALUES (?, ?) "
-        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        (key, value),
-    )
-    conn.commit()
-
 
 def _meta_datetime(conn, key: str) -> datetime | None:
-    raw = _meta_get(conn, key)
+    raw = repo.meta_get(conn, key)
     if not raw:
         return None
     try:
         return datetime.fromisoformat(raw)
     except ValueError:
         return None
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -108,6 +96,20 @@ def list_appearances(
     return [_row_to_appearance(r) for r in rows]
 
 
+@router.get("/scout/watchlist")
+def get_watchlist(db: sqlite3.Connection = Depends(get_db)) -> dict:
+    """Return the tracked companies/people, seeding defaults on first use."""
+    return {"watchlist": roster.load_watchlist(db)}
+
+
+@router.put("/scout/watchlist")
+def put_watchlist(watchlist: list[dict], db: sqlite3.Connection = Depends(get_db)) -> dict:
+    """Save the tracked companies/people — the single source of truth the next
+    /scout/refresh scan searches against."""
+    roster.save_watchlist(db, watchlist)
+    return {"watchlist": watchlist}
+
+
 @router.post("/scout/refresh")
 def refresh_appearances(
     background_tasks: BackgroundTasks,
@@ -115,16 +117,14 @@ def refresh_appearances(
     force: bool = Query(False, description="Bypass the scan cooldown"),
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
-    """Kick off a Podscan scan in the background and return immediately.
-
-    The scan queries every tracked person (~72 requests, ≥1 s apart) against a
-    100-requests/day Podscan quota, so it runs in a background thread and at
-    most once per cooldown window. Poll GET /scout/refresh/status for the
-    real outcome.
+    """Kick off a Podscan scan for the current watchlist in the background, then
+    ingest + transcribe + extract insights for everything it finds within the
+    *days* window (older pending appearances are left for the nightly
+    scout-sync job) and return immediately. Poll GET /scout/refresh/status for
+    the real outcome.
     """
-    from ...config import get_settings
     from ...store.db import connect as _db_connect
-    from ...scout.pipeline import run_cycle
+    from ...scout.pipeline import sync_and_process
 
     if _refresh_state["status"] == "running":
         return {"status": "already_running"}
@@ -152,27 +152,38 @@ def refresh_appearances(
                     "retry_at": next_allowed.isoformat(),
                 }
 
+    flat_roster = roster.flatten_watchlist(roster.load_watchlist(db))
+
     _refresh_state.update(
         status="running", started_at=_now_iso(), finished_at=None, new=0, skipped=0, errors=[],
+        roster_size=len(flat_roster), processing_done=0, processing_total=0,
     )
+
+    def _on_progress(done: int, total: int) -> None:
+        _refresh_state.update(processing_done=done, processing_total=total)
 
     def _run() -> None:
         settings = get_settings()
         conn = _db_connect(settings.resolved_db_path)
         try:
-            result = run_cycle(conn, days=days)
+            result = sync_and_process(
+                conn, settings, flat_roster, days=days,
+                scope_sweep_to_days=True, on_progress=_on_progress,
+            )
             _refresh_state.update(
                 status="error" if result.errors and not (result.new or result.skipped) else "done",
                 finished_at=_now_iso(),
                 new=result.new,
                 skipped=result.skipped,
                 errors=result.errors[:5],
+                processing_done=result.processed,
+                processing_total=result.processing_total,
             )
             if result.quota_reset_at:
-                _meta_set(conn, "scout_quota_reset_at", result.quota_reset_at)
+                repo.meta_set(conn, "scout_quota_reset_at", result.quota_reset_at)
             if not result.aborted:
                 # Full pass completed — start the cooldown clock.
-                _meta_set(conn, "scout_last_scan_at", _now_iso())
+                repo.meta_set(conn, "scout_last_scan_at", _now_iso())
         except Exception as exc:
             _refresh_state.update(status="error", finished_at=_now_iso(), errors=[str(exc)])
         finally:

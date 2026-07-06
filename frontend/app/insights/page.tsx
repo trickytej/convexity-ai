@@ -164,7 +164,7 @@ export default async function InsightsPage({
       </h1>
 
       <p className="mt-4 max-w-2xl text-xl font-light text-zinc-300">
-        Structured realtime insights integrated with your research.
+        ConvexityAI is a position-aware <span className="text-[#00d4ff]">system of research</span> for professional managers.
       </p>
 
       {/* refresh feeds */}

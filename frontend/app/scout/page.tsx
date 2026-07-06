@@ -3,7 +3,11 @@
 import dynamic from "next/dynamic";
 import Script from "next/script";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getScoutAppearances, reprocessPendingScout, ingestScoutAppearance, processEpisode, getEpisodeStatus, type ScoutAppearance } from "@/lib/api";
+import {
+  getScoutAppearances, ingestScoutAppearance, processEpisode, getEpisodeStatus,
+  getScoutWatchlist, putScoutWatchlist, refreshScout, getScoutRefreshStatus,
+  type ScoutAppearance, type ScoutCategory, type ScoutRefreshKickoff,
+} from "@/lib/api";
 
 const NeonSphere = dynamic(() => import("@/components/NeonSphere"), { ssr: false });
 
@@ -11,140 +15,19 @@ const NeonSphere = dynamic(() => import("@/components/NeonSphere"), { ssr: false
 
 type Person   = { name: string; role: string };
 type Company  = { name: string; ticker?: string; people?: Person[] };
-type Category = { label: string; companies: Company[] };
-
-const WATCHLIST_DEFAULT: Category[] = [
-  {
-    label: "Privates",
-    companies: [
-      { name: "Anthropic",  people: [{ name: "Dario Amodei",    role: "CEO & Co-founder" },    { name: "Daniela Amodei", role: "President & Co-founder" }, { name: "Tom Brown",   role: "Co-founder" }, { name: "Chris Olah", role: "Co-founder & Research Scientist" }] },
-      { name: "OpenAI",     people: [{ name: "Sam Altman",      role: "CEO" },                 { name: "Greg Brockman",  role: "Co-founder & President" }, { name: "Jakub Pachocki", role: "Chief Scientist" }, { name: "Brad Lightcap", role: "COO" }] },
-      { name: "xAI",        people: [{ name: "Elon Musk",       role: "Founder & CEO" }] },
-      { name: "Databricks", people: [{ name: "Ali Ghodsi",      role: "CEO & Co-founder" },    { name: "Ion Stoica",     role: "Co-founder & Executive Chairman" }, { name: "Matei Zaharia", role: "Co-founder & CTO" }] },
-      { name: "Stripe",     people: [{ name: "Patrick Collison", role: "CEO & Co-founder" },   { name: "John Collison",  role: "President & Co-founder" }] },
-      { name: "Anduril",    people: [{ name: "Palmer Luckey",   role: "Founder" },             { name: "Brian Schimpf",  role: "CEO & Co-founder" }] },
-      { name: "Figure",     people: [{ name: "Brett Adcock",    role: "CEO & Founder" }] },
-      { name: "Perplexity", people: [{ name: "Aravind Srinivas", role: "CEO & Co-founder" }] },
-      { name: "Sierra",     people: [{ name: "Bret Taylor",     role: "CEO & Co-founder" },    { name: "Clay Bavor",     role: "Co-founder" }] },
-      { name: "Crusoe",     people: [{ name: "Chase Lochmiller", role: "CEO & Co-founder" }] },
-      { name: "Groq",       people: [{ name: "Jonathan Ross",   role: "CEO & Founder" }] },
-      { name: "Cohere",     people: [{ name: "Aidan Gomez",     role: "CEO & Co-founder" },    { name: "Nick Frosst",    role: "Co-founder" }] },
-      { name: "Mistral",    people: [{ name: "Arthur Mensch",   role: "CEO & Co-founder" },    { name: "Guillaume Lample", role: "Co-founder" }] },
-      { name: "Scale AI",   people: [{ name: "Alexandr Wang",   role: "CEO & Founder" }] },
-      { name: "Waymo",      people: [{ name: "Dmitri Dolgov",   role: "CEO & Co-founder" },    { name: "Tekedra Mawakana", role: "Co-CEO" }] },
-      { name: "SpaceX",     people: [{ name: "Gwynne Shotwell", role: "President & COO" }] },
-    ],
-  },
-  {
-    label: "Semiconductors",
-    companies: [
-      { name: "Nvidia",             ticker: "NVDA",      people: [{ name: "Jensen Huang",       role: "CEO & Co-founder" }, { name: "Colette Kress",       role: "CFO" },                  { name: "Bill Dally",         role: "Chief Scientist" }] },
-      { name: "TSMC",               ticker: "TSM",       people: [{ name: "C.C. Wei",           role: "CEO" },              { name: "Morris Chang",        role: "Founder" }] },
-      { name: "Broadcom",           ticker: "AVGO",      people: [{ name: "Hock Tan",           role: "CEO" },              { name: "Kirsten Spears",      role: "CFO" }] },
-      { name: "Micron",             ticker: "MU",        people: [{ name: "Sanjay Mehrotra",    role: "CEO" }] },
-      { name: "AMD",                ticker: "AMD",       people: [{ name: "Lisa Su",            role: "CEO" },              { name: "Mark Papermaster",    role: "CTO" }] },
-      { name: "ASML",               ticker: "ASML",      people: [{ name: "Christophe Fouquet", role: "CEO" },              { name: "Roger Dassen",        role: "CFO" }] },
-      { name: "Intel",              ticker: "INTC",      people: [{ name: "Lip-Bu Tan",         role: "CEO" }] },
-      { name: "ARM",                ticker: "ARM",       people: [{ name: "Rene Haas",          role: "CEO" }] },
-      { name: "Lam Research",       ticker: "LRCX",      people: [{ name: "Tim Archer",         role: "CEO" }] },
-      { name: "Applied Materials",  ticker: "AMAT",      people: [{ name: "Gary Dickerson",     role: "CEO" }] },
-      { name: "KLA",                ticker: "KLAC",      people: [{ name: "Rick Wallace",       role: "CEO" }] },
-      { name: "Texas Instruments",  ticker: "TXN",       people: [{ name: "Haviv Ilan",         role: "CEO" }] },
-      { name: "Marvell",            ticker: "MRVL",      people: [{ name: "Matt Murphy",        role: "CEO" }] },
-      { name: "Qualcomm",           ticker: "QCOM",      people: [{ name: "Cristiano Amon",     role: "CEO" }] },
-      { name: "Analog Devices",     ticker: "ADI",       people: [{ name: "Vincent Roche",      role: "CEO" }] },
-      { name: "Cadence",            ticker: "CDNS",      people: [{ name: "Anirudh Devgan",     role: "CEO" }] },
-      { name: "Synopsys",           ticker: "SNPS",      people: [{ name: "Sassine Ghazi",      role: "CEO" }] },
-      { name: "NXP",                ticker: "NXPI",      people: [{ name: "Kurt Sievers",       role: "CEO" }] },
-      { name: "Mobileye",           ticker: "MBLY",      people: [{ name: "Amnon Shashua",      role: "CEO & Founder" }] },
-      { name: "Lattice Semiconductor", ticker: "LSCC",   people: [{ name: "Ford Tamer",         role: "CEO" }] },
-    ],
-  },
-  {
-    label: "Mag 7",
-    companies: [
-      { name: "Apple",     ticker: "AAPL",  people: [{ name: "Tim Cook",          role: "CEO" },              { name: "Jeff Williams",       role: "COO" },                  { name: "Luca Maestri",       role: "CFO" }] },
-      { name: "Alphabet",  ticker: "GOOGL", people: [{ name: "Sundar Pichai",     role: "CEO" },              { name: "Demis Hassabis",      role: "CEO Google DeepMind & Co-founder" }, { name: "Ruth Porat", role: "President & CFO" }, { name: "Sergey Brin", role: "Co-founder" }, { name: "Larry Page", role: "Co-founder" }] },
-      { name: "Microsoft", ticker: "MSFT",  people: [{ name: "Satya Nadella",     role: "CEO" },              { name: "Brad Smith",          role: "President & Vice Chair" }, { name: "Kevin Scott", role: "CTO & EVP AI" }] },
-      { name: "Amazon",    ticker: "AMZN",  people: [{ name: "Andy Jassy",        role: "CEO" },              { name: "Jeff Bezos",          role: "Founder & Executive Chairman" }, { name: "Matt Garman", role: "CEO Amazon Web Services" }] },
-      { name: "Meta",      ticker: "META",  people: [{ name: "Mark Zuckerberg",   role: "CEO & Co-founder" }, { name: "Yann LeCun",          role: "Chief AI Scientist" },    { name: "Andrew Bosworth", role: "CTO" }] },
-      { name: "Tesla",     ticker: "TSLA",  people: [{ name: "Elon Musk",         role: "CEO & Co-founder" }, { name: "Vaibhav Taneja",      role: "CFO" }] },
-      { name: "Nvidia",    ticker: "NVDA",  people: [{ name: "Jensen Huang",      role: "CEO & Co-founder" }, { name: "Colette Kress",       role: "CFO" }] },
-    ],
-  },
-  {
-    label: "Software",
-    companies: [
-      { name: "Oracle",             ticker: "ORCL", people: [{ name: "Larry Ellison",    role: "Founder & CTO" },    { name: "Safra Catz",         role: "CEO" }] },
-      { name: "Palantir",           ticker: "PLTR", people: [{ name: "Alex Karp",        role: "CEO & Co-founder" }, { name: "Peter Thiel",        role: "Co-founder" }] },
-      { name: "Cisco",              ticker: "CSCO", people: [{ name: "Chuck Robbins",    role: "CEO" }] },
-      { name: "SAP",                ticker: "SAP",  people: [{ name: "Christian Klein",  role: "CEO" }] },
-      { name: "Salesforce",         ticker: "CRM",  people: [{ name: "Marc Benioff",     role: "CEO & Founder" }] },
-      { name: "IBM",                ticker: "IBM",  people: [{ name: "Arvind Krishna",   role: "CEO" }] },
-      { name: "AppLovin",           ticker: "APP",  people: [{ name: "Adam Foroughi",    role: "CEO & Co-founder" }] },
-      { name: "ServiceNow",         ticker: "NOW",  people: [{ name: "Bill McDermott",   role: "CEO" }] },
-      { name: "Intuit",             ticker: "INTU", people: [{ name: "Sasan Goodarzi",   role: "CEO" }] },
-      { name: "Adobe",              ticker: "ADBE", people: [{ name: "Shantanu Narayen", role: "CEO" }] },
-      { name: "Shopify",            ticker: "SHOP", people: [{ name: "Tobi Lütke",       role: "CEO & Founder" },    { name: "Harley Finkelstein", role: "President" }] },
-      { name: "Palo Alto Networks", ticker: "PANW", people: [{ name: "Nikesh Arora",     role: "CEO" }] },
-      { name: "CrowdStrike",        ticker: "CRWD", people: [{ name: "George Kurtz",     role: "CEO & Co-founder" }] },
-      { name: "Snowflake",          ticker: "SNOW", people: [{ name: "Sridhar Ramaswamy", role: "CEO" }] },
-      { name: "Fortinet",           ticker: "FTNT", people: [{ name: "Ken Xie",          role: "CEO & Founder" }] },
-      { name: "Workday",            ticker: "WDAY", people: [{ name: "Carl Eschenbach",  role: "CEO" }] },
-      { name: "Datadog",            ticker: "DDOG", people: [{ name: "Olivier Pomel",    role: "CEO & Co-founder" }] },
-      { name: "MongoDB",            ticker: "MDB",  people: [{ name: "Dev Ittycheria",   role: "CEO" }] },
-      { name: "Cloudflare",         ticker: "NET",  people: [{ name: "Matthew Prince",   role: "CEO & Co-founder" }, { name: "Michelle Zatlyn",    role: "President & COO & Co-founder" }] },
-      { name: "Confluent",          ticker: "CFLT", people: [{ name: "Jay Kreps",        role: "CEO & Co-founder" }] },
-      { name: "HashiCorp",                          people: [{ name: "Armon Dadgar",      role: "Co-founder & CTO" }, { name: "Mitchell Hashimoto", role: "Co-founder" }] },
-    ],
-  },
-  {
-    label: "Internet",
-    companies: [
-      { name: "Netflix",          ticker: "NFLX", people: [{ name: "Ted Sarandos",    role: "Co-CEO" },              { name: "Greg Peters",      role: "Co-CEO" },               { name: "Reed Hastings",    role: "Co-founder & Executive Chairman" }] },
-      { name: "Uber",             ticker: "UBER", people: [{ name: "Dara Khosrowshahi", role: "CEO" },              { name: "Travis Kalanick",  role: "Co-founder" }] },
-      { name: "Booking Holdings", ticker: "BKNG", people: [{ name: "Glenn Fogel",      role: "CEO" }] },
-      { name: "Spotify",          ticker: "SPOT", people: [{ name: "Daniel Ek",        role: "CEO & Co-founder" }] },
-      { name: "MercadoLibre",     ticker: "MELI", people: [{ name: "Marcos Galperin",  role: "CEO & Founder" }] },
-      { name: "DoorDash",         ticker: "DASH", people: [{ name: "Tony Xu",          role: "CEO & Co-founder" }] },
-      { name: "Sea Ltd",          ticker: "SE",   people: [{ name: "Forrest Li",       role: "CEO & Founder" }] },
-      { name: "Airbnb",           ticker: "ABNB", people: [{ name: "Brian Chesky",     role: "CEO & Co-founder" },    { name: "Joe Gebbia",       role: "Co-founder" },           { name: "Nathan Blecharczyk", role: "Co-founder & Chief Strategy Officer" }] },
-      { name: "PayPal",           ticker: "PYPL", people: [{ name: "Alex Chriss",      role: "CEO" },                 { name: "Peter Thiel",      role: "Co-founder" }] },
-      { name: "Coupang",          ticker: "CPNG", people: [{ name: "Bom Kim",          role: "CEO & Founder" }] },
-      { name: "Block",            ticker: "XYZ",  people: [{ name: "Jack Dorsey",      role: "CEO & Founder" }] },
-      { name: "Roblox",           ticker: "RBLX", people: [{ name: "David Baszucki",   role: "CEO & Founder" }] },
-      { name: "Robinhood",        ticker: "HOOD", people: [{ name: "Vlad Tenev",       role: "CEO & Co-founder" },    { name: "Baiju Bhatt",      role: "Co-founder" }] },
-      { name: "Reddit",           ticker: "RDDT", people: [{ name: "Steve Huffman",    role: "CEO & Co-founder" }] },
-      { name: "Pinterest",        ticker: "PINS", people: [{ name: "Bill Ready",       role: "CEO" },                 { name: "Ben Silbermann",   role: "Co-founder & Executive Chairman" }] },
-      { name: "Lyft",             ticker: "LYFT", people: [{ name: "David Risher",     role: "CEO" }] },
-      { name: "Instacart",        ticker: "CART", people: [{ name: "Fidji Simo",       role: "CEO" }] },
-      { name: "Duolingo",         ticker: "DUOL", people: [{ name: "Luis von Ahn",     role: "CEO & Co-founder" }] },
-    ],
-  },
-];
+type Category = ScoutCategory;
 
 const STORAGE_KEY = "scout-watchlist-v3";
 
-function loadWatchlist(): Category[] {
-  if (typeof window === "undefined") return WATCHLIST_DEFAULT;
+// Instant-paint cache only — the backend (GET/PUT /api/scout/watchlist) is the
+// source of truth the Podscan scan actually searches against.
+function loadCachedWatchlist(): Category[] {
+  if (typeof window === "undefined") return [];
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) return WATCHLIST_DEFAULT;
-    const parsed = JSON.parse(saved) as Category[];
-    // Back-fill people from WATCHLIST_DEFAULT for any company that has none saved
-    return parsed.map((cat) => {
-      const defCat = WATCHLIST_DEFAULT.find((c) => c.label === cat.label);
-      return {
-        ...cat,
-        companies: cat.companies.map((co) => {
-          if (co.people && co.people.length > 0) return co;
-          const defCo = defCat?.companies.find((c) => c.name === co.name);
-          return defCo?.people ? { ...co, people: defCo.people } : co;
-        }),
-      };
-    });
+    return saved ? (JSON.parse(saved) as Category[]) : [];
   } catch {
-    return WATCHLIST_DEFAULT;
+    return [];
   }
 }
 
@@ -187,17 +70,9 @@ function CompanyRow({
   const nameRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (addingPerson) nameRef.current?.focus(); }, [addingPerson]);
 
-  // Merge roster people — always pull from WATCHLIST_DEFAULT as the source of truth,
-  // then layer in any people stored on co (user additions) and seenPeople from appearances.
-  const defaultPeople =
-    WATCHLIST_DEFAULT.flatMap((c) => c.companies)
-      .find((c) => c.name === co.name)?.people ?? [];
-  const savedPeople = co.people ?? [];
-  const rosterPeople: Person[] = [...defaultPeople];
-  for (const p of savedPeople) {
-    if (!rosterPeople.find((r) => r.name === p.name)) rosterPeople.push(p);
-  }
-  const allPeople: Person[] = [...rosterPeople];
+  // co.people comes straight from the backend watchlist now — just layer in
+  // seenPeople from appearances that aren't tracked yet.
+  const allPeople: Person[] = [...(co.people ?? [])];
   for (const p of seenPeople) {
     if (!allPeople.find((r) => r.name === p.name)) allPeople.push(p);
   }
@@ -423,6 +298,15 @@ function AppearanceCard({ a }: { a: ScoutAppearance }) {
                 )}
               </>
             )}
+            {txState.phase === "done" && (
+              <a
+                href={`/episode/${txState.episode_id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="shrink-0 rounded-full border border-[#00d4ff]/30 bg-[#00d4ff]/5 px-2 py-0.5 text-[10px] font-medium text-[#00d4ff] transition hover:bg-[#00d4ff]/10"
+              >
+                Review nuggets →
+              </a>
+            )}
             <span className="ml-auto shrink-0 text-[11px] text-zinc-600">{relativeTime(a.published_at)}</span>
           </div>
           <p className="text-[14px] font-medium leading-snug text-zinc-200 group-hover:text-white transition">
@@ -499,7 +383,7 @@ function AppearanceCard({ a }: { a: ScoutAppearance }) {
                   className="rounded-lg border border-[#00d4ff]/30 bg-[#00d4ff]/5 px-3.5 py-1.5 text-[12px] font-medium text-[#00d4ff] transition hover:bg-[#00d4ff]/10"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  View nuggets →
+                  Review nuggets →
                 </a>
               </div>
             )}
@@ -541,10 +425,13 @@ export default function ScoutPage() {
   const [refreshing,    setRefreshing]    = useState(false);
   const [lastNew,       setLastNew]       = useState<number | null>(null);
   const [scanErrors,    setScanErrors]    = useState<string[]>([]);
+  const [cooldown,      setCooldown]      = useState<ScoutRefreshKickoff | null>(null);
+  const [progress,      setProgress]      = useState<{ done: number; total: number; rosterSize: number } | null>(null);
   const [filterCompany, setFilterCompany] = useState("");
 
-  // Watchlist state — hydrated from localStorage on mount
-  const [watchlist,      setWatchlist]      = useState<Category[]>(WATCHLIST_DEFAULT);
+  // Watchlist state — instant-paint from localStorage cache, then reconciled
+  // against the backend (the actual source of truth the scan searches) on mount.
+  const [watchlist,      setWatchlist]      = useState<Category[]>(() => loadCachedWatchlist());
   const [addingTo,       setAddingTo]       = useState<string | null>(null);
   const [watchlistOpen,  setWatchlistOpen]  = useState(false);
   const watchlistRef = useRef<HTMLDivElement>(null);
@@ -569,11 +456,19 @@ export default function ScoutPage() {
 
   const days = Math.max(1, Math.ceil((Date.now() - new Date(dateFrom).getTime()) / 86400000));
 
-  useEffect(() => { setWatchlist(loadWatchlist()); }, []);
+  useEffect(() => {
+    getScoutWatchlist()
+      .then((wl) => {
+        setWatchlist(wl);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(wl));
+      })
+      .catch(() => { /* backend may not be running; keep the cached/local list */ });
+  }, []);
 
   function saveWatchlist(next: Category[]) {
     setWatchlist(next);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    putScoutWatchlist(next).catch(() => {});
   }
 
   function deleteCompany(catLabel: string, name: string) {
@@ -628,23 +523,47 @@ export default function ScoutPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function handleRefresh() {
-    // Podscan search + transcription now run on a nightly schedule (see
-    // .github/workflows/scout.yml); this just reloads what that job has
-    // already produced and retries insight extraction for anything left
-    // transcribed/failed (fast — no Podscan/AssemblyAI calls).
+  async function pollUntilDone() {
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const status = await getScoutRefreshStatus();
+      setProgress({ done: status.processing_done, total: status.processing_total, rosterSize: status.roster_size });
+      if (status.status !== "running") {
+        if (status.status === "error" && status.errors.length > 0) setScanErrors(status.errors);
+        else setLastNew(status.new);
+        return;
+      }
+    }
+  }
+
+  async function doRefresh(force = false) {
     setRefreshing(true);
     setLastNew(null);
     setScanErrors([]);
+    setCooldown(null);
+    setProgress(null);
     try {
-      const { queued } = await reprocessPendingScout();
-      setLastNew(queued);
+      const kickoff = await refreshScout(days, force);
+      if (kickoff.status === "cooldown") {
+        setCooldown(kickoff);
+        return;
+      }
+      // "started" or "already_running" both mean: poll until the run finishes.
+      await pollUntilDone();
       await load();
     } catch (err: unknown) {
       setScanErrors([err instanceof Error ? err.message : "Refresh failed"]);
     } finally {
       setRefreshing(false);
     }
+  }
+
+  const handleRefresh = () => doRefresh(false);
+
+  function refreshStatusLabel(): string {
+    if (!progress) return "Scanning for new appearances…";
+    if (progress.total === 0) return `Scanning ${progress.rosterSize} tracked people…`;
+    return `Processing ${progress.done}/${progress.total} episodes…`;
   }
 
   const fromDate = new Date(dateFrom);
@@ -702,15 +621,33 @@ export default function ScoutPage() {
               </svg>
               {refreshing ? "Refreshing…" : "Refresh"}
             </button>
+            {refreshing && (
+              <p className="text-[11px] text-zinc-500">{refreshStatusLabel()}</p>
+            )}
             {!refreshing && lastNew !== null && scanErrors.length === 0 && (
               <p className="text-[11px] text-[#00d4ff]/60">
-                {lastNew > 0 ? `Retrying ${lastNew} pending` : "Up to date"}
+                {lastNew > 0 ? `${lastNew} new appearance${lastNew === 1 ? "" : "s"}` : "Up to date"}
               </p>
             )}
             {!refreshing && scanErrors.length > 0 && (
               <p className="max-w-xs text-right text-[11px] text-red-400/80" title={scanErrors.join("\n")}>
                 {scanErrors[0]}
               </p>
+            )}
+            {!refreshing && cooldown && (
+              <div className="max-w-xs text-right">
+                <p className="text-[11px] text-zinc-500">
+                  {cooldown.reason === "quota"
+                    ? `Podscan quota exhausted — resets ${cooldown.retry_at ? new Date(cooldown.retry_at).toLocaleString() : "soon"}`
+                    : `Last scanned ${cooldown.last_scan_at ? relativeTime(cooldown.last_scan_at) : "recently"} — next scan at ${cooldown.retry_at ? new Date(cooldown.retry_at).toLocaleString() : "later"}`}
+                </p>
+                <button
+                  onClick={() => doRefresh(true)}
+                  className="text-[11px] text-[#00d4ff]/70 underline transition hover:text-[#00d4ff]"
+                >
+                  Scan anyway
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -767,9 +704,7 @@ export default function ScoutPage() {
                       </p>
                       <div className="space-y-0.5">
                         {cat.companies.map((co) => {
-                          const people =
-                            WATCHLIST_DEFAULT.flatMap((c) => c.companies)
-                              .find((c) => c.name === co.name)?.people ?? co.people ?? [];
+                          const people = co.people ?? [];
                           return (
                             <div key={co.name} className="rounded-lg px-2 py-1.5 transition hover:bg-white/[0.04]">
                               <div className="flex items-center gap-2">

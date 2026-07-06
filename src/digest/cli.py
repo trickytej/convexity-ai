@@ -16,12 +16,12 @@ from .pipeline import (
     discover_show,
     generate_insights,
     ingest_window,
-    process_episode_pipeline,
     remap_speakers,
     transcribe_episode,
 )
 from .registry import load_registry
-from .scout.pipeline import ingest_appearance_row, run_cycle
+from .scout import roster as scout_roster
+from .scout.pipeline import sync_and_process
 from .store import get_conn, init_db
 from .store import repo
 from .store.models import EpisodeStatus
@@ -476,8 +476,14 @@ def scout_sync(
 
     with get_conn(settings.resolved_db_path) as conn:
         init_db(conn)
-        with console.status("[bold]Searching Podscan...[/bold]"):
-            result = run_cycle(conn, days=days)
+        flat_roster = scout_roster.flatten_watchlist(scout_roster.load_watchlist(conn))
+
+        with console.status("[bold]Searching Podscan...[/bold]") as widget:
+            def _on_progress(done: int, total: int) -> None:
+                widget.update(f"[bold]Ingesting[/bold] {done}/{total} appearance(s)...")
+
+            result = sync_and_process(conn, settings, flat_roster, days=days, on_progress=_on_progress)
+
         console.print(
             f"Podscan search: [green]{result.new}[/green] new, "
             f"{result.skipped} already known, {len(result.errors)} error(s)."
@@ -485,20 +491,13 @@ def scout_sync(
         for err in result.errors:
             console.print(f"  [red]error:[/red] {err}")
 
-        rows = conn.execute("SELECT * FROM scout_appearances WHERE episode_id IS NULL").fetchall()
-        with console.status(f"[bold]Ingesting {len(rows)} appearance(s)...[/bold]") as widget:
-            for row in rows:
-                widget.update(f"[bold]Ingesting[/bold] {row['episode_title'][:50]}...")
-                try:
-                    episode_id, _ = ingest_appearance_row(conn, row, settings)
-                except ValueError as exc:
-                    table.add_row("-", row["episode_title"][:50], f"[red]{exc}[/red]")
-                    continue
-                process_episode_pipeline(conn, episode_id, settings)
-                ep = repo.get_episode(conn, episode_id)
-                style = "green" if ep and ep.status == EpisodeStatus.INSIGHTS_EXTRACTED else "red"
-                status = ep.status.value if ep else "unknown"
-                table.add_row(str(episode_id), row["episode_title"][:50], f"[{style}]{status}[/{style}]")
+        for row in result.rows:
+            style = "green" if row["status"] == "insights_extracted" else "red"
+            table.add_row(
+                str(row["episode_id"]) if row["episode_id"] else "-",
+                row["title"][:50],
+                f"[{style}]{row['status']}[/{style}]",
+            )
 
     console.print(table)
 
@@ -703,34 +702,6 @@ def newsletter(
         )
     else:
         console.print(md)
-
-
-@app.command()
-def scout(
-    days:    int  = typer.Option(30,    "--days",    "-d", help="Look-back window in days."),
-    verbose: bool = typer.Option(False, "--verbose", "-v"),
-) -> None:
-    """Search Listen Notes for podcast appearances from watchlist companies."""
-    _setup_logging(verbose)
-    settings = get_settings()
-    if not settings.listennotes_api_key:
-        console.print("[yellow]LISTENNOTES_API_KEY not set — nothing to do.[/yellow]")
-        raise typer.Exit(code=1)
-
-    from .scout.pipeline import run_cycle
-    from .store.db import init_db
-
-    console.print(f"[cyan]Scout[/cyan] scanning {days}-day window via Listen Notes…")
-    with get_conn(settings.resolved_db_path) as conn:
-        init_db(conn)
-        result = run_cycle(conn, days=days)
-
-    console.print(
-        f"[green]Done.[/green]  "
-        f"[bold]{result.new}[/bold] new · {result.skipped} already seen"
-    )
-    for err in result.errors:
-        console.print(f"  [red]error:[/red] {err}")
 
 
 @app.command()

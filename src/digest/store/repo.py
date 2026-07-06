@@ -838,6 +838,25 @@ def nugget_type_counts(conn: sqlite3.Connection, episode_id: int) -> dict[str, i
     return {r["type"]: r["n"] for r in rows}
 
 
+_META_TABLE_SQL = "CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+
+
+def meta_get(conn: sqlite3.Connection, key: str) -> str | None:
+    conn.execute(_META_TABLE_SQL)
+    row = conn.execute("SELECT value FROM app_meta WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else None
+
+
+def meta_set(conn: sqlite3.Connection, key: str, value: str) -> None:
+    conn.execute(_META_TABLE_SQL)
+    conn.execute(
+        "INSERT INTO app_meta (key, value) VALUES (?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (key, value),
+    )
+    conn.commit()
+
+
 def status_matrix(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
         """

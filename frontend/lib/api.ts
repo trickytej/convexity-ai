@@ -564,6 +564,24 @@ export function getScoutAppearances(params: { company?: string; days?: number } 
   return getJSON<ScoutAppearance[]>(`/api/scout/appearances?${q.toString()}`);
 }
 
+export type ScoutPerson   = { name: string; role: string };
+export type ScoutCompany  = { name: string; ticker?: string; people?: ScoutPerson[] };
+export type ScoutCategory = { label: string; companies: ScoutCompany[] };
+
+export async function getScoutWatchlist(): Promise<ScoutCategory[]> {
+  const { watchlist } = await getJSON<{ watchlist: ScoutCategory[] }>("/api/scout/watchlist");
+  return watchlist;
+}
+
+export async function putScoutWatchlist(watchlist: ScoutCategory[]): Promise<void> {
+  const res = await apiFetch(`/api/scout/watchlist`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(watchlist),
+  });
+  if (!res.ok) throw new Error(`watchlist save failed: ${res.status}`);
+}
+
 export interface ScoutRefreshKickoff {
   status: "started" | "already_running" | "cooldown";
   reason?: "quota" | "recent_scan";
@@ -584,6 +602,9 @@ export interface ScoutRefreshStatus {
   new: number;
   skipped: number;
   errors: string[];
+  roster_size: number;
+  processing_done: number;
+  processing_total: number;
 }
 
 export function getScoutRefreshStatus(): Promise<ScoutRefreshStatus> {
