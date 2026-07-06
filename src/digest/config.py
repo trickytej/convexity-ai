@@ -60,6 +60,18 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("PODSCAN_API_KEY", "DIGEST_PODSCAN_API_KEY"),
     )
 
+    # Hosted (Turso) database. Scout always connects here — see store.db.connect_turso —
+    # so appearance data lands in production even when the rest of the app runs against
+    # a local db file.
+    turso_database_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("TURSO_DATABASE_URL", "LIBSQL_URL"),
+    )
+    turso_auth_token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("TURSO_AUTH_TOKEN", "LIBSQL_AUTH_TOKEN"),
+    )
+
     # High-volume / mechanical work: extraction, correction, speaker-id, sectors.
     anthropic_model: str = "claude-sonnet-4-6"
     # Low-volume / high-value synthesis: weekly report + per-episode digest.

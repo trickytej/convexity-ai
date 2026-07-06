@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 
 import typer
@@ -23,6 +24,7 @@ from .registry import load_registry
 from .scout import roster as scout_roster
 from .scout.pipeline import sync_and_process
 from .store import get_conn, init_db
+from .store.db import connect_turso
 from .store import repo
 from .store.models import EpisodeStatus
 
@@ -449,14 +451,21 @@ def scout_sync(
     days: int = typer.Option(7, "--days", "-d", help="Look-back window for the Podscan search."),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
-    """Daily Scout driver: search Podscan for new watchlist appearances, ingest
-    each one (Podscan transcript if available, else AssemblyAI), and extract
-    insights. Intended to run on a schedule (see .github/workflows/scout.yml).
+    """Scout driver: search Podscan for new watchlist appearances, ingest each
+    one (Podscan transcript if available, else AssemblyAI), and extract
+    insights. Always runs against the hosted (Turso) database — never the
+    local db file (see .github/workflows/scout.yml for the on-demand job).
     """
     _setup_logging(verbose)
     settings = get_settings()
     settings.ensure_dirs()
 
+    if not settings.turso_database_url or not settings.turso_auth_token:
+        console.print(
+            "[red]TURSO_DATABASE_URL / TURSO_AUTH_TOKEN are not set.[/red] "
+            "Scout only writes to the hosted database; add them to .env."
+        )
+        raise typer.Exit(code=1)
     if not settings.podscan_api_key:
         console.print("[red]PODSCAN_API_KEY is not set.[/red] Add it to .env.")
         raise typer.Exit(code=1)
@@ -474,7 +483,7 @@ def scout_sync(
     table.add_column("appearance")
     table.add_column("status")
 
-    with get_conn(settings.resolved_db_path) as conn:
+    with closing(connect_turso(settings)) as conn:
         init_db(conn)
         flat_roster = scout_roster.flatten_watchlist(scout_roster.load_watchlist(conn))
 

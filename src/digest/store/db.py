@@ -316,6 +316,32 @@ def _turso_target() -> tuple[str | None, str | None]:
     return (url or None), (token or None)
 
 
+class TursoNotConfiguredError(RuntimeError):
+    """Raised when a Turso-only code path runs without Turso credentials."""
+
+
+def connect_turso(settings) -> _Conn:
+    """Open a connection to the hosted (Turso) database, never a local file.
+
+    Scout uses this for every read and write so appearance data always lands in
+    the production database, regardless of what the rest of the process is
+    pointed at. Credentials come from Settings (env vars or .env).
+    """
+    url = getattr(settings, "turso_database_url", None)
+    token = getattr(settings, "turso_auth_token", None)
+    if not url or not token:
+        raise TursoNotConfiguredError(
+            "Scout requires the hosted database: set TURSO_DATABASE_URL and "
+            "TURSO_AUTH_TOKEN (env or .env)."
+        )
+    conn = _Conn(libsql.connect(database=url, auth_token=token))
+    try:
+        conn.execute("PRAGMA foreign_keys = ON;")
+    except Exception:
+        pass
+    return conn
+
+
 def connect(db_path: Path) -> _Conn:
     """Open a connection. Remote (Turso) when env is set, else a local libSQL file."""
     url, token = _turso_target()

@@ -13,7 +13,8 @@ from ...config import get_settings
 from ...scout import roster
 from ...scout.pipeline import ingest_appearance_row
 from ...store import repo
-from ..deps import get_db
+from ...store.db import connect_turso
+from ..deps import get_scout_db
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["scout"])
@@ -75,7 +76,7 @@ def list_appearances(
     company: str | None = Query(None),
     days:    int        = Query(90),
     limit:   int        = Query(200),
-    db: sqlite3.Connection = Depends(get_db),
+    db: sqlite3.Connection = Depends(get_scout_db),
 ) -> list[dict]:
     """Return stored Scout appearances, newest first."""
     sql = "SELECT * FROM scout_appearances WHERE 1=1"
@@ -97,13 +98,13 @@ def list_appearances(
 
 
 @router.get("/scout/watchlist")
-def get_watchlist(db: sqlite3.Connection = Depends(get_db)) -> dict:
+def get_watchlist(db: sqlite3.Connection = Depends(get_scout_db)) -> dict:
     """Return the tracked companies/people, seeding defaults on first use."""
     return {"watchlist": roster.load_watchlist(db)}
 
 
 @router.put("/scout/watchlist")
-def put_watchlist(watchlist: list[dict], db: sqlite3.Connection = Depends(get_db)) -> dict:
+def put_watchlist(watchlist: list[dict], db: sqlite3.Connection = Depends(get_scout_db)) -> dict:
     """Save the tracked companies/people — the single source of truth the next
     /scout/refresh scan searches against."""
     roster.save_watchlist(db, watchlist)
@@ -115,15 +116,14 @@ def refresh_appearances(
     background_tasks: BackgroundTasks,
     days: int = Query(30, description="Look-back window in days"),
     force: bool = Query(False, description="Bypass the scan cooldown"),
-    db: sqlite3.Connection = Depends(get_db),
+    db: sqlite3.Connection = Depends(get_scout_db),
 ) -> dict:
     """Kick off a Podscan scan for the current watchlist in the background, then
     ingest + transcribe + extract insights for everything it finds within the
-    *days* window (older pending appearances are left for the nightly
-    scout-sync job) and return immediately. Poll GET /scout/refresh/status for
+    *days* window (older pending appearances are left for a manually triggered
+    scout-sync run) and return immediately. Poll GET /scout/refresh/status for
     the real outcome.
     """
-    from ...store.db import connect as _db_connect
     from ...scout.pipeline import sync_and_process
 
     if _refresh_state["status"] == "running":
@@ -163,8 +163,7 @@ def refresh_appearances(
         _refresh_state.update(processing_done=done, processing_total=total)
 
     def _run() -> None:
-        settings = get_settings()
-        conn = _db_connect(settings.resolved_db_path)
+        conn = connect_turso(get_settings())
         try:
             result = sync_and_process(
                 conn, settings, flat_roster, days=days,
@@ -201,10 +200,9 @@ def refresh_status() -> dict:
 
 def _reprocess_one(episode_id: int) -> None:
     from ...pipeline import process_episode_pipeline
-    from ...store.db import connect as _db_connect
 
     settings = get_settings()
-    conn = _db_connect(settings.resolved_db_path)
+    conn = connect_turso(settings)
     try:
         process_episode_pipeline(conn, episode_id, settings)
     finally:
@@ -212,7 +210,7 @@ def _reprocess_one(episode_id: int) -> None:
 
 
 @router.post("/scout/reprocess-pending")
-def reprocess_pending(background_tasks: BackgroundTasks, db: sqlite3.Connection = Depends(get_db)) -> dict:
+def reprocess_pending(background_tasks: BackgroundTasks, db: sqlite3.Connection = Depends(get_scout_db)) -> dict:
     """Retry insight extraction for appearances already ingested but not yet
     insights_extracted (e.g. the nightly scout-sync job's LLM call failed, or
     was interrupted mid-run). Fast: no Podscan/AssemblyAI calls for episodes
@@ -237,7 +235,7 @@ def reprocess_pending(background_tasks: BackgroundTasks, db: sqlite3.Connection 
 @router.post("/scout/appearances/{appearance_id}/ingest")
 def ingest_appearance(
     appearance_id: int,
-    db: sqlite3.Connection = Depends(get_db),
+    db: sqlite3.Connection = Depends(get_scout_db),
 ) -> dict:
     """Create an episode record from a Scout appearance and kick off transcription.
 

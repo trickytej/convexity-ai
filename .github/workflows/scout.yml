@@ -1,13 +1,12 @@
 name: scout
 
-# Scheduled Scout sync: search Podscan for new watchlist appearances, ingest
+# On-demand Scout sync: search Podscan for new watchlist appearances, ingest
 # each one (Podscan transcript if available, else AssemblyAI), and extract
-# insights — all against the hosted Turso DB. Runs daily; also runnable on
-# demand from the Actions tab.
+# insights — all against the hosted Turso DB. Run manually from the Actions
+# tab; no schedule for now (deliberately removed — re-add a `schedule:` block
+# here if/when nightly syncs are wanted again).
 
 on:
-  schedule:
-    - cron: "0 0 * * *" # 00:00 UTC (~8PM ET)
   workflow_dispatch:
     inputs:
       days:
