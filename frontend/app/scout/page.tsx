@@ -365,10 +365,19 @@ function AppearanceCard({ a }: { a: ScoutAppearance }) {
               </span>
             )}
             {txState.phase === "processing" && (
-              <span className="flex items-center gap-2 text-[12px] text-zinc-500">
-                <span className="inline-block h-2.5 w-2.5 animate-spin rounded-full border border-zinc-600 border-t-[#00d4ff]" />
-                <EpisodeStatusLabel episode_id={txState.episode_id} />
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="flex items-center gap-2 text-[12px] text-zinc-500">
+                  <span className="inline-block h-2.5 w-2.5 animate-spin rounded-full border border-zinc-600 border-t-[#00d4ff]" />
+                  <EpisodeStatusLabel episode_id={txState.episode_id} />
+                </span>
+                <button
+                  onClick={handleTranscribe}
+                  title="Re-kick processing if it looks stuck (safe: skips anything already done)"
+                  className="text-[11px] text-zinc-600 underline hover:text-zinc-400"
+                >
+                  Restart
+                </button>
+              </div>
             )}
             {txState.phase === "done" && (
               <div className="flex items-center gap-3">

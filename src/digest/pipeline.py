@@ -156,6 +156,57 @@ def persist_parsed_transcript(
     return repo.insert_transcript(conn, transcript)
 
 
+def rebuild_transcript_file(
+    conn: sqlite3.Connection,
+    episode: Episode,
+    transcript_row: sqlite3.Row,
+    settings: Settings,
+) -> Path | None:
+    """Recreate the normalized transcript JSON from the segments stored in the
+    DB, for hosts where the original file no longer exists (ephemeral disks).
+    Returns the new path, or None when no segments were persisted either."""
+    segments = repo.get_segments(conn, transcript_row["id"])
+    if not segments:
+        return None
+
+    out_dir = settings.transcripts_dir / episode.show_slug
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{episode.id}.json"
+
+    payload = {
+        "episode_id": episode.id,
+        "show_slug": episode.show_slug,
+        "title": episode.title,
+        "published_at": episode.published_at.isoformat() if episode.published_at else None,
+        "source": transcript_row["source"],
+        "provider": transcript_row["provider"],
+        "language": transcript_row["language"],
+        "has_diarization": bool(transcript_row["has_diarization"]),
+        "corrected": bool(transcript_row["corrected"]),
+        "word_count": transcript_row["word_count"],
+        "meta": json.loads(transcript_row["meta"]) if transcript_row["meta"] else None,
+        "segments": [
+            {
+                "idx": s.idx,
+                "speaker_name": s.speaker_name,
+                "speaker_label": s.speaker_label,
+                "start_ms": s.start_ms,
+                "end_ms": s.end_ms,
+                "text": s.text,
+            }
+            for s in segments
+        ],
+    }
+    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    conn.execute(
+        "UPDATE transcripts SET normalized_path = ? WHERE id = ?",
+        (str(out_path), transcript_row["id"]),
+    )
+    conn.commit()
+    return out_path
+
+
 def acquire_episode(
     conn: sqlite3.Connection,
     episode: Episode,
@@ -429,11 +480,24 @@ def generate_insights(
             episode.id, True, detail="already extracted (use --force to redo)", skipped=True
         )
 
+    # The normalized JSON lives on whichever machine transcribed the episode;
+    # on a redeployed/other instance the file is gone while the segments
+    # survive in the DB. Rebuild it so extraction can run anywhere.
+    transcript_path = Path(transcript["normalized_path"])
+    if not transcript_path.exists():
+        rebuilt = rebuild_transcript_file(conn, episode, transcript, settings)
+        if rebuilt is None:
+            return InsightResult(
+                episode.id, False,
+                error="transcript unavailable: normalized file missing and no segments stored",
+            )
+        transcript_path = rebuilt
+
     from .insights.extract import extract_nuggets
     from .transcribe.llm import LLMError
 
     try:
-        nuggets = extract_nuggets(episode, show, transcript["normalized_path"], settings)
+        nuggets = extract_nuggets(episode, show, transcript_path, settings)
     except LLMError as exc:
         return InsightResult(episode.id, False, error=f"{type(exc).__name__}: {exc}")
     except (FileNotFoundError, OSError) as exc:
