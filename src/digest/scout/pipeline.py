@@ -221,6 +221,10 @@ def run_cycle(conn, roster: list[tuple[str, str, str]], *, days: int = 7) -> Sco
                     )
                 else:
                     result.skipped += 1
+                # Commit per appearance: the connection can sit idle for minutes
+                # between Podscan searches, and Turso reaps idle streams — an
+                # end-of-pass commit would lose every insert accumulated so far.
+                conn.commit()
             except Exception as exc:
                 result.errors.append(f"{person_name}: {exc}")
                 log.warning("insert failed for %s: %s", person_name, exc)

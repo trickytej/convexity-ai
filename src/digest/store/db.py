@@ -258,34 +258,85 @@ class _Cursor:
         return getattr(self._raw, "rowcount", -1)
 
 
+def _is_stale_stream_error(exc: Exception) -> bool:
+    """True when the remote (Hrana) stream backing this connection has been
+    reaped server-side — Turso closes streams that idle for a few minutes,
+    which long pipelines hit whenever they wait on external APIs between
+    queries. The connection object is unusable; only a reconnect recovers."""
+    msg = str(exc).lower()
+    return "stream not found" in msg or "stream expired" in msg
+
+
 class _Conn:
     """sqlite3.Connection-shaped wrapper around a libsql connection."""
 
-    def __init__(self, raw: Any) -> None:
+    def __init__(self, raw: Any, reconnect: Any = None) -> None:
         self._raw = raw
+        self._reconnect = reconnect  # () -> raw connection, for stale-stream recovery
         self.row_factory: Any = None  # accepted but ignored — rows are always Row
 
+    def _recover(self) -> None:
+        try:
+            self._raw.close()
+        except Exception:
+            pass
+        self._raw = self._reconnect()
+        try:
+            self._raw.execute("PRAGMA foreign_keys = ON;")
+        except Exception:
+            pass
+
     def _exec_raw(self, sql: str, params: Any) -> Any:
-        if params is None:
-            return self._raw.execute(sql)
-        return self._raw.execute(sql, params)
+        try:
+            if params is None:
+                return self._raw.execute(sql)
+            return self._raw.execute(sql, params)
+        except Exception as exc:
+            if self._reconnect is None or not _is_stale_stream_error(exc):
+                raise
+            self._recover()
+            if params is None:
+                return self._raw.execute(sql)
+            return self._raw.execute(sql, params)
 
     def execute(self, sql: str, params: Any = None) -> _Cursor:
         return _Cursor(self, self._exec_raw(sql, params))
 
     def executemany(self, sql: str, seq: Any) -> _Cursor:
-        self._raw.executemany(sql, list(seq))
+        rows = list(seq)
+        try:
+            self._raw.executemany(sql, rows)
+        except Exception as exc:
+            if self._reconnect is None or not _is_stale_stream_error(exc):
+                raise
+            self._recover()
+            self._raw.executemany(sql, rows)
         return _Cursor(self, None)
 
     def executescript(self, script: str) -> _Cursor:
-        self._raw.executescript(script)
+        try:
+            self._raw.executescript(script)
+        except Exception as exc:
+            if self._reconnect is None or not _is_stale_stream_error(exc):
+                raise
+            self._recover()
+            self._raw.executescript(script)
         return _Cursor(self, None)
 
     def cursor(self) -> _Cursor:
         return _Cursor(self, None)
 
     def commit(self) -> None:
-        self._raw.commit()
+        try:
+            self._raw.commit()
+        except Exception as exc:
+            if self._reconnect is None or not _is_stale_stream_error(exc):
+                raise
+            # The stream died with this transaction's statements on it — they
+            # are gone server-side and cannot be committed. Recover the
+            # connection so subsequent work proceeds, then surface the loss.
+            self._recover()
+            raise
 
     def rollback(self) -> None:
         try:
@@ -334,7 +385,10 @@ def connect_turso(settings) -> _Conn:
             "Scout requires the hosted database: set TURSO_DATABASE_URL and "
             "TURSO_AUTH_TOKEN (env or .env)."
         )
-    conn = _Conn(libsql.connect(database=url, auth_token=token))
+    def _open():  # fresh raw connection, reused for stale-stream recovery
+        return libsql.connect(database=url, auth_token=token)
+
+    conn = _Conn(_open(), reconnect=_open)
     try:
         conn.execute("PRAGMA foreign_keys = ON;")
     except Exception:
@@ -346,8 +400,10 @@ def connect(db_path: Path) -> _Conn:
     """Open a connection. Remote (Turso) when env is set, else a local libSQL file."""
     url, token = _turso_target()
     if url:
-        raw = libsql.connect(database=url, auth_token=token)
-        conn = _Conn(raw)
+        def _open():  # fresh raw connection, reused for stale-stream recovery
+            return libsql.connect(database=url, auth_token=token)
+
+        conn = _Conn(_open(), reconnect=_open)
     else:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         raw = libsql.connect(str(db_path))
