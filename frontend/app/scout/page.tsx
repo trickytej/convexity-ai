@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   getScoutAppearances, ingestScoutAppearance, processEpisode, getEpisodeStatus,
   getScoutWatchlist, putScoutWatchlist, refreshScout, getScoutRefreshStatus,
-  getScoutXAccounts, putScoutXAccounts, getScoutTweets,
+  getScoutXAccounts, putScoutXAccounts, getScoutTweets, refreshScoutX, getScoutXRefreshStatus,
   type ScoutAppearance, type ScoutCategory, type ScoutRefreshKickoff, type ScoutTweetBucket,
 } from "@/lib/api";
 import { NuggetReviewCard } from "@/components/NuggetReviewCard";
@@ -445,7 +445,9 @@ export default function ScoutPage() {
   const [xConfigured,  setXConfigured]  = useState(true);
   const [newHandle,    setNewHandle]    = useState("");
   const [tweetBuckets, setTweetBuckets] = useState<ScoutTweetBucket[]>([]);
+  const [refreshingX,  setRefreshingX]  = useState(false);
   const [lastTweetsNew, setLastTweetsNew] = useState<number | null>(null);
+  const [xErrors,      setXErrors]      = useState<string[]>([]);
 
   // Watchlist state — instant-paint from localStorage cache, then reconciled
   // against the backend (the actual source of truth the scan searches) on mount.
@@ -576,10 +578,7 @@ export default function ScoutPage() {
       setProgress({ done: status.processing_done, total: status.processing_total, rosterSize: status.roster_size });
       if (status.status !== "running") {
         if (status.status === "error" && status.errors.length > 0) setScanErrors(status.errors);
-        else {
-          setLastNew(status.new);
-          setLastTweetsNew(status.tweets_new ?? null);
-        }
+        else setLastNew(status.new);
         return;
       }
     }
@@ -588,7 +587,6 @@ export default function ScoutPage() {
   async function doRefresh(force = false) {
     setRefreshing(true);
     setLastNew(null);
-    setLastTweetsNew(null);
     setScanErrors([]);
     setCooldown(null);
     setProgress(null);
@@ -601,7 +599,6 @@ export default function ScoutPage() {
       // "started" or "already_running" both mean: poll until the run finishes.
       await pollUntilDone();
       await load();
-      await loadTweets();
     } catch (err: unknown) {
       setScanErrors([err instanceof Error ? err.message : "Refresh failed"]);
     } finally {
@@ -610,6 +607,32 @@ export default function ScoutPage() {
   }
 
   const handleRefresh = () => doRefresh(false);
+
+  async function doRefreshX() {
+    setRefreshingX(true);
+    setLastTweetsNew(null);
+    setXErrors([]);
+    try {
+      await refreshScoutX(days);
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const status = await getScoutXRefreshStatus();
+        if (status.status !== "running") {
+          if (status.status === "error" && status.errors.length > 0) setXErrors(status.errors);
+          else {
+            setLastTweetsNew(status.new);
+            if (status.errors.length > 0) setXErrors(status.errors);
+          }
+          break;
+        }
+      }
+      await loadTweets();
+    } catch (err: unknown) {
+      setXErrors([err instanceof Error ? err.message : "X refresh failed"]);
+    } finally {
+      setRefreshingX(false);
+    }
+  }
 
   function refreshStatusLabel(): string {
     if (!progress) return "Scanning for new appearances…";
@@ -668,59 +691,9 @@ export default function ScoutPage() {
             </h1>
           </div>
 
-          {/* Refresh */}
-          <div className="flex shrink-0 flex-col items-end gap-2 pt-1">
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-medium transition disabled:opacity-40 bg-[#00d4ff] text-[#001a26] hover:bg-[#00d4ff]/90"
-            >
-              <svg
-                className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
-                viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"
-              >
-                <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5" strokeLinecap="round" />
-                <path d="M8 1v3.5H4.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              {refreshing ? "Refreshing…" : "Refresh"}
-            </button>
-            {refreshing && (
-              <p className="text-[11px] text-zinc-500">{refreshStatusLabel()}</p>
-            )}
-            {!refreshing && lastNew !== null && scanErrors.length === 0 && (
-              <p className="text-[11px] text-[#00d4ff]/60">
-                {lastNew > 0 || (lastTweetsNew ?? 0) > 0
-                  ? [
-                      lastNew > 0 ? `${lastNew} new appearance${lastNew === 1 ? "" : "s"}` : null,
-                      (lastTweetsNew ?? 0) > 0 ? `${lastTweetsNew} new tweet${lastTweetsNew === 1 ? "" : "s"}` : null,
-                    ].filter(Boolean).join(" · ")
-                  : "Up to date"}
-              </p>
-            )}
-            {!refreshing && scanErrors.length > 0 && (
-              <p className="max-w-xs text-right text-[11px] text-red-400/80" title={scanErrors.join("\n")}>
-                {scanErrors[0]}
-              </p>
-            )}
-            {!refreshing && cooldown && (
-              <div className="max-w-xs text-right">
-                <p className="text-[11px] text-zinc-500">
-                  {cooldown.reason === "quota"
-                    ? `Podscan quota exhausted — resets ${cooldown.retry_at ? new Date(cooldown.retry_at).toLocaleString() : "soon"}`
-                    : `Last scanned ${cooldown.last_scan_at ? relativeTime(cooldown.last_scan_at) : "recently"} — next scan at ${cooldown.retry_at ? new Date(cooldown.retry_at).toLocaleString() : "later"}`}
-                </p>
-                <button
-                  onClick={() => doRefresh(true)}
-                  className="text-[11px] text-[#00d4ff]/70 underline transition hover:text-[#00d4ff]"
-                >
-                  Scan anyway
-                </button>
-              </div>
-            )}
-          </div>
         </div>
 
-        {/* ── Date range + Watchlist button ── */}
+        {/* ── Date range + Watchlist + Refresh buttons ── */}
         <div className="mt-6 flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-[11px] uppercase tracking-widest text-zinc-600">From</label>
@@ -798,7 +771,86 @@ export default function ScoutPage() {
               </div>
             )}
           </div>
+
+          {/* Refresh: podcasts */}
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-2 self-end rounded-lg bg-[#00d4ff] px-4 py-1.5 text-[13px] font-medium text-[#001a26] transition hover:bg-[#00d4ff]/90 disabled:opacity-40"
+          >
+            <svg
+              className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
+              viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"
+            >
+              <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5" strokeLinecap="round" />
+              <path d="M8 1v3.5H4.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {refreshing ? "Refreshing…" : "Refresh Podcasts"}
+          </button>
+
+          {/* Refresh: X */}
+          <button
+            onClick={doRefreshX}
+            disabled={refreshingX}
+            className="flex items-center gap-2 self-end rounded-lg border border-[#00d4ff]/40 bg-[#00d4ff]/10 px-4 py-1.5 text-[13px] font-medium text-[#00d4ff] transition hover:bg-[#00d4ff]/20 disabled:opacity-40"
+          >
+            <svg
+              className={`h-3.5 w-3.5 ${refreshingX ? "animate-spin" : ""}`}
+              viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"
+            >
+              <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5" strokeLinecap="round" />
+              <path d="M8 1v3.5H4.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {refreshingX ? "Refreshing…" : "Refresh X"}
+          </button>
         </div>
+
+        {/* ── Refresh status lines ── */}
+        {(refreshing || refreshingX || lastNew !== null || lastTweetsNew !== null
+          || scanErrors.length > 0 || xErrors.length > 0 || cooldown) && (
+          <div className="mt-2 space-y-1">
+            {refreshing && (
+              <p className="text-[11px] text-zinc-500">Podcasts — {refreshStatusLabel()}</p>
+            )}
+            {!refreshing && lastNew !== null && scanErrors.length === 0 && (
+              <p className="text-[11px] text-[#00d4ff]/60">
+                Podcasts — {lastNew > 0 ? `${lastNew} new appearance${lastNew === 1 ? "" : "s"}` : "up to date"}
+              </p>
+            )}
+            {!refreshing && scanErrors.length > 0 && (
+              <p className="text-[11px] text-red-400/80" title={scanErrors.join("\n")}>
+                Podcasts — {scanErrors[0]}
+              </p>
+            )}
+            {!refreshing && cooldown && (
+              <p className="text-[11px] text-zinc-500">
+                {cooldown.reason === "quota"
+                  ? `Podscan quota exhausted — resets ${cooldown.retry_at ? new Date(cooldown.retry_at).toLocaleString() : "soon"}`
+                  : `Last scanned ${cooldown.last_scan_at ? relativeTime(cooldown.last_scan_at) : "recently"} — next scan at ${cooldown.retry_at ? new Date(cooldown.retry_at).toLocaleString() : "later"}`}
+                {" "}
+                <button
+                  onClick={() => doRefresh(true)}
+                  className="text-[#00d4ff]/70 underline transition hover:text-[#00d4ff]"
+                >
+                  Scan anyway
+                </button>
+              </p>
+            )}
+            {refreshingX && (
+              <p className="text-[11px] text-zinc-500">X — pulling posts for {xHandles.length} account{xHandles.length === 1 ? "" : "s"}…</p>
+            )}
+            {!refreshingX && lastTweetsNew !== null && xErrors.length === 0 && (
+              <p className="text-[11px] text-[#00d4ff]/60">
+                X — {lastTweetsNew > 0 ? `${lastTweetsNew} new post${lastTweetsNew === 1 ? "" : "s"}` : "up to date"}
+              </p>
+            )}
+            {!refreshingX && xErrors.length > 0 && (
+              <p className="text-[11px] text-red-400/80" title={xErrors.join("\n")}>
+                X — {xErrors[0]}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* ── Three-column layout ── */}
         <div className="mt-5 grid grid-cols-[240px_1fr_240px] gap-5">
@@ -919,7 +971,7 @@ export default function ScoutPage() {
 
                 {filteredBuckets.length === 0 && xConfigured && xHandles.length > 0 && (
                   <p className="text-[12px] text-zinc-600">
-                    No posts in this date range yet — hit Refresh to pull the latest.
+                    No posts in this date range yet — hit Refresh X to pull the latest.
                   </p>
                 )}
 

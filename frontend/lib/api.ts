@@ -605,7 +605,6 @@ export interface ScoutRefreshStatus {
   roster_size: number;
   processing_done: number;
   processing_total: number;
-  tweets_new: number;
 }
 
 export function getScoutRefreshStatus(): Promise<ScoutRefreshStatus> {
@@ -649,6 +648,26 @@ export async function putScoutXAccounts(handles: string[]): Promise<ScoutXAccoun
   });
   if (!res.ok) throw new Error(`x-accounts save failed: ${res.status}`);
   return res.json();
+}
+
+export async function refreshScoutX(days = 7): Promise<{ status: "started" | "already_running" }> {
+  const res = await apiFetch(`/api/scout/refresh-x?days=${days}`, { method: "POST" });
+  if (!res.ok) throw new Error(`x refresh failed: ${res.status}`);
+  return res.json();
+}
+
+export interface ScoutXRefreshStatus {
+  status: "idle" | "running" | "done" | "error";
+  started_at: string | null;
+  finished_at: string | null;
+  new: number;
+  skipped: number;
+  errors: string[];
+  handles_synced: number;
+}
+
+export function getScoutXRefreshStatus(): Promise<ScoutXRefreshStatus> {
+  return getJSON<ScoutXRefreshStatus>("/api/scout/refresh-x/status");
 }
 
 export interface ScoutTweet {

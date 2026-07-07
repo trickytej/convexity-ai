@@ -34,7 +34,18 @@ _refresh_state: dict = {
     "roster_size": 0,
     "processing_done": 0,
     "processing_total": 0,
-    "tweets_new": 0,
+}
+
+# Same idea for the X (tweets) refresh — independent of the podcast scan so the
+# two buttons in the UI can run and report separately.
+_x_refresh_state: dict = {
+    "status": "idle",  # idle | running | done | error
+    "started_at": None,
+    "finished_at": None,
+    "new": 0,
+    "skipped": 0,
+    "errors": [],
+    "handles_synced": 0,
 }
 
 # A full scan costs one Podscan request per tracked person against a
@@ -160,7 +171,7 @@ def refresh_appearances(
 
     _refresh_state.update(
         status="running", started_at=_now_iso(), finished_at=None, new=0, skipped=0, errors=[],
-        roster_size=len(flat_roster), processing_done=0, processing_total=0, tweets_new=0,
+        roster_size=len(flat_roster), processing_done=0, processing_total=0,
     )
 
     def _on_progress(done: int, total: int) -> None:
@@ -174,17 +185,14 @@ def refresh_appearances(
                 conn, settings, flat_roster, days=days,
                 scope_sweep_to_days=True, on_progress=_on_progress,
             )
-            x_result = x_scout.sync_x_accounts(conn, settings, days=days)
-            all_errors = result.errors + x_result.errors
             _refresh_state.update(
-                status="error" if all_errors and not (result.new or result.skipped or x_result.new) else "done",
+                status="error" if result.errors and not (result.new or result.skipped) else "done",
                 finished_at=_now_iso(),
                 new=result.new,
                 skipped=result.skipped,
-                errors=all_errors[:5],
+                errors=result.errors[:5],
                 processing_done=result.processed,
                 processing_total=result.processing_total,
-                tweets_new=x_result.new,
             )
             if result.quota_reset_at:
                 repo.meta_set(conn, "scout_quota_reset_at", result.quota_reset_at)
@@ -287,6 +295,50 @@ def put_x_accounts(
         "handles": x_scout.save_accounts(db, handles),
         "configured": bool(get_settings().x_bearer_token),
     }
+
+
+@router.post("/scout/refresh-x")
+def refresh_x(
+    background_tasks: BackgroundTasks,
+    days: int = Query(7, description="Look-back window in days"),
+) -> dict:
+    """Pull tweets for every tracked X handle in the background — independent of
+    the podcast scan (own quota, no Podscan cooldown). Poll
+    GET /scout/refresh-x/status for the outcome."""
+    if _x_refresh_state["status"] == "running":
+        return {"status": "already_running"}
+
+    _x_refresh_state.update(
+        status="running", started_at=_now_iso(), finished_at=None,
+        new=0, skipped=0, errors=[], handles_synced=0,
+    )
+
+    def _run_x() -> None:
+        settings = get_settings()
+        conn = connect_turso(settings)
+        try:
+            result = x_scout.sync_x_accounts(conn, settings, days=days)
+            _x_refresh_state.update(
+                status="error" if result.errors and not (result.new or result.skipped) else "done",
+                finished_at=_now_iso(),
+                new=result.new,
+                skipped=result.skipped,
+                errors=result.errors[:5],
+                handles_synced=result.handles_synced,
+            )
+        except Exception as exc:
+            _x_refresh_state.update(status="error", finished_at=_now_iso(), errors=[str(exc)])
+        finally:
+            conn.close()
+
+    background_tasks.add_task(_run_x)
+    return {"status": "started"}
+
+
+@router.get("/scout/refresh-x/status")
+def refresh_x_status() -> dict:
+    """Return the state of the most recent (or in-progress) /scout/refresh-x run."""
+    return _x_refresh_state
 
 
 @router.get("/scout/tweets")
