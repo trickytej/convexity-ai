@@ -163,7 +163,8 @@ def refresh_appearances(
         _refresh_state.update(processing_done=done, processing_total=total)
 
     def _run() -> None:
-        conn = connect_turso(get_settings())
+        settings = get_settings()
+        conn = connect_turso(settings)
         try:
             result = sync_and_process(
                 conn, settings, flat_roster, days=days,
