@@ -1,7 +1,8 @@
-"""Scout API — podcast appearance monitoring."""
+"""Scout API — podcast appearance and X (Twitter) account monitoring."""
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import sqlite3
@@ -11,10 +12,12 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
 from ...config import get_settings
 from ...scout import roster
+from ...scout import x as x_scout
 from ...scout.pipeline import ingest_appearance_row
 from ...store import repo
 from ...store.db import connect_turso
 from ..deps import get_scout_db
+from .curation import _nugget_with_curation_out
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["scout"])
@@ -31,6 +34,7 @@ _refresh_state: dict = {
     "roster_size": 0,
     "processing_done": 0,
     "processing_total": 0,
+    "tweets_new": 0,
 }
 
 # A full scan costs one Podscan request per tracked person against a
@@ -156,7 +160,7 @@ def refresh_appearances(
 
     _refresh_state.update(
         status="running", started_at=_now_iso(), finished_at=None, new=0, skipped=0, errors=[],
-        roster_size=len(flat_roster), processing_done=0, processing_total=0,
+        roster_size=len(flat_roster), processing_done=0, processing_total=0, tweets_new=0,
     )
 
     def _on_progress(done: int, total: int) -> None:
@@ -170,14 +174,17 @@ def refresh_appearances(
                 conn, settings, flat_roster, days=days,
                 scope_sweep_to_days=True, on_progress=_on_progress,
             )
+            x_result = x_scout.sync_x_accounts(conn, settings, days=days)
+            all_errors = result.errors + x_result.errors
             _refresh_state.update(
-                status="error" if result.errors and not (result.new or result.skipped) else "done",
+                status="error" if all_errors and not (result.new or result.skipped or x_result.new) else "done",
                 finished_at=_now_iso(),
                 new=result.new,
                 skipped=result.skipped,
-                errors=result.errors[:5],
+                errors=all_errors[:5],
                 processing_done=result.processed,
                 processing_total=result.processing_total,
+                tweets_new=x_result.new,
             )
             if result.quota_reset_at:
                 repo.meta_set(conn, "scout_quota_reset_at", result.quota_reset_at)
@@ -257,3 +264,55 @@ def ingest_appearance(
         raise HTTPException(status_code=422, detail=str(exc))
 
     return {"episode_id": episode_id, "created": created}
+
+
+# ── X (Twitter) accounts ──────────────────────────────────────────────────────
+
+@router.get("/scout/x-accounts")
+def get_x_accounts(db: sqlite3.Connection = Depends(get_scout_db)) -> dict:
+    """Tracked X handles plus whether the X API is usable (bearer token set)."""
+    return {
+        "handles": x_scout.load_accounts(db),
+        "configured": bool(get_settings().x_bearer_token),
+    }
+
+
+@router.put("/scout/x-accounts")
+def put_x_accounts(
+    handles: list[str], db: sqlite3.Connection = Depends(get_scout_db)
+) -> dict:
+    """Save the tracked X handles — the list the next /scout/refresh pulls
+    timelines for. Accepts @handles, bare handles, or profile URLs."""
+    return {
+        "handles": x_scout.save_accounts(db, handles),
+        "configured": bool(get_settings().x_bearer_token),
+    }
+
+
+@router.get("/scout/tweets")
+def list_scout_tweets(
+    days: int = Query(7, description="Look-back window in days"),
+    db: sqlite3.Connection = Depends(get_scout_db),
+) -> list[dict]:
+    """Synced tweets from the window, bucketed by handle, each tweet carrying
+    its keep/kill nugget (with curation) so the frontend renders the same
+    review cards used for podcast insights."""
+    buckets = x_scout.list_tweet_buckets(db, days=days)
+    return [
+        {
+            "handle": b["handle"],
+            "author_name": b["author_name"],
+            "episode_id": b["episode_id"],
+            "tweets": [
+                {
+                    "tweet_id": r["tweet_id"],
+                    "url": r["url"],
+                    "created_at": r["created_at"],
+                    "metrics": json.loads(r["metrics"]) if r["metrics"] else None,
+                    "nugget": _nugget_with_curation_out(r),
+                }
+                for r in b["tweets"]
+            ],
+        }
+        for b in buckets
+    ]

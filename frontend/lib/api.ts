@@ -605,6 +605,7 @@ export interface ScoutRefreshStatus {
   roster_size: number;
   processing_done: number;
   processing_total: number;
+  tweets_new: number;
 }
 
 export function getScoutRefreshStatus(): Promise<ScoutRefreshStatus> {
@@ -627,6 +628,46 @@ export async function ingestScoutAppearance(appearanceId: number): Promise<{ epi
     throw new Error((err as { detail?: string }).detail ?? `Ingest failed: ${res.status}`);
   }
   return res.json();
+}
+
+// ─── Scout: X (Twitter) accounts + tweets ────────────────────────────────────
+
+export interface ScoutXAccounts {
+  handles: string[];
+  configured: boolean; // X_BEARER_TOKEN present on the backend
+}
+
+export function getScoutXAccounts(): Promise<ScoutXAccounts> {
+  return getJSON<ScoutXAccounts>("/api/scout/x-accounts");
+}
+
+export async function putScoutXAccounts(handles: string[]): Promise<ScoutXAccounts> {
+  const res = await apiFetch(`/api/scout/x-accounts`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(handles),
+  });
+  if (!res.ok) throw new Error(`x-accounts save failed: ${res.status}`);
+  return res.json();
+}
+
+export interface ScoutTweet {
+  tweet_id: string;
+  url: string;
+  created_at: string | null;
+  metrics: Record<string, number> | null;
+  nugget: NuggetWithCuration;
+}
+
+export interface ScoutTweetBucket {
+  handle: string;
+  author_name: string | null;
+  episode_id: number;
+  tweets: ScoutTweet[];
+}
+
+export function getScoutTweets(days = 7): Promise<ScoutTweetBucket[]> {
+  return getJSON<ScoutTweetBucket[]>(`/api/scout/tweets?days=${days}`);
 }
 
 export async function sendNewsletter(payload: NewsletterSendPayload): Promise<{ sent: number }> {

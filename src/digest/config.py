@@ -59,6 +59,10 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("PODSCAN_API_KEY", "DIGEST_PODSCAN_API_KEY"),
     )
+    x_bearer_token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("X_BEARER_TOKEN", "DIGEST_X_BEARER_TOKEN"),
+    )
 
     # Hosted (Turso) database. Scout always connects here — see store.db.connect_turso —
     # so appearance data lands in production even when the rest of the app runs against

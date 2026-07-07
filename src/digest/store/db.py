@@ -142,6 +142,22 @@ CREATE TABLE IF NOT EXISTS scout_appearances (
 CREATE INDEX IF NOT EXISTS idx_scout_company   ON scout_appearances(company);
 CREATE INDEX IF NOT EXISTS idx_scout_published ON scout_appearances(published_at DESC);
 
+CREATE TABLE IF NOT EXISTS scout_tweets (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    tweet_id    TEXT UNIQUE NOT NULL,
+    handle      TEXT NOT NULL,               -- X username, no @
+    author_name TEXT,
+    text        TEXT NOT NULL,
+    url         TEXT,
+    created_at  TEXT,                        -- tweet publish time, ISO-8601 UTC
+    metrics     TEXT,                        -- json public_metrics
+    episode_id  INTEGER,                     -- per-handle episode bucketing the nuggets
+    nugget_id   INTEGER,                     -- the keep/kill nugget minted for this tweet
+    fetched_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_scout_tweets_handle  ON scout_tweets(handle);
+CREATE INDEX IF NOT EXISTS idx_scout_tweets_created ON scout_tweets(created_at DESC);
+
 CREATE TABLE IF NOT EXISTS nugget_curation (
     nugget_id             INTEGER PRIMARY KEY,
     -- Intentionally NO "REFERENCES nuggets(id) ON DELETE CASCADE": curator decisions

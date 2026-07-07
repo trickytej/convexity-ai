@@ -6,8 +6,10 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   getScoutAppearances, ingestScoutAppearance, processEpisode, getEpisodeStatus,
   getScoutWatchlist, putScoutWatchlist, refreshScout, getScoutRefreshStatus,
-  type ScoutAppearance, type ScoutCategory, type ScoutRefreshKickoff,
+  getScoutXAccounts, putScoutXAccounts, getScoutTweets,
+  type ScoutAppearance, type ScoutCategory, type ScoutRefreshKickoff, type ScoutTweetBucket,
 } from "@/lib/api";
+import { NuggetReviewCard } from "@/components/NuggetReviewCard";
 
 const NeonSphere = dynamic(() => import("@/components/NeonSphere"), { ssr: false });
 
@@ -438,6 +440,13 @@ export default function ScoutPage() {
   const [progress,      setProgress]      = useState<{ done: number; total: number; rosterSize: number } | null>(null);
   const [filterCompany, setFilterCompany] = useState("");
 
+  // X (Twitter) accounts + synced tweets
+  const [xHandles,     setXHandles]     = useState<string[]>([]);
+  const [xConfigured,  setXConfigured]  = useState(true);
+  const [newHandle,    setNewHandle]    = useState("");
+  const [tweetBuckets, setTweetBuckets] = useState<ScoutTweetBucket[]>([]);
+  const [lastTweetsNew, setLastTweetsNew] = useState<number | null>(null);
+
   // Watchlist state — instant-paint from localStorage cache, then reconciled
   // against the backend (the actual source of truth the scan searches) on mount.
   const [watchlist,      setWatchlist]      = useState<Category[]>(() => loadCachedWatchlist());
@@ -532,6 +541,34 @@ export default function ScoutPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const loadTweets = useCallback(async () => {
+    try {
+      setTweetBuckets(await getScoutTweets(days));
+    } catch { /* backend may not be running */ }
+  }, [days]);
+
+  useEffect(() => { loadTweets(); }, [loadTweets]);
+
+  useEffect(() => {
+    getScoutXAccounts()
+      .then(({ handles, configured }) => { setXHandles(handles); setXConfigured(configured); })
+      .catch(() => {});
+  }, []);
+
+  function saveXHandles(next: string[]) {
+    setXHandles(next); // optimistic; server echoes the normalized list back
+    putScoutXAccounts(next)
+      .then(({ handles, configured }) => { setXHandles(handles); setXConfigured(configured); })
+      .catch(() => {});
+  }
+
+  function addXHandle() {
+    const h = newHandle.trim();
+    if (!h) return;
+    saveXHandles([...xHandles, h]);
+    setNewHandle("");
+  }
+
   async function pollUntilDone() {
     for (;;) {
       await new Promise((r) => setTimeout(r, 3000));
@@ -539,7 +576,10 @@ export default function ScoutPage() {
       setProgress({ done: status.processing_done, total: status.processing_total, rosterSize: status.roster_size });
       if (status.status !== "running") {
         if (status.status === "error" && status.errors.length > 0) setScanErrors(status.errors);
-        else setLastNew(status.new);
+        else {
+          setLastNew(status.new);
+          setLastTweetsNew(status.tweets_new ?? null);
+        }
         return;
       }
     }
@@ -548,6 +588,7 @@ export default function ScoutPage() {
   async function doRefresh(force = false) {
     setRefreshing(true);
     setLastNew(null);
+    setLastTweetsNew(null);
     setScanErrors([]);
     setCooldown(null);
     setProgress(null);
@@ -560,6 +601,7 @@ export default function ScoutPage() {
       // "started" or "already_running" both mean: poll until the run finishes.
       await pollUntilDone();
       await load();
+      await loadTweets();
     } catch (err: unknown) {
       setScanErrors([err instanceof Error ? err.message : "Refresh failed"]);
     } finally {
@@ -587,6 +629,18 @@ export default function ScoutPage() {
     .filter((a) => !filterCompany || a.company === filterCompany);
 
   const uniqueCompanies = [...new Set(appearances.map((a) => a.company))].sort();
+
+  // Tweets, date-filtered like the appearances; drop handles left with nothing.
+  const filteredBuckets = tweetBuckets
+    .map((b) => ({
+      ...b,
+      tweets: b.tweets.filter((t) => {
+        if (!t.created_at) return true;
+        const posted = new Date(t.created_at);
+        return posted >= fromDate && posted <= toDate;
+      }),
+    }))
+    .filter((b) => b.tweets.length > 0);
 
   return (
     <>
@@ -635,7 +689,12 @@ export default function ScoutPage() {
             )}
             {!refreshing && lastNew !== null && scanErrors.length === 0 && (
               <p className="text-[11px] text-[#00d4ff]/60">
-                {lastNew > 0 ? `${lastNew} new appearance${lastNew === 1 ? "" : "s"}` : "Up to date"}
+                {lastNew > 0 || (lastTweetsNew ?? 0) > 0
+                  ? [
+                      lastNew > 0 ? `${lastNew} new appearance${lastNew === 1 ? "" : "s"}` : null,
+                      (lastTweetsNew ?? 0) > 0 ? `${lastTweetsNew} new tweet${lastTweetsNew === 1 ? "" : "s"}` : null,
+                    ].filter(Boolean).join(" · ")
+                  : "Up to date"}
               </p>
             )}
             {!refreshing && scanErrors.length > 0 && (
@@ -842,25 +901,133 @@ export default function ScoutPage() {
                 ))}
               </div>
             )}
+
+            {/* ── X posts, bucketed by account ── */}
+            {(filteredBuckets.length > 0 || xHandles.length > 0) && (
+              <div className="mt-10">
+                <p className="mb-4 flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
+                  <span className="inline-block h-px w-8 bg-[#00d4ff]" />
+                  <span className="text-[#00d4ff]">X Posts</span>
+                </p>
+
+                {!xConfigured && xHandles.length > 0 && (
+                  <p className="mb-4 rounded-lg border border-amber-400/20 bg-amber-400/[0.05] px-4 py-3 text-[12px] text-amber-200/80">
+                    X API is not configured — set <code className="text-amber-100">X_BEARER_TOKEN</code> on
+                    the backend to pull tweets for the {xHandles.length} tracked account{xHandles.length === 1 ? "" : "s"} on refresh.
+                  </p>
+                )}
+
+                {filteredBuckets.length === 0 && xConfigured && xHandles.length > 0 && (
+                  <p className="text-[12px] text-zinc-600">
+                    No posts in this date range yet — hit Refresh to pull the latest.
+                  </p>
+                )}
+
+                <div className="space-y-8">
+                  {filteredBuckets.map((bucket) => (
+                    <div key={bucket.handle}>
+                      <div className="mb-2.5 flex items-center gap-2">
+                        <a
+                          href={`https://x.com/${bucket.handle}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[13px] font-medium text-zinc-200 transition hover:text-[#00d4ff]"
+                        >
+                          @{bucket.handle}
+                        </a>
+                        {bucket.author_name && (
+                          <span className="text-[11px] text-zinc-600">{bucket.author_name}</span>
+                        )}
+                        <span className="rounded-full bg-white/[0.04] px-2 py-0.5 text-[10px] tabular-nums text-zinc-600">
+                          {bucket.tweets.length}
+                        </span>
+                      </div>
+                      <div className="space-y-2.5">
+                        {bucket.tweets.map((t) => (
+                          <div key={t.tweet_id}>
+                            <div className="mb-1 flex items-center gap-2 pl-1 text-[11px] text-zinc-600">
+                              <span>{t.created_at ? relativeTime(t.created_at) : ""}</span>
+                              {t.metrics?.like_count != null && (
+                                <span className="text-zinc-700">♥ {t.metrics.like_count.toLocaleString()}</span>
+                              )}
+                              <a
+                                href={t.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-zinc-700 transition hover:text-[#00d4ff]"
+                              >
+                                View on X ↗
+                              </a>
+                            </div>
+                            <NuggetReviewCard nugget={t.nugget} episodeId={bucket.episode_id} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* ── Creators ── */}
+          {/* ── Creators: tracked X accounts ── */}
           <div className="rounded-xl border border-white/[0.05] bg-[#0a0a0c]/60 p-4">
             <div className="mb-3 flex items-center justify-between border-b border-white/[0.05] pb-3">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">Creators</span>
-              <span className="rounded-full bg-white/[0.04] px-2 py-0.5 text-[10px] text-zinc-600">0</span>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">X Accounts</span>
+              <span className="rounded-full bg-white/[0.04] px-2 py-0.5 text-[10px] tabular-nums text-zinc-600">{xHandles.length}</span>
             </div>
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.02]">
-                <svg className="h-4 w-4 text-zinc-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-              </div>
-              <p className="text-[12px] font-medium text-zinc-200">X accounts &amp; sources</p>
-              <p className="mt-1 text-[11px] leading-relaxed text-zinc-700">
-                Link creator accounts<br />to track here
+
+            {/* add form */}
+            <div className="mb-3 flex items-center gap-1.5">
+              <input
+                value={newHandle}
+                onChange={(e) => setNewHandle(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") addXHandle(); }}
+                placeholder="@handle or profile URL"
+                className="min-w-0 flex-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-1.5 text-[12px] text-zinc-300 placeholder-zinc-700 outline-none focus:border-[#00d4ff]/40 focus:ring-1 focus:ring-[#00d4ff]/20"
+              />
+              <button
+                onClick={addXHandle}
+                className="shrink-0 text-[11px] text-[#00d4ff] transition hover:text-[#33ddff]"
+              >
+                Add
+              </button>
+            </div>
+
+            {/* handle rows */}
+            {xHandles.length === 0 ? (
+              <p className="py-6 text-center text-[11px] leading-relaxed text-zinc-700">
+                Track X accounts here —<br />their posts are pulled on Refresh
               </p>
-            </div>
+            ) : (
+              <div className="space-y-0.5">
+                {xHandles.map((h) => (
+                  <div key={h} className="group/handle flex items-center justify-between rounded-lg px-2 py-1.5 transition hover:bg-white/[0.04]">
+                    <a
+                      href={`https://x.com/${h}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[13px] text-zinc-200 transition hover:text-[#00d4ff]"
+                    >
+                      @{h}
+                    </a>
+                    <button
+                      onClick={() => saveXHandles(xHandles.filter((x) => x !== h))}
+                      className="hidden text-[11px] text-zinc-700 transition hover:text-red-400/80 group-hover/handle:block"
+                      title={`Stop tracking @${h}`}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!xConfigured && (
+              <p className="mt-3 border-t border-white/[0.05] pt-3 text-[10px] leading-relaxed text-amber-200/60">
+                X_BEARER_TOKEN not set — accounts are saved, but tweets won&apos;t sync until it&apos;s configured.
+              </p>
+            )}
           </div>
 
         </div>

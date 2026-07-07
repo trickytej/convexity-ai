@@ -500,6 +500,45 @@ def replace_nuggets(
     return len(nuggets)
 
 
+def add_nugget(conn: sqlite3.Connection, n: Nugget) -> int:
+    """Append one nugget without touching the episode's existing ones (unlike
+    replace_nuggets). Used by Scout's tweet sync, which mints nuggets
+    incrementally as new tweets arrive. Returns the new nugget id."""
+    conn.execute(
+        """
+        INSERT INTO nuggets (episode_id, type, claim, quote, speaker_name, start_ms,
+                             end_ms, entities, sectors, primary_sector, scores,
+                             signal_score, quote_verified, triage, model, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            n.episode_id,
+            n.type,
+            n.claim,
+            n.quote,
+            n.speaker_name,
+            n.start_ms,
+            n.end_ms,
+            json.dumps(n.entities) if n.entities else None,
+            json.dumps(n.sectors) if n.sectors else None,
+            n.primary_sector,
+            json.dumps(n.scores) if n.scores else None,
+            n.signal_score,
+            1 if n.quote_verified else 0,
+            n.triage,
+            n.model,
+            _now_iso(),
+        ),
+    )
+    # libsql cursors don't expose lastrowid reliably; the sync task is the sole
+    # writer for its episode, so the newest row is the one just inserted.
+    row = conn.execute(
+        "SELECT id FROM nuggets WHERE episode_id = ? ORDER BY id DESC LIMIT 1",
+        (n.episode_id,),
+    ).fetchone()
+    return row["id"]
+
+
 def nuggets_for_classification(
     conn: sqlite3.Connection, only_missing: bool = True
 ) -> list[sqlite3.Row]:
