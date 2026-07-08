@@ -352,7 +352,15 @@ def sync_x_accounts(conn, settings, *, days: int = 7) -> XSyncResult:
 
 def list_tweet_buckets(conn, *, days: int = 7) -> list[dict]:
     """Tweets from the window grouped by handle, each carrying its nugget id —
-    the frontend joins these to nuggets-with-curation for keep/kill cards."""
+    the frontend joins these to nuggets-with-curation for keep/kill cards.
+
+    Only currently tracked handles are returned: deleting an account from the
+    UI hides its synced tweets (rows and any kept nuggets stay in the DB, so
+    re-adding the account brings history back and curation survives)."""
+    tracked = {h.lower() for h in load_accounts(conn)}
+    if not tracked:
+        return []
+
     ensure_schema(conn)
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     rows = conn.execute(
@@ -375,6 +383,8 @@ def list_tweet_buckets(conn, *, days: int = 7) -> list[dict]:
     buckets: dict[str, dict] = {}
     for r in rows:
         key = r["handle"].lower()
+        if key not in tracked:
+            continue
         bucket = buckets.setdefault(
             key,
             {

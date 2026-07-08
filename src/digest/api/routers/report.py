@@ -32,10 +32,18 @@ def generate(
     days: int = Query(7, ge=1, le=90),
     since: str | None = Query(None),
     until: str | None = Query(None),
+    include_tweets: bool = Query(False, description="Also include curator-kept X posts"),
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
+    if include_tweets:
+        # The tweets query joins scout_tweets, which only the Scout sync
+        # creates — ensure it exists so a tweet-less DB doesn't error.
+        from ...scout.x import ensure_schema
+        ensure_schema(db)
     try:
-        return generate_report(db, days=days, since_iso=since, until_iso=until)
+        return generate_report(
+            db, days=days, since_iso=since, until_iso=until, include_tweets=include_tweets
+        )
     except LLMError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

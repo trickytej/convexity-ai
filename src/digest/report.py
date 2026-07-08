@@ -142,6 +142,7 @@ def build_weekly_report(
     min_signal: float = 0.0,
     per_section_limit: int | None = None,
     triage: str | None = None,
+    include_tweets: bool = False,
 ) -> WeeklyReport:
     until = datetime.now(timezone.utc)
     since = until - timedelta(days=days) if days else None
@@ -149,7 +150,9 @@ def build_weekly_report(
         since = datetime.fromisoformat(since_iso).replace(tzinfo=timezone.utc)
     if until_iso:
         until = datetime.fromisoformat(until_iso).replace(tzinfo=timezone.utc)
-    rows = repo.nuggets_in_window(conn, since=since, until=until, min_signal=min_signal)
+    rows = repo.nuggets_in_window(
+        conn, since=since, until=until, min_signal=min_signal, include_tweets=include_tweets
+    )
 
     nuggets: list[ReportNugget] = []
     company_shows: dict[str, set[str]] = defaultdict(set)
@@ -200,15 +203,23 @@ def build_weekly_report(
         n.corroboration_shows = best
 
     # Triage counts over the whole window; sections over the (optionally) filtered set.
+    # Tweets (show "x") bypass the triage filter: nuggets_in_window already
+    # restricted them to curator-kept ones, and keep/kill is their triage.
     triage_counts: dict[str, int] = defaultdict(int)
     for n in nuggets:
         triage_counts[n.triage] += 1
-    visible = [n for n in nuggets if triage is None or n.triage == triage]
+    visible = [
+        n for n in nuggets
+        if triage is None or n.triage == triage or n.show_slug == "x"
+    ]
 
     # Group by the controlled primary_sector; fall back to the legacy first-tag.
     by_sector: dict[str, list[ReportNugget]] = defaultdict(list)
     for n in visible:
-        primary = n.primary_sector or (n.sectors[0] if n.sectors else "Other")
+        if n.show_slug == "x":
+            primary = "From X"  # kept tweets get their own report section
+        else:
+            primary = n.primary_sector or (n.sectors[0] if n.sectors else "Other")
         by_sector[primary].append(n)
 
     sections: list[ReportSection] = []

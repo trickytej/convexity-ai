@@ -323,7 +323,15 @@ export default function NewsletterPage() {
   const [sendMessage, setSendMessage] = useState("");
 
   useEffect(() => {
-    getShows().then((all) => setShows(all.filter((s) => s.active && s.transcribed > 0)));
+    // All active shows, transcribed ones first — untranscribed render greyed
+    // out so it's clear why they can't produce a newsletter yet.
+    getShows().then((all) =>
+      setShows(
+        all
+          .filter((s) => s.active)
+          .sort((a, b) => Number(b.transcribed > 0) - Number(a.transcribed > 0)),
+      ),
+    );
   }, []);
 
   useEffect(() => {
@@ -433,21 +441,34 @@ export default function NewsletterPage() {
 
       {/* Podcast selector */}
       <div className="print:hidden flex flex-wrap gap-2">
-        {shows.map((s) => (
-          <button
-            key={s.slug}
-            type="button"
-            onClick={() => selectShow(s.slug)}
-            disabled={loading}
-            className={`rounded-full px-3.5 py-1.5 text-sm transition disabled:opacity-50 ${
-              selectedShow === s.slug
-                ? "bg-[#00d4ff] font-medium text-[#001a26]"
-                : "border border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-100"
-            }`}
-          >
-            {s.name}
-          </button>
-        ))}
+        {shows.map((s) => {
+          const hasTranscripts = s.transcribed > 0;
+          return (
+            <button
+              key={s.slug}
+              type="button"
+              onClick={() => selectShow(s.slug)}
+              disabled={loading || !hasTranscripts}
+              title={
+                hasTranscripts
+                  ? undefined
+                  : "No transcripts yet — run the ingest workflow to transcribe episodes first"
+              }
+              className={`rounded-full px-3.5 py-1.5 text-sm transition ${
+                !hasTranscripts
+                  ? "cursor-not-allowed border border-white/[0.05] text-zinc-700"
+                  : selectedShow === s.slug
+                    ? "bg-[#00d4ff] font-medium text-[#001a26]"
+                    : "border border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-100"
+              } ${loading ? "opacity-50" : ""}`}
+            >
+              {s.name}
+              {!hasTranscripts && (
+                <span className="ml-1.5 text-[10px] text-zinc-700">no transcripts yet</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {loading && <p className="text-sm text-zinc-500 animate-pulse">Building newsletter…</p>}

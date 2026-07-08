@@ -589,15 +589,32 @@ def nuggets_in_window(
     since: datetime | None = None,
     until: datetime | None = None,
     min_signal: float = 0.0,
+    include_tweets: bool = False,
 ) -> list[sqlite3.Row]:
-    """Nuggets joined to their episode + show, for the weekly report."""
+    """Nuggets joined to their episode + show, for the weekly report.
+
+    Show ``x`` holds verbatim tweets minted by Scout; they are excluded unless
+    ``include_tweets``, and then only curator-kept ones qualify, windowed on
+    the tweet's own post time (the per-handle episode's published_at is just
+    the first sync date, so it can't be the window basis)."""
     clauses = ["s.active = 1"]
     params: list[object] = []
+    if include_tweets:
+        joins = (
+            "LEFT JOIN scout_tweets st ON st.nugget_id = n.id "
+            "LEFT JOIN nugget_curation nc ON nc.nugget_id = n.id"
+        )
+        window_col = "COALESCE(st.created_at, e.published_at)"
+        clauses.append("(e.show_slug != 'x' OR nc.decision = 'kept')")
+    else:
+        joins = ""
+        window_col = "e.published_at"
+        clauses.append("e.show_slug != 'x'")
     if since is not None:
-        clauses.append("e.published_at >= ?")
+        clauses.append(f"{window_col} >= ?")
         params.append(_dt_to_iso(since))
     if until is not None:
-        clauses.append("e.published_at <= ?")
+        clauses.append(f"{window_col} <= ?")
         params.append(_dt_to_iso(until))
     if min_signal:
         clauses.append("n.signal_score >= ?")
@@ -610,6 +627,7 @@ def nuggets_in_window(
         FROM nuggets n
         JOIN episodes e ON e.id = n.episode_id
         JOIN shows s ON s.slug = e.show_slug
+        {joins}
         {where}
         ORDER BY n.signal_score DESC, n.id ASC
         """,

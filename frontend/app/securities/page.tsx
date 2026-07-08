@@ -3,11 +3,29 @@ import { fmtDate } from "@/lib/format";
 import type { NewsletterNugget } from "@/lib/api";
 import Link from "next/link";
 import SecuritiesTable from "@/components/SecuritiesTable";
+import DateRangeFilter from "@/components/DateRangeFilter";
 
 export const dynamic = "force-dynamic";
 
-export default async function SecuritiesPage() {
-  const newsletter = await getNewsletter({});
+function defaultFrom() {
+  const d = new Date();
+  d.setDate(d.getDate() - 7);
+  return d.toISOString().slice(0, 10);
+}
+function defaultTo() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export default async function SecuritiesPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ from?: string; to?: string }>;
+}) {
+  const params = await searchParams;
+  const since = params?.from || defaultFrom();
+  const until = params?.to || defaultTo();
+
+  const newsletter = await getNewsletter({ from: since, to: until });
   const { lead, good_to_know, stock_readthrough, from_date, to_date } = newsletter;
   const allNuggets = [...lead, ...good_to_know];
 
@@ -66,6 +84,10 @@ export default async function SecuritiesPage() {
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-zinc-400">
         {allStocks.length} securities classified by sentiment across curated nuggets.
       </p>
+
+      <div className="mt-7">
+        <DateRangeFilter basePath="/securities" initialFrom={since} initialTo={until} />
+      </div>
 
       <div className="mt-10">
         {isEmpty ? (

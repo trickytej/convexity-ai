@@ -80,24 +80,26 @@ export default function ShowGrid({ initialShows }: { initialShows: Show[] }) {
         </p>
       </header>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div>
+        <div className="grid grid-cols-[1fr_8rem_auto] gap-x-6 border-b border-white/[0.08] pb-2 text-[10px] font-medium uppercase tracking-[0.2em] text-zinc-600">
+          <span>Show</span>
+          <span className="text-right">Transcribed</span>
+          <span />
+        </div>
         {shows.map((s) => (
           <div
             key={s.slug}
-            className="group flex flex-col rounded-xl border border-white/[0.08] bg-[#0b0c10]/70 pl-5 pr-5 pt-5 pb-4 transition-all hover:border-[#00d4ff]/30 hover:bg-[#0e1016]/85"
-            style={{ borderLeft: "3px solid #00d4ff" }}
+            className="group grid grid-cols-[1fr_8rem_auto] items-center gap-x-6 border-b border-white/[0.05] py-4"
           >
-            <Link href={`/episodes?show=${s.slug}`} className="flex-1">
-              <h2 className="text-base font-medium leading-snug tracking-tight text-zinc-100 transition-colors group-hover:text-[#00d4ff]">
+            <Link href={`/episodes?show=${s.slug}`}>
+              <p className="text-sm font-medium text-zinc-100 transition-colors group-hover:text-[#00d4ff]">
                 {s.name}
-              </h2>
+              </p>
             </Link>
-
-            <div className="mt-3 flex items-center justify-between">
-              <div className="flex items-center gap-1 text-sm text-zinc-500">
-                <span className="font-[family-name:var(--font-mono)] font-medium text-zinc-300">{s.transcribed}</span>
-                <span>transcribed</span>
-              </div>
+            <span className="text-right font-[family-name:var(--font-mono)] text-sm text-zinc-400">
+              {s.transcribed}
+            </span>
+            <div className="flex w-8 items-center justify-end">
               <DeleteButton slug={s.slug} onDeleted={() => removeShow(s.slug)} />
             </div>
           </div>

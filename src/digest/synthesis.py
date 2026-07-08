@@ -163,16 +163,18 @@ def generate_report(
     since_iso: str | None = None,
     until_iso: str | None = None,
     per_section_limit: int = 60,
+    include_tweets: bool = False,
     settings: Settings | None = None,
 ) -> dict:
     """Generate, store, and return the synthesized weekly report.
 
     Hybrid feed: synthesize triaged-relevant nuggets if any exist this week,
-    otherwise the top-N by signal per sector.
+    otherwise the top-N by signal per sector. With ``include_tweets``,
+    curator-kept X posts from the window join the feed as their own section.
     """
     settings = settings or get_settings()
     client = llm.get_client(settings)  # raises LLMError if no key
-    kw = dict(since_iso=since_iso, until_iso=until_iso)
+    kw = dict(since_iso=since_iso, until_iso=until_iso, include_tweets=include_tweets)
     base = build_weekly_report(conn, days=days, **kw)
     relevant_n = int((base.stats.get("triage") or {}).get("relevant", 0) or 0)
     if relevant_n > 0:

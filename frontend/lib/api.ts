@@ -300,10 +300,11 @@ export function getLatestReport(): Promise<GeneratedReport | null> {
   return getJSON<GeneratedReport | null>("/api/report/latest");
 }
 
-export async function generateReport(params: { days?: number; since?: string; until?: string } = {}): Promise<GeneratedReport> {
+export async function generateReport(params: { days?: number; since?: string; until?: string; include_tweets?: boolean } = {}): Promise<GeneratedReport> {
   const q = new URLSearchParams({ days: String(params.days ?? 7) });
   if (params.since) q.set("since", params.since);
   if (params.until) q.set("until", params.until);
+  if (params.include_tweets) q.set("include_tweets", "true");
   const res = await apiFetch(`/api/report/generate?${q.toString()}`, { method: "POST" });
   if (!res.ok) {
     throw new Error(`report generation failed: ${res.status}`);

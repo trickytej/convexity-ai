@@ -560,7 +560,11 @@ export default function ScoutPage() {
   function saveXHandles(next: string[]) {
     setXHandles(next); // optimistic; server echoes the normalized list back
     putScoutXAccounts(next)
-      .then(({ handles, configured }) => { setXHandles(handles); setXConfigured(configured); })
+      .then(({ handles, configured }) => {
+        setXHandles(handles);
+        setXConfigured(configured);
+        loadTweets(); // the server only returns buckets for tracked handles
+      })
       .catch(() => {});
   }
 
@@ -653,8 +657,11 @@ export default function ScoutPage() {
 
   const uniqueCompanies = [...new Set(appearances.map((a) => a.company))].sort();
 
-  // Tweets, date-filtered like the appearances; drop handles left with nothing.
+  // Tweets, date-filtered like the appearances; only currently tracked handles
+  // (so deleting an account hides its posts immediately, before the refetch).
+  const trackedHandles = new Set(xHandles.map((h) => h.toLowerCase()));
   const filteredBuckets = tweetBuckets
+    .filter((b) => trackedHandles.has(b.handle.toLowerCase()))
     .map((b) => ({
       ...b,
       tweets: b.tweets.filter((t) => {
@@ -997,7 +1004,7 @@ export default function ScoutPage() {
                       <div className="space-y-2.5">
                         {bucket.tweets.map((t) => (
                           <div key={t.tweet_id}>
-                            <div className="mb-1 flex items-center gap-2 pl-1 text-[11px] text-zinc-600">
+                            <div className="mb-1 flex items-center gap-3 pl-1 text-[11px] text-zinc-600">
                               <span>{t.created_at ? relativeTime(t.created_at) : ""}</span>
                               {t.metrics?.like_count != null && (
                                 <span className="text-zinc-700">♥ {t.metrics.like_count.toLocaleString()}</span>
@@ -1006,9 +1013,9 @@ export default function ScoutPage() {
                                 href={t.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-zinc-700 transition hover:text-[#00d4ff]"
+                                className="font-medium text-[#00d4ff]/70 transition hover:text-[#00d4ff]"
                               >
-                                View on X ↗
+                                View post on X ↗
                               </a>
                             </div>
                             <NuggetReviewCard nugget={t.nugget} episodeId={bucket.episode_id} />
