@@ -567,7 +567,8 @@ export function getScoutAppearances(params: { company?: string; days?: number } 
 
 export type ScoutPerson   = { name: string; role: string };
 export type ScoutCompany  = { name: string; ticker?: string; people?: ScoutPerson[] };
-export type ScoutCategory = { label: string; companies: ScoutCompany[] };
+// `people` holds individuals tracked without a company (the Individuals section).
+export type ScoutCategory = { label: string; companies: ScoutCompany[]; people?: ScoutPerson[] };
 
 export async function getScoutWatchlist(): Promise<ScoutCategory[]> {
   const { watchlist } = await getJSON<{ watchlist: ScoutCategory[] }>("/api/scout/watchlist");

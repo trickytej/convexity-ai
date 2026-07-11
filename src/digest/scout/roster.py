@@ -257,20 +257,30 @@ def save_watchlist(conn, watchlist: list[dict]) -> None:
 def flatten_watchlist(categories: list[dict]) -> list[tuple[str, str, str]]:
     """Flatten to (company, person_name, person_role) triples for Podscan search.
 
+    Besides ``companies[].people``, a category may carry a top-level ``people``
+    list — individuals tracked without a company (the frontend's "Individuals"
+    section). Those flatten with an empty company, which also exempts them from
+    the company-mention requirement in the Podscan search filter.
+
     Dedupes by person name (case-insensitive), keeping the first company a name
     is encountered under, since Podscan searches by name only and a full scan
     costs one request per unique person against a 100/day quota.
     """
     seen: dict[str, tuple[str, str, str]] = {}
+
+    def _add(company_name: str, person: dict) -> None:
+        name = person.get("name", "")
+        if not name:
+            return
+        key = name.strip().lower()
+        if key in seen:
+            return
+        seen[key] = (company_name, name, person.get("role", ""))
+
     for category in categories:
         for company in category.get("companies", []):
-            company_name = company.get("name", "")
             for person in company.get("people", []):
-                name = person.get("name", "")
-                if not name:
-                    continue
-                key = name.strip().lower()
-                if key in seen:
-                    continue
-                seen[key] = (company_name, name, person.get("role", ""))
+                _add(company.get("name", ""), person)
+        for person in category.get("people", []):
+            _add("", person)
     return list(seen.values())

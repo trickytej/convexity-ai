@@ -143,16 +143,29 @@ def _is_guest_appearance(person_name: str, title: str, description: str) -> bool
     return False
 
 
+def _mentions(term: str, text: str) -> bool:
+    """Word-boundary, case-insensitive match; whitespace in *term* is flexible."""
+    pattern = r"\b" + r"\s+".join(re.escape(w) for w in term.split()) + r"\b"
+    return re.search(pattern, text, re.IGNORECASE) is not None
+
+
 def _cutoff_dt(days: int) -> datetime:
     return datetime.now(timezone.utc) - timedelta(days=days)
 
 
-def search_episodes(query: str, *, days: int = 30, max_results: int = 10) -> list[dict]:
+def search_episodes(
+    query: str, *, days: int = 30, max_results: int = 10, company: str | None = None
+) -> list[dict]:
     """Search Podscan for recent episodes where *person_name* is a guest.
 
     Podscan's full-text search returns all mentions, so we apply client-side
     filters: date window, minimum duration, and a guest-appearance heuristic
     on the title + description.
+
+    When *company* is given, both the person's full name and the company must
+    appear in the episode text (title + description + transcript) — a common
+    name alone (e.g. "Tom Brown") otherwise matches unrelated people who
+    happen to share it.
 
     Results are sorted newest-first so we stop paginating once past the window.
     """
@@ -226,6 +239,14 @@ def search_episodes(query: str, *, days: int = 30, max_results: int = 10) -> lis
                     title = (ep.get("episode_title") or "").strip()
                     desc = ep.get("episode_description") or ""
                     if not _is_guest_appearance(query, title, desc):
+                        continue
+
+                    haystack = "\n".join(
+                        (title, desc, ep.get("episode_transcript") or "")
+                    )
+                    if not _mentions(query, haystack):
+                        continue
+                    if company and not _mentions(company, haystack):
                         continue
 
                     collected.append(_normalise(ep))

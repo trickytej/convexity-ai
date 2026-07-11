@@ -147,7 +147,10 @@ export default async function InsightsPage({
     getNewsletter({ from: since, to: until }),
     getEpisodes({ since, until, limit: 200, all: true }),
   ]);
-  const trackedEpisodes = episodeList.episodes.filter(e => e.show_slug !== "scout");
+  // "x" episodes are per-handle tweet buckets from Scout's X sync, not podcasts.
+  const trackedEpisodes = episodeList.episodes.filter(
+    e => e.show_slug !== "scout" && e.show_slug !== "x"
+  );
   const { lead, good_to_know, stock_readthrough, kept_count } =
     newsletter;
 

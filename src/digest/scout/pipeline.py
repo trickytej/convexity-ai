@@ -156,14 +156,16 @@ def run_cycle(conn, roster: list[tuple[str, str, str]], *, days: int = 7) -> Sco
     """Search Podscan for every (company, person_name, person_role) triple in
     *roster* and persist confirmed appearances.
 
-    Podscan's ``has_guests=true`` filter already limits results to actual guest
-    appearances, so no additional regex filtering is needed here.
+    The company (when the person has one) is passed through to
+    ``search_episodes`` so an episode only counts when both the person and
+    their company are mentioned — this is what keeps a search for a common
+    name like "Tom Brown" from picking up unrelated people.
     """
     result = ScoutResult()
 
     for company_name, person_name, person_role in roster:
         try:
-            episodes = search_episodes(person_name, days=days)
+            episodes = search_episodes(person_name, days=days, company=company_name or None)
         except PodscanAuthError as exc:
             result.errors.append(str(exc))
             result.aborted = True

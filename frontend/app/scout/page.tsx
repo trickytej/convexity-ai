@@ -57,11 +57,13 @@ function CompanyRow({
   co,
   onDelete,
   onAddPerson,
+  onDeletePerson,
   seenPeople,
 }: {
   co: Company;
   onDelete: () => void;
   onAddPerson: (person: Person) => void;
+  onDeletePerson: (name: string) => void;
   seenPeople: Person[];
 }) {
   const [expanded,    setExpanded]    = useState(false);
@@ -122,12 +124,24 @@ function CompanyRow({
             <p className="text-[11px] text-zinc-700">No people tracked yet</p>
           ) : (
             <div className="space-y-1.5 mb-2">
-              {allPeople.map((p) => (
-                <div key={p.name} className="flex items-baseline gap-2">
-                  <span className="text-[12px] font-medium text-zinc-300">{p.name}</span>
-                  {p.role && <span className="text-[11px] text-zinc-600">{p.role}</span>}
-                </div>
-              ))}
+              {allPeople.map((p) => {
+                const tracked = (co.people ?? []).some((r) => r.name === p.name);
+                return (
+                  <div key={p.name} className="group/person flex items-baseline gap-2">
+                    <span className="text-[12px] font-medium text-zinc-300">{p.name}</span>
+                    {p.role && <span className="text-[11px] text-zinc-600">{p.role}</span>}
+                    {tracked && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onDeletePerson(p.name); }}
+                        className="ml-auto hidden rounded px-1 text-[11px] text-zinc-600 transition hover:text-red-400 group-hover/person:block"
+                        title={`Stop tracking ${p.name}`}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -200,6 +214,46 @@ function AddCompanyRow({
         onKeyDown={(e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") onCancel(); }}
         placeholder="Ticker"
         className="w-14 rounded bg-white/[0.04] px-2 py-1 text-[11px] text-zinc-200 outline-none placeholder:text-zinc-700 focus:ring-1 focus:ring-[#00d4ff]/30"
+      />
+      <button onClick={submit}   className="text-[11px] text-[#00d4ff] transition hover:text-[#33ddff]">✓</button>
+      <button onClick={onCancel} className="text-[11px] text-zinc-600  transition hover:text-zinc-400">✕</button>
+    </div>
+  );
+}
+
+function AddIndividualRow({
+  onAdd,
+  onCancel,
+}: {
+  onAdd: (person: Person) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("");
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => { ref.current?.focus(); }, []);
+
+  function submit() {
+    const n = name.trim();
+    if (n) onAdd({ name: n, role: role.trim() });
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 py-1.5 border-b border-white/[0.03]">
+      <input
+        ref={ref}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") onCancel(); }}
+        placeholder="Name"
+        className="min-w-0 flex-1 rounded bg-white/[0.04] px-2 py-1 text-[11px] text-zinc-200 outline-none placeholder:text-zinc-700 focus:ring-1 focus:ring-[#00d4ff]/30"
+      />
+      <input
+        value={role}
+        onChange={(e) => setRole(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") onCancel(); }}
+        placeholder="Role"
+        className="w-20 rounded bg-white/[0.04] px-2 py-1 text-[11px] text-zinc-200 outline-none placeholder:text-zinc-700 focus:ring-1 focus:ring-[#00d4ff]/30"
       />
       <button onClick={submit}   className="text-[11px] text-[#00d4ff] transition hover:text-[#33ddff]">✓</button>
       <button onClick={onCancel} className="text-[11px] text-zinc-600  transition hover:text-zinc-400">✕</button>
@@ -288,12 +342,14 @@ function AppearanceCard({ a }: { a: ScoutAppearance }) {
         <div className="mt-0.5 w-px shrink-0 self-stretch rounded-full bg-[#00d4ff]/20 group-hover:bg-[#00d4ff]/40 transition" />
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex items-center gap-2 flex-wrap">
-            <span className="rounded-sm bg-[#00d4ff]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#00d4ff]/70">
-              {a.company}
-            </span>
+            {a.company && (
+              <span className="rounded-sm bg-[#00d4ff]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#00d4ff]/70">
+                {a.company}
+              </span>
+            )}
             {a.person_name && (
               <>
-                <span className="text-zinc-700">·</span>
+                {a.company && <span className="text-zinc-700">·</span>}
                 <span className="text-[12px] font-medium text-zinc-300">{a.person_name}</span>
                 {a.person_role && (
                   <span className="text-[11px] text-zinc-600">{a.person_role}</span>
@@ -530,6 +586,52 @@ export default function ScoutPage() {
     );
   }
 
+  function removePersonFromCompany(catLabel: string, coName: string, personName: string) {
+    saveWatchlist(
+      watchlist.map((cat) =>
+        cat.label === catLabel
+          ? {
+              ...cat,
+              companies: cat.companies.map((co) =>
+                co.name === coName
+                  ? { ...co, people: (co.people ?? []).filter((p) => p.name !== personName) }
+                  : co
+              ),
+            }
+          : cat
+      )
+    );
+  }
+
+  // Individuals — people tracked without a company, stored as a category-level
+  // `people` list under this label (searched by name only, no company filter).
+  const INDIVIDUALS_LABEL = "Individuals";
+  const individuals = watchlist.find((c) => c.label === INDIVIDUALS_LABEL)?.people ?? [];
+
+  function addIndividual(person: Person) {
+    if (individuals.some((p) => p.name === person.name)) return;
+    const exists = watchlist.some((c) => c.label === INDIVIDUALS_LABEL);
+    saveWatchlist(
+      exists
+        ? watchlist.map((cat) =>
+            cat.label === INDIVIDUALS_LABEL
+              ? { ...cat, people: [...(cat.people ?? []), person] }
+              : cat
+          )
+        : [...watchlist, { label: INDIVIDUALS_LABEL, companies: [], people: [person] }]
+    );
+  }
+
+  function removeIndividual(name: string) {
+    saveWatchlist(
+      watchlist.map((cat) =>
+        cat.label === INDIVIDUALS_LABEL
+          ? { ...cat, people: (cat.people ?? []).filter((p) => p.name !== name) }
+          : cat
+      )
+    );
+  }
+
   const total = watchlist.reduce((s, c) => s + c.companies.length, 0);
 
   const load = useCallback(async () => {
@@ -655,7 +757,7 @@ export default function ScoutPage() {
     })
     .filter((a) => !filterCompany || a.company === filterCompany);
 
-  const uniqueCompanies = [...new Set(appearances.map((a) => a.company))].sort();
+  const uniqueCompanies = [...new Set(appearances.map((a) => a.company))].filter(Boolean).sort();
 
   // Tweets, date-filtered like the appearances; only currently tracked handles
   // (so deleting an account hides its posts immediately, before the refetch).
@@ -738,7 +840,7 @@ export default function ScoutPage() {
               </svg>
               Watchlist
               <span className="rounded-full bg-white/[0.07] px-1.5 py-0.5 text-[10px] tabular-nums text-zinc-500">
-                {watchlist.reduce((s, c) => s + c.companies.length, 0)}
+                {watchlist.reduce((s, c) => s + c.companies.length + (c.people?.length ?? 0), 0)}
               </span>
             </button>
 
@@ -748,8 +850,18 @@ export default function ScoutPage() {
                   {watchlist.map((cat) => (
                     <div key={cat.label} className="mb-3 last:mb-0">
                       <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-600">
-                        {cat.label} <span className="text-zinc-700">· {cat.companies.length}</span>
+                        {cat.label}{" "}
+                        <span className="text-zinc-700">
+                          · {cat.companies.length + (cat.people?.length ?? 0)}
+                        </span>
                       </p>
+                      {(cat.people?.length ?? 0) > 0 && (
+                        <div className="mb-1 flex flex-wrap gap-x-2 gap-y-0.5 px-2">
+                          {cat.people!.map((p) => (
+                            <span key={p.name} className="text-[11px] text-zinc-400">{p.name}</span>
+                          ))}
+                        </div>
+                      )}
                       <div className="space-y-0.5">
                         {cat.companies.map((co) => {
                           const people = co.people ?? [];
@@ -869,7 +981,7 @@ export default function ScoutPage() {
               <span className="rounded-full bg-white/[0.04] px-2 py-0.5 text-[10px] tabular-nums text-zinc-600">{total}</span>
             </div>
             <div className="space-y-4">
-              {watchlist.map((cat) => (
+              {watchlist.filter((cat) => cat.label !== INDIVIDUALS_LABEL).map((cat) => (
                 <div key={cat.label}>
                   {/* section header with + button */}
                   <div className="flex items-center justify-between pb-2 pt-1">
@@ -912,6 +1024,7 @@ export default function ScoutPage() {
                           co={co}
                           onDelete={() => deleteCompany(cat.label, co.name)}
                           onAddPerson={(p) => addPersonToCompany(cat.label, co.name, p)}
+                          onDeletePerson={(name) => removePersonFromCompany(cat.label, co.name, name)}
                           seenPeople={seenPeople}
                         />
                       );
@@ -919,6 +1032,57 @@ export default function ScoutPage() {
                   </div>
                 </div>
               ))}
+
+              {/* Individuals — tracked people without a company */}
+              <div>
+                <div className="flex items-center justify-between pb-2 pt-1">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-600">
+                    Individuals
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] tabular-nums text-zinc-700">{individuals.length}</span>
+                    <button
+                      onClick={() => setAddingTo(addingTo === INDIVIDUALS_LABEL ? null : INDIVIDUALS_LABEL)}
+                      className="flex h-4 w-4 items-center justify-center rounded text-[10px] text-zinc-700 transition hover:bg-white/[0.06] hover:text-zinc-300"
+                      title="Track a person without a company"
+                    >
+                      {addingTo === INDIVIDUALS_LABEL ? "−" : "+"}
+                    </button>
+                  </div>
+                </div>
+
+                {addingTo === INDIVIDUALS_LABEL && (
+                  <AddIndividualRow
+                    onAdd={(p) => { addIndividual(p); setAddingTo(null); }}
+                    onCancel={() => setAddingTo(null)}
+                  />
+                )}
+
+                {individuals.length === 0 && addingTo !== INDIVIDUALS_LABEL ? (
+                  <p className="py-1 text-[11px] text-zinc-700">No individuals tracked yet</p>
+                ) : (
+                  <div>
+                    {individuals.map((p) => (
+                      <div
+                        key={p.name}
+                        className="group/ind flex items-center justify-between border-b border-white/[0.03] py-[7px] px-1 -mx-1 rounded transition last:border-0 hover:bg-white/[0.02]"
+                      >
+                        <div className="flex min-w-0 items-baseline gap-2">
+                          <span className="truncate text-[13px] text-zinc-200">{p.name}</span>
+                          {p.role && <span className="shrink-0 text-[11px] text-zinc-600">{p.role}</span>}
+                        </div>
+                        <button
+                          onClick={() => removeIndividual(p.name)}
+                          className="hidden rounded px-1 text-[11px] text-zinc-600 transition hover:text-red-400 group-hover/ind:block"
+                          title={`Stop tracking ${p.name}`}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
