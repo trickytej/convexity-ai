@@ -93,8 +93,8 @@ def list_appearances(
     limit:   int        = Query(200),
     db: sqlite3.Connection = Depends(get_scout_db),
 ) -> list[dict]:
-    """Return stored Scout appearances, newest first."""
-    sql = "SELECT * FROM scout_appearances WHERE 1=1"
+    """Return stored Scout appearances, newest first. Dismissed ones are hidden."""
+    sql = "SELECT * FROM scout_appearances WHERE dismissed = 0"
     params: list = []
 
     if company:
@@ -237,7 +237,7 @@ def reprocess_pending(background_tasks: BackgroundTasks, db: sqlite3.Connection 
             """
             SELECT sa.episode_id FROM scout_appearances sa
             JOIN episodes e ON e.id = sa.episode_id
-            WHERE e.status IN ('transcribed', 'failed')
+            WHERE e.status IN ('transcribed', 'failed') AND sa.dismissed = 0
             """
         ).fetchall()
         for row in rows:
@@ -246,6 +246,27 @@ def reprocess_pending(background_tasks: BackgroundTasks, db: sqlite3.Connection 
     except Exception as exc:
         log.error("reprocess-pending failed: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}")
+
+
+@router.delete("/scout/appearances/{appearance_id}")
+def dismiss_appearance(
+    appearance_id: int,
+    db: sqlite3.Connection = Depends(get_scout_db),
+) -> dict:
+    """Soft-delete an appearance the user judged irrelevant.
+
+    The row is kept (dismissed = 1) rather than deleted: its unique
+    listennotes_id is what makes the next Podscan scan's INSERT OR IGNORE a
+    no-op, so the appearance can't come back on refresh. Any episode/nuggets
+    already extracted from it are left untouched.
+    """
+    cur = db.execute(
+        "UPDATE scout_appearances SET dismissed = 1 WHERE id = ?", (appearance_id,)
+    )
+    db.commit()
+    if not cur.rowcount:
+        raise HTTPException(status_code=404, detail="appearance not found")
+    return {"dismissed": True}
 
 
 @router.post("/scout/appearances/{appearance_id}/ingest")

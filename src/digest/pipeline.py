@@ -579,6 +579,16 @@ def process_episode_pipeline(
             result = generate_insights(conn, ep, show, settings)
             if result.ok:
                 repo.set_status(conn, episode_id, EpisodeStatus.INSIGHTS_EXTRACTED)
+                # Per-episode digest (themes + stock stances). Without it the
+                # newsletter's Stock Read-Through falls back to grouping raw
+                # nuggets, which can only ever label companies "mentioned" —
+                # the bullish/bearish/owned calls come from this synthesis.
+                if repo.get_episode_digest(conn, episode_id) is None:
+                    try:
+                        from .synthesis import generate_episode_digest
+                        generate_episode_digest(conn, episode_id, settings=settings)
+                    except Exception as exc:
+                        log.warning("digest synthesis failed for episode %s: %s", episode_id, exc)
             else:
                 repo.set_status(conn, episode_id, EpisodeStatus.FAILED, error=result.error)
     except Exception as exc:

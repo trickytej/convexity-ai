@@ -622,6 +622,14 @@ export async function reprocessPendingScout(): Promise<{ queued: number }> {
   return res.json();
 }
 
+export async function dismissScoutAppearance(appearanceId: number): Promise<void> {
+  const res = await apiFetch(`/api/scout/appearances/${appearanceId}`, { method: "DELETE" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `Dismiss failed: ${res.status}`);
+  }
+}
+
 export async function ingestScoutAppearance(appearanceId: number): Promise<{ episode_id: number; created: boolean }> {
   const res = await apiFetch(`/api/scout/appearances/${appearanceId}/ingest`, { method: "POST" });
   if (!res.ok) {

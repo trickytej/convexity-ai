@@ -152,6 +152,9 @@ class ScoutResult:
     rows: list[dict] = field(default_factory=list)  # per-appearance detail: episode_id/title/status
 
 
+_ROSTER_CURSOR_KEY = "scout_roster_cursor"
+
+
 def run_cycle(conn, roster: list[tuple[str, str, str]], *, days: int = 7) -> ScoutResult:
     """Search Podscan for every (company, person_name, person_role) triple in
     *roster* and persist confirmed appearances.
@@ -160,16 +163,31 @@ def run_cycle(conn, roster: list[tuple[str, str, str]], *, days: int = 7) -> Sco
     ``search_episodes`` so an episode only counts when both the person and
     their company are mentioned — this is what keeps a search for a common
     name like "Tom Brown" from picking up unrelated people.
+
+    The roster can be larger than the daily Podscan quota (one request per
+    person, 100/day). Scanning always starts from a persisted cursor and, when
+    the quota cuts a cycle short, the cursor is saved at the person that
+    failed — so the next cycle picks up exactly there instead of re-searching
+    the same head of the roster and starving the same tail forever.
     """
     result = ScoutResult()
+    if not roster:
+        return result
 
-    for company_name, person_name, person_role in roster:
+    try:
+        start = int(repo.meta_get(conn, _ROSTER_CURSOR_KEY) or 0) % len(roster)
+    except (TypeError, ValueError):
+        start = 0
+    rotated = roster[start:] + roster[:start]
+
+    for i, (company_name, person_name, person_role) in enumerate(rotated):
         try:
             episodes = search_episodes(person_name, days=days, company=company_name or None)
         except PodscanAuthError as exc:
             result.errors.append(str(exc))
             result.aborted = True
             log.error("aborting scout cycle: %s", exc)
+            repo.meta_set(conn, _ROSTER_CURSOR_KEY, str((start + i) % len(roster)))
             conn.commit()  # keep appearances found before the abort
             return result
         except PodscanRateLimitError as exc:
@@ -178,6 +196,7 @@ def run_cycle(conn, roster: list[tuple[str, str, str]], *, days: int = 7) -> Sco
             if exc.reset_at is not None:
                 result.quota_reset_at = exc.reset_at.isoformat()
             log.error("aborting scout cycle: %s", exc)
+            repo.meta_set(conn, _ROSTER_CURSOR_KEY, str((start + i) % len(roster)))
             conn.commit()
             return result
 
@@ -265,12 +284,14 @@ def sync_and_process(
 
     if scope_sweep_to_days:
         rows = conn.execute(
-            "SELECT * FROM scout_appearances WHERE episode_id IS NULL "
+            "SELECT * FROM scout_appearances WHERE episode_id IS NULL AND dismissed = 0 "
             "AND (published_at IS NULL OR published_at >= datetime('now', ?))",
             (f"-{days} days",),
         ).fetchall()
     else:
-        rows = conn.execute("SELECT * FROM scout_appearances WHERE episode_id IS NULL").fetchall()
+        rows = conn.execute(
+            "SELECT * FROM scout_appearances WHERE episode_id IS NULL AND dismissed = 0"
+        ).fetchall()
     result.processing_total = len(rows)
 
     for i, row in enumerate(rows, start=1):

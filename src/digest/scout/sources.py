@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 _BASE = "https://podscan.fm/api/v1"
 _MIN_DURATION_SECONDS = 300   # ignore sub-5-min clips / news briefs
 
-# Minimum spacing between consecutive Podscan requests (pages AND persons).
+# Minimum spacing between consecutive Podscan requests (one per person searched).
 _REQUEST_DELAY_SECONDS = 1.0
 _RETRY_AFTER_SECONDS = 60      # fallback wait after a 429 with no Retry-After header
 _RETRY_MAX_WAIT_SECONDS = 120  # a Retry-After beyond this means the daily quota is gone, not a burst limit
@@ -63,8 +63,8 @@ _last_request_at = 0.0
 def _throttle() -> None:
     """Keep consecutive Podscan requests ≥ _REQUEST_DELAY_SECONDS apart.
 
-    Module-level so the spacing applies across person searches too, not just
-    between pages within one search.
+    Module-level so the spacing applies across person searches, plus the rare
+    429 retry within one search.
     """
     global _last_request_at
     wait = _last_request_at + _REQUEST_DELAY_SECONDS - time.monotonic()
@@ -156,110 +156,109 @@ def _cutoff_dt(days: int) -> datetime:
 def search_episodes(
     query: str, *, days: int = 30, max_results: int = 10, company: str | None = None
 ) -> list[dict]:
-    """Search Podscan for recent episodes where *person_name* is a guest.
+    """Search Podscan for recent episodes where *query* (a person's name) is a guest.
 
-    Podscan's full-text search returns all mentions, so we apply client-side
-    filters: date window, minimum duration, and a guest-appearance heuristic
-    on the title + description.
+    Exactly ONE Podscan request per call — the daily quota is 100 requests and
+    a full watchlist scan runs one search per tracked person, so pagination is
+    not affordable. Everything that used to force extra pages is pushed
+    server-side instead:
 
-    When *company* is given, both the person's full name and the company must
-    appear in the episode text (title + description + transcript) — a common
-    name alone (e.g. "Tom Brown") otherwise matches unrelated people who
-    happen to share it.
+      - the person's name goes in quotes (a bare multi-word query is OR-matched
+        word by word, so "Tom Brown" would match every episode saying just
+        "Tom" or just "Brown" — that noise is what made paging necessary);
+      - ``search_fields=title,description``: _is_guest_appearance can only
+        accept an episode whose title/description names the person, so
+        transcript hits (news shows quoting them — the bulk of matches for a
+        famous name) could never survive the filter and would just crowd the
+        page;
+      - ``since`` scopes results to the date window;
+      - ``min_duration`` drops sub-5-min clips;
+      - ``per_page`` is 50, the API maximum.
 
-    Results are sorted newest-first so we stop paginating once past the window.
+    *company* is deliberately NOT in the server query: descriptions don't
+    always name the guest's company, but transcripts nearly always do, so the
+    word-boundary company check below (which sees the transcript) keeps recall
+    while still weeding out same-name strangers. The guest-appearance
+    heuristic also still runs client-side — Podscan can't tell a guest from a
+    mention.
     """
     settings = get_settings()
     if not settings.podscan_api_key:
         raise PodscanAuthError("PODSCAN_API_KEY is not set")
 
     cutoff = _cutoff_dt(days)
+    params = {
+        "query":         f'"{query}"',
+        "search_fields": "title,description",
+        "since":         cutoff.strftime("%Y-%m-%d %H:%M:%S"),
+        "order_by":      "posted_at",
+        "order_dir":     "desc",
+        "per_page":      50,
+        "min_duration":  _MIN_DURATION_SECONDS,
+    }
+    headers = {"Authorization": f"Bearer {settings.podscan_api_key}"}
     collected: list[dict] = []
-    page = 1
 
     try:
-        with httpx.Client(timeout=20) as client:
-            while len(collected) < max_results:
-                params = {
-                    "query":    query,
-                    "order_by": "posted_at",
-                    "order":    "desc",
-                    "per_page": 20,
-                    "page":     page,
-                }
-                headers = {"Authorization": f"Bearer {settings.podscan_api_key}"}
+        with httpx.Client(timeout=60) as client:
+            _throttle()
+            resp = client.get(f"{_BASE}/episodes/search", params=params, headers=headers)
 
+            if resp.status_code == 429:
+                try:
+                    retry_after = int(resp.headers.get("retry-after") or 0)
+                except ValueError:
+                    retry_after = 0
+                if retry_after > _RETRY_MAX_WAIT_SECONDS:
+                    raise _quota_error(resp)
+                wait = retry_after or _RETRY_AFTER_SECONDS
+                log.warning("Podscan rate limit hit for %r — waiting %ss", query, wait)
+                time.sleep(wait)
                 _throttle()
                 resp = client.get(f"{_BASE}/episodes/search", params=params, headers=headers)
-
                 if resp.status_code == 429:
+                    raise _quota_error(resp)
+
+            if resp.status_code in (401, 403):
+                raise PodscanAuthError(
+                    f"Podscan rejected the API key (HTTP {resp.status_code}) — check PODSCAN_API_KEY"
+                )
+
+            resp.raise_for_status()
+            episodes = resp.json().get("episodes", [])
+
+            for ep in episodes:
+                posted_raw = ep.get("posted_at") or ""
+                if posted_raw:
                     try:
-                        retry_after = int(resp.headers.get("retry-after") or 0)
+                        posted = datetime.fromisoformat(posted_raw)
+                        if posted.tzinfo is None:
+                            posted = posted.replace(tzinfo=timezone.utc)
+                        if posted < cutoff:
+                            continue
                     except ValueError:
-                        retry_after = 0
-                    if retry_after > _RETRY_MAX_WAIT_SECONDS:
-                        raise _quota_error(resp)
-                    wait = retry_after or _RETRY_AFTER_SECONDS
-                    log.warning("Podscan rate limit hit for %r — waiting %ss", query, wait)
-                    time.sleep(wait)
-                    _throttle()
-                    resp = client.get(f"{_BASE}/episodes/search", params=params, headers=headers)
-                    if resp.status_code == 429:
-                        raise _quota_error(resp)
+                        pass
 
-                if resp.status_code in (401, 403):
-                    raise PodscanAuthError(
-                        f"Podscan rejected the API key (HTTP {resp.status_code}) — check PODSCAN_API_KEY"
-                    )
+                duration = ep.get("episode_duration") or 0
+                if duration < _MIN_DURATION_SECONDS:
+                    continue
 
-                resp.raise_for_status()
-                data = resp.json()
-                episodes = data.get("episodes", [])
-                if not episodes:
+                title = (ep.get("episode_title") or "").strip()
+                desc = ep.get("episode_description") or ""
+                if not _is_guest_appearance(query, title, desc):
+                    continue
+
+                haystack = "\n".join(
+                    (title, desc, ep.get("episode_transcript") or "")
+                )
+                if not _mentions(query, haystack):
+                    continue
+                if company and not _mentions(company, haystack):
+                    continue
+
+                collected.append(_normalise(ep))
+                if len(collected) >= max_results:
                     break
-
-                past_window = False
-                for ep in episodes:
-                    posted_raw = ep.get("posted_at") or ""
-                    if posted_raw:
-                        try:
-                            posted = datetime.fromisoformat(posted_raw)
-                            if posted.tzinfo is None:
-                                posted = posted.replace(tzinfo=timezone.utc)
-                            if posted < cutoff:
-                                past_window = True
-                                break
-                        except ValueError:
-                            pass
-
-                    duration = ep.get("episode_duration") or 0
-                    if duration < _MIN_DURATION_SECONDS:
-                        continue
-
-                    title = (ep.get("episode_title") or "").strip()
-                    desc = ep.get("episode_description") or ""
-                    if not _is_guest_appearance(query, title, desc):
-                        continue
-
-                    haystack = "\n".join(
-                        (title, desc, ep.get("episode_transcript") or "")
-                    )
-                    if not _mentions(query, haystack):
-                        continue
-                    if company and not _mentions(company, haystack):
-                        continue
-
-                    collected.append(_normalise(ep))
-                    if len(collected) >= max_results:
-                        break
-
-                if past_window or len(collected) >= max_results:
-                    break
-
-                pagination = data.get("pagination", {})
-                if page >= (pagination.get("last_page") or 1):
-                    break
-                page += 1
 
     except (PodscanAuthError, PodscanRateLimitError):
         raise
