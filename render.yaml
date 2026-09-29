@@ -7,7 +7,7 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     plan: starter # always-on (~$7/mo); free tier sleeps when idle
-    region: ohio # co-located with the Turso DB (aws-us-east-2 = Ohio) for low latency
+    region: virginia # co-located with the Turso DB (aws-us-east-1 = N. Virginia) for low latency
     healthCheckPath: /api/health
     autoDeployTrigger: commit
     envVars:
@@ -31,4 +31,4 @@ services:
       - key: GITHUB_DISPATCH_TOKEN
         sync: false # GitHub fine-grained PAT with "Actions: write" on the repo
       - key: GITHUB_REPO
-        value: dav-s-git/research-digest
+        value: trickytej/convexity-ai
