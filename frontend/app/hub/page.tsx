@@ -1,4 +1,4 @@
-import { getNewsletter } from "@/lib/api";
+import { getNewsletter, getTheses } from "@/lib/api";
 import type { NewsletterNugget } from "@/lib/api";
 import { getSeries } from "@/lib/moves";
 import MovesPanel from "@/components/MovesPanel";
@@ -463,13 +463,31 @@ export default async function HubPage({
   const series = ticker ? await getSeries(ticker, { days: 730, threshold: 0.07 }) : null;
   const meta = TICKERS.find((t) => t.symbol === ticker);
 
+  // "What Matters" theses for the selected security, if any — links the model
+  // view to that company's section of the Brief.
+  let thesisCompany: { company: string; count: number } | null = null;
+  if (ticker) {
+    try {
+      const { companies } = await getTheses();
+      const match = companies.find(
+        (c) =>
+          (c.ticker ?? "").toUpperCase() === ticker.toUpperCase() ||
+          (meta && c.company.toLowerCase() === meta.name.toLowerCase()),
+      );
+      if (match) thesisCompany = { company: match.company, count: match.questions.length };
+    } catch {
+      /* theses unavailable — skip the link */
+    }
+  }
+  const companySlug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
   return (
     <div className="space-y-8">
       {/* ticker bar — always visible */}
       <div>
         <p className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
           <span className="inline-block h-px w-8 bg-[#00d4ff]" />
-          <span className="text-[#00d4ff]">Hub</span>
+          <span className="text-[#00d4ff]">Model</span>
         </p>
         <div className="mt-5">
           <TickerBar active={ticker} />
@@ -487,6 +505,24 @@ export default async function HubPage({
         </div>
       ) : (
         <div className="space-y-12">
+          <div className="flex flex-wrap items-center gap-3">
+            {thesisCompany ? (
+              <Link
+                href={`/brief#company-${companySlug(thesisCompany.company)}`}
+                className="inline-flex items-center gap-2 rounded-full border border-[#00d4ff]/25 bg-[#00d4ff]/5 px-3.5 py-1.5 text-[12px] font-medium text-[#00d4ff] transition hover:bg-[#00d4ff]/10"
+              >
+                What Matters: {thesisCompany.company} · {thesisCompany.count} question
+                {thesisCompany.count === 1 ? "" : "s"} → Brief
+              </Link>
+            ) : (
+              <Link
+                href="/theses"
+                className="inline-flex items-center gap-2 rounded-full border border-white/[0.1] px-3.5 py-1.5 text-[12px] font-medium text-zinc-400 transition hover:border-[#00d4ff]/40 hover:text-[#00d4ff]"
+              >
+                Define what matters for {meta?.name ?? ticker} →
+              </Link>
+            )}
+          </div>
           {ticker === "MU" ? (
             <MuModel />
           ) : (

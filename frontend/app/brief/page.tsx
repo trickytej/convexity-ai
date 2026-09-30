@@ -132,7 +132,11 @@ export default async function BriefPage({
 
       <div className="mt-10 space-y-12">
         {brief.companies.map((c) => (
-          <section key={c.company}>
+          <section
+            key={c.company}
+            id={`company-${c.company.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+            className="scroll-mt-20"
+          >
             <div className="mb-5 flex items-baseline gap-3 border-b border-white/[0.08] pb-3">
               <h2 className="text-2xl font-light tracking-tight text-zinc-50 [font-family:var(--font-display)]">
                 {c.company}

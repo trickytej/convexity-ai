@@ -1,135 +1,246 @@
 import Link from "next/link";
-import { getEpisodes, getShows, isEpisodeProcessed } from "@/lib/api";
-import { fmtDate, fmtDuration } from "@/lib/format";
-import { Badge, SourceBadge } from "@/components/ui";
-import TranscribeButton from "@/components/TranscribeButton";
-import PollButton from "@/components/PollButton";
-import ImportedEpisodeList from "@/components/ImportedEpisodeList";
+import { getNewsletter, getEpisodes } from "@/lib/api";
+import { fmtDate } from "@/lib/format";
+import type { NewsletterNugget, StockMention } from "@/lib/api";
+import { Badge } from "@/components/ui";
+import RefreshFeedsButton from "@/components/RefreshFeedsButton";
+import EpisodeWorkflowPanel from "@/components/EpisodeWorkflowPanel";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  transcribed: { label: "Transcribed", cls: "bg-emerald-500/10 text-emerald-300 ring-emerald-500/25" },
-  acquired:    { label: "Downloaded",  cls: "bg-sky-500/10 text-sky-300 ring-sky-500/25" },
-  discovered:  { label: "Discovered",  cls: "bg-white/[0.05] text-zinc-400 ring-white/10" },
-  failed:      { label: "Failed",      cls: "bg-rose-500/10 text-rose-300 ring-rose-500/25" },
+const TYPE_TONE: Record<string, "zinc" | "green" | "blue" | "amber" | "indigo"> = {
+  thesis: "indigo",
+  prediction: "amber",
+  data_point: "blue",
+  company_move: "green",
+  contrarian: "amber",
+  mental_model: "zinc",
+  watch_item: "zinc",
 };
 
-export default async function EpisodesPage({
+const TYPE_LABEL: Record<string, string> = { contrarian: "take" };
+
+function typeLabel(t: string) {
+  return TYPE_LABEL[t] ?? t.replace(/_/g, " ");
+}
+
+function KeptNuggetCard({ n }: { n: NewsletterNugget }) {
+  const href = `/episode/${n.episode_id}${n.start_ms != null ? `#t-${n.start_ms}` : ""}`;
+  return (
+    <div className="group rounded-xl border border-white/[0.08] bg-[#0b0c10]/75 p-4 transition hover:border-[#00d4ff]/30 hover:bg-[#0e1016]/85">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <Badge tone={TYPE_TONE[n.type] ?? "zinc"}>{typeLabel(n.type)}</Badge>
+        {n.curator_rank != null && (
+          <Badge tone="amber">{"★".repeat(n.curator_rank)}</Badge>
+        )}
+        {(n.companies ?? []).slice(0, 3).map((c) => (
+          <span
+            key={c}
+            className="rounded-full border border-[#00d4ff]/25 px-2 py-0.5 text-[11px] font-medium text-[#00d4ff]/80"
+          >
+            {c}
+          </span>
+        ))}
+      </div>
+
+      <p className="text-[15px] font-medium leading-snug text-zinc-100">{n.claim}</p>
+
+      {n.quote && (
+        <blockquote className="mt-2 border-l-2 border-[#00d4ff]/40 pl-3 text-sm italic leading-relaxed text-zinc-500">
+          "{n.quote}"
+        </blockquote>
+      )}
+
+      {n.curation_note && (
+        <p className="mt-2 text-xs italic text-[#00d4ff]/70">{n.curation_note}</p>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
+        <span className="min-w-0 truncate">
+          {n.speaker_name ? (
+            <span className="font-medium text-zinc-300">{n.speaker_name}</span>
+          ) : null}
+          {" · "}
+          <span className="font-[family-name:var(--font-mono)]">{n.show_slug}</span>
+          {" · "}
+          {fmtDate(n.episode_published_at)}
+        </span>
+        <Link href={href} className="shrink-0 font-medium text-[#00d4ff] transition hover:text-[#33ddff]">
+          in context →
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+const STANCE_TONE: Record<string, "green" | "amber" | "zinc"> = {
+  bullish: "green",
+  bearish: "amber",
+  neutral: "zinc",
+};
+
+function StockCard({ s }: { s: StockMention }) {
+  return (
+    <div className="rounded-xl border border-white/[0.08] bg-[#0b0c10]/75 p-4 transition hover:border-[#00d4ff]/30 hover:bg-[#0e1016]/85">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <span className="text-sm font-semibold text-zinc-100">{s.company}</span>
+        {s.tickers.length > 0 && (
+          <span className="font-[family-name:var(--font-mono)] text-xs text-zinc-500">
+            {s.tickers.join(" · ")}
+          </span>
+        )}
+        <Badge tone={STANCE_TONE[s.stance] ?? "zinc"}>{s.stance}</Badge>
+        <span className="ml-auto font-[family-name:var(--font-mono)] text-xs text-zinc-600">
+          {s.mention_count} mention{s.mention_count !== 1 ? "s" : ""}
+        </span>
+      </div>
+      <p className="text-sm leading-relaxed text-zinc-400">{s.summary}</p>
+    </div>
+  );
+}
+
+function SectionHeader({
+  index,
+  title,
+  count,
+}: {
+  index: string;
+  title: string;
+  count: number;
+}) {
+  return (
+    <div className="mb-6 flex items-baseline justify-between border-b border-white/[0.08] pb-4">
+      <div className="flex items-baseline gap-3">
+        <span className="rounded-[5px] border border-[#00d4ff]/40 px-1.5 py-1 font-[family-name:var(--font-mono)] text-[11px] leading-none text-[#00d4ff]">
+          {index}
+        </span>
+        <h2 className="text-2xl font-light tracking-tight text-zinc-50 [font-family:var(--font-display)]">
+          {title}
+        </h2>
+      </div>
+      <span className="font-[family-name:var(--font-mono)] text-xs tabular-nums text-zinc-500">
+        {count}
+      </span>
+    </div>
+  );
+}
+
+function defaultFrom() {
+  const d = new Date();
+  d.setDate(d.getDate() - 7);
+  return d.toISOString().slice(0, 10);
+}
+function defaultTo() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export default async function InsightsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ show?: string }>;
+  searchParams?: Promise<{ from?: string; to?: string }>;
 }) {
-  const { show } = await searchParams;
-  // When a specific show is selected, show ALL discovered episodes (not just transcribed)
-  const [shows, list] = await Promise.all([
-    getShows(),
-    getEpisodes({ show, limit: 200, all: !!show }),
+  const params = await searchParams;
+  const since = params?.from || defaultFrom();
+  const until = params?.to || defaultTo();
+
+  const [newsletter, episodeList] = await Promise.all([
+    getNewsletter({ from: since, to: until }),
+    getEpisodes({ since, until, limit: 200, all: true }),
   ]);
-  const withTranscripts = shows.filter((s) => s.transcribed > 0);
+  // "x" episodes are per-handle tweet buckets from Scout's X sync, not podcasts.
+  const trackedEpisodes = episodeList.episodes.filter(
+    e => e.show_slug !== "scout" && e.show_slug !== "x"
+  );
+  const { lead, good_to_know, stock_readthrough, kept_count } =
+    newsletter;
 
   return (
     <div>
       {/* masthead */}
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <p className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
-            <span className="inline-block h-px w-8 bg-[#00d4ff]" />
-            <span className="text-[#00d4ff]">Library</span>
-          </p>
-          <h1 className="mt-4 text-4xl font-light tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-5xl">
-            Episodes
-          </h1>
-          <p className="mt-3 text-[15px] text-zinc-400">
-            {show ? `${list.total} episodes` : `${list.total} transcribed episodes`}
-          </p>
-        </div>
-        {show && <PollButton slug={show} />}
-      </div>
+      <p className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
+        <span className="inline-block h-px w-8 bg-[#00d4ff]" />
+        <span className="text-[#00d4ff]">Episodes</span>
+      </p>
 
-      {/* Show filter pills */}
-      <div className="mt-8 flex flex-wrap gap-2">
-        <Link
-          href="/episodes"
-          className={`rounded-full px-3.5 py-1.5 text-sm transition ${
-            !show
-              ? "bg-[#00d4ff] font-medium text-[#001a26]"
-              : "border border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-100"
-          }`}
-        >
-          All
-        </Link>
-        {withTranscripts.map((s) => (
-          <Link
-            key={s.slug}
-            href={`/episodes?show=${s.slug}`}
-            className={`rounded-full px-3.5 py-1.5 text-sm transition ${
-              show === s.slug
-                ? "bg-[#00d4ff] font-medium text-[#001a26]"
-                : "border border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-100"
-            }`}
-          >
-            {s.name}
-            <span className={`ml-1.5 ${show === s.slug ? "opacity-60" : "opacity-50"}`}>
-              {s.transcribed}
-            </span>
-          </Link>
-        ))}
-      </div>
+      <h1 className="mt-4 text-4xl font-light tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-5xl">
+        Review the week&apos;s <span className="text-[#00d4ff]">episodes</span>
+      </h1>
 
-      {/* Episode list */}
+      <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-zinc-400">
+        Everything ingested in the window — transcribe, review nuggets, and curate
+        what surfaces on the newsletter and Brief.
+      </p>
+
+      {/* refresh feeds */}
       <div className="mt-8">
-        {show === "imported" ? (
-          <ImportedEpisodeList initialEpisodes={list.episodes} />
-        ) : (
-          <div className="divide-y divide-white/[0.06] overflow-hidden rounded-xl border border-white/[0.08] bg-[#0b0c10]/60">
-            {list.episodes.length === 0 && (
-              <p className="px-4 py-10 text-center text-zinc-500">
-                {show
-                  ? "No episodes discovered yet. Use the Refresh button above to check for new episodes."
-                  : "No transcribed episodes yet."}
-              </p>
-            )}
-            {list.episodes.map((e) => {
-              const isTranscribed = isEpisodeProcessed(e);
-              const statusInfo = STATUS_BADGE[e.status ?? (e.source ? "transcribed" : "discovered")];
-
-              return (
-                <div key={e.id} className="flex items-center justify-between gap-4 px-4 py-3.5 transition hover:bg-white/[0.02]">
-                  <div className="min-w-0 flex-1">
-                    {isTranscribed ? (
-                      <Link href={`/episode/${e.id}`} className="transition-colors hover:text-[#00d4ff]">
-                        <p className="truncate font-medium text-zinc-100">{e.title}</p>
-                      </Link>
-                    ) : (
-                      <p className="truncate font-medium text-zinc-500">{e.title}</p>
-                    )}
-                    <p className="mt-0.5 text-sm text-zinc-500">
-                      <span className="font-[family-name:var(--font-mono)] text-zinc-400">{e.show_slug}</span> ·{" "}
-                      {fmtDate(e.published_at)} · {fmtDuration(e.duration_seconds)}
-                      {e.guests && e.guests.length > 0 ? ` · ${e.guests.join(", ")}` : ""}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {isTranscribed && e.nugget_count > 0 && (
-                      <Badge tone="indigo">{e.nugget_count} nuggets</Badge>
-                    )}
-                    {isTranscribed && <SourceBadge source={e.source} />}
-                    {!isTranscribed && statusInfo && (
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${statusInfo.cls}`}>
-                        {statusInfo.label}
-                      </span>
-                    )}
-                    {!isTranscribed && (
-                      <TranscribeButton episodeId={e.id} initialStatus={e.status} />
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <RefreshFeedsButton />
       </div>
+
+      {/* episode list for date range */}
+      <section className="mt-12 scroll-mt-20">
+        <div className="mb-6 flex items-baseline justify-between border-b border-white/[0.08] pb-4">
+          <div className="flex items-baseline gap-3">
+            <span className="rounded-[5px] border border-[#00d4ff]/40 px-1.5 py-1 font-[family-name:var(--font-mono)] text-[11px] leading-none text-[#00d4ff]">
+              00
+            </span>
+            <h2 className="text-2xl font-light tracking-tight text-zinc-50 [font-family:var(--font-display)]">
+              Episodes
+            </h2>
+          </div>
+          <span className="font-[family-name:var(--font-mono)] text-xs tabular-nums text-zinc-500">
+            {trackedEpisodes.length}
+          </span>
+        </div>
+        <EpisodeWorkflowPanel
+          episodes={trackedEpisodes}
+          since={since}
+          until={until}
+        />
+      </section>
+
+      {/* lead */}
+      {lead.length > 0 && (
+        <section className="mt-14 scroll-mt-20">
+          <SectionHeader index="01" title="Top Picks" count={lead.length} />
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {lead.map((n) => (
+              <KeptNuggetCard key={n.id} n={n} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* good to know */}
+      {good_to_know.length > 0 && (
+        <section className="mt-16 scroll-mt-20">
+          <SectionHeader index="02" title="Relevant Insights" count={good_to_know.length} />
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {good_to_know.map((n) => (
+              <KeptNuggetCard key={n.id} n={n} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* stock read-through */}
+      {stock_readthrough.length > 0 && (
+        <section className="mt-16 scroll-mt-20">
+          <SectionHeader index="03" title="Stock Read-Through" count={stock_readthrough.length} />
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {stock_readthrough.map((s) => (
+              <StockCard key={s.company} s={s} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* empty state */}
+      {kept_count === 0 && (
+        <p className="mt-14 rounded-xl border border-white/[0.08] bg-[#0b0c10]/75 px-4 py-10 text-center text-zinc-500">
+          No kept insights yet — expand an episode above, review its nuggets, and
+          mark what matters.
+        </p>
+      )}
     </div>
   );
 }

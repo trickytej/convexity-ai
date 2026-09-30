@@ -5,7 +5,9 @@ import { usePathname } from "next/navigation";
 
 const NAV = [
   { href: "/insights",    label: "Home",        match: (p: string) => p === "/" || p === "/insights" || p === "/preview" },
+  { href: "/hub",         label: "Model",       match: (p: string) => p.startsWith("/hub") },
   { href: "/brief",       label: "Brief",       match: (p: string) => p.startsWith("/brief") || p.startsWith("/theses") },
+  { href: "/episodes",    label: "Episodes",    match: (p: string) => p.startsWith("/episodes") },
   { href: "/scout",       label: "Scout",       match: (p: string) => p.startsWith("/scout") },
   { href: "/securities",  label: "Securities",  match: (p: string) => p.startsWith("/securities") },
   { href: "/podcasts",    label: "Podcasts",    match: (p: string) => p === "/podcasts" || p.startsWith("/podcasts?") },
@@ -19,22 +21,13 @@ export default function SiteHeader() {
   return (
     <header className="sticky top-0 z-30 border-b border-white/[0.08] bg-[#0a0a0c]/85 backdrop-blur print:hidden">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
-        <div className="flex items-center gap-4">
-          <Link
-            href="/hub"
-            className={`text-[15px] font-medium tracking-tight transition [font-family:var(--font-display)] ${pathname.startsWith("/hub") ? "text-[#00d4ff]" : "text-zinc-400 hover:text-zinc-100"}`}
-          >
-            Hub
-          </Link>
-          <span className="text-zinc-700">/</span>
-          <Link
-            href="/insights"
-            className="flex items-center gap-2 text-[15px] font-medium tracking-tight text-zinc-100 [font-family:var(--font-display)]"
-          >
-            <span className="inline-block h-3 w-3 rounded-sm bg-[#00d4ff]" />
-            ConvexityAI
-          </Link>
-        </div>
+        <Link
+          href="/insights"
+          className="flex items-center gap-2 text-[15px] font-medium tracking-tight text-zinc-100 [font-family:var(--font-display)]"
+        >
+          <span className="inline-block h-3 w-3 rounded-sm bg-[#00d4ff]" />
+          ConvexityAI
+        </Link>
         <nav className="flex gap-6 text-sm sm:gap-7">
           {NAV.map((n) => {
             const active = n.match(pathname);
