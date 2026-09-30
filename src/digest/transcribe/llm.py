@@ -28,18 +28,19 @@ def complete(
     user: str,
     model: str,
     max_tokens: int = 4096,
-    temperature: float | None = 0.0,
     thinking: bool = False,
     betas: list[str] | None = None,
     stream: bool = False,
 ) -> str:
     """One-shot completion.
 
-    Set ``thinking=True`` for adaptive ("max") reasoning models like Opus 4.8 (which
-    also reject ``temperature``); pass ``betas`` (e.g. ["context-1m-2025-08-07"]) to
-    enable beta features such as the 1M context window. Use ``stream=True`` for large
-    ``max_tokens`` requests (the SDK requires streaming for ones that may exceed 10
-    minutes).
+    Set ``thinking=True`` for adaptive ("max") reasoning models like Opus 4.8;
+    pass ``betas`` (e.g. ["context-1m-2025-08-07"]) to enable beta features such
+    as the 1M context window. Use ``stream=True`` for large ``max_tokens``
+    requests (the SDK requires streaming for ones that may exceed 10 minutes).
+
+    No sampling params: ``temperature`` was removed from the SDK/API for current
+    models (sending it is a TypeError on anthropic>=1.x).
     """
     kwargs: dict = {
         "model": model,
@@ -48,9 +49,7 @@ def complete(
         "messages": [{"role": "user", "content": user}],
     }
     if thinking:
-        kwargs["thinking"] = {"type": "adaptive"}  # adaptive thinking models reject temperature
-    elif temperature is not None:
-        kwargs["temperature"] = temperature
+        kwargs["thinking"] = {"type": "adaptive"}
     if betas:
         kwargs["extra_headers"] = {"anthropic-beta": ",".join(betas)}
 
