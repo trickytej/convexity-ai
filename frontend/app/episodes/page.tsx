@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getEpisodes, getShows } from "@/lib/api";
+import { getEpisodes, getShows, isEpisodeProcessed } from "@/lib/api";
 import { fmtDate, fmtDuration } from "@/lib/format";
 import { Badge, SourceBadge } from "@/components/ui";
 import TranscribeButton from "@/components/TranscribeButton";
@@ -91,7 +91,7 @@ export default async function EpisodesPage({
               </p>
             )}
             {list.episodes.map((e) => {
-              const isTranscribed = e.status === "transcribed" || e.status === "insights_extracted" || (!e.status && !!e.source);
+              const isTranscribed = isEpisodeProcessed(e);
               const statusInfo = STATUS_BADGE[e.status ?? (e.source ? "transcribed" : "discovered")];
 
               return (

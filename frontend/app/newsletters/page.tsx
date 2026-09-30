@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getShows, getEpisodes } from "@/lib/api";
+import { getShows, getEpisodes, isEpisodeProcessed } from "@/lib/api";
 import { fmtDate } from "@/lib/format";
 import ImportNewsletter from "@/components/ImportNewsletter";
 import TranscribeButton from "@/components/TranscribeButton";
@@ -103,7 +103,7 @@ export default async function NewslettersPage({
               </p>
             )}
             {list.episodes.map((ep) => {
-              const isTranscribed = ep.status === "transcribed" || ep.status === "insights_extracted" || (!ep.status && !!ep.source);
+              const isTranscribed = isEpisodeProcessed(ep);
               return (
                 <div
                   key={ep.id}

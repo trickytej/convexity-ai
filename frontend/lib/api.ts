@@ -59,6 +59,13 @@ export interface EpisodeList {
   episodes: Episode[];
 }
 
+/** True when an episode has a stored transcript (and possibly insights) to show.
+ * The pipeline advances finished episodes transcribed → insights_extracted;
+ * legacy rows imported from feeds may carry a source but no status at all. */
+export function isEpisodeProcessed(e: { status?: string | null; source?: string | null }): boolean {
+  return e.status === "transcribed" || e.status === "insights_extracted" || (!e.status && !!e.source);
+}
+
 export interface Segment {
   idx: number;
   speaker_name?: string | null;

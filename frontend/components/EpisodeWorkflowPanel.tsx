@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import type { Episode, NuggetWithCuration, Newsletter, NewsletterNugget, StockMention } from "@/lib/api";
-import { getEpisodeNuggets, getNewsletter } from "@/lib/api";
+import { getEpisodeNuggets, getNewsletter, isEpisodeProcessed } from "@/lib/api";
 import { fmtDate, fmtDuration } from "@/lib/format";
 import { Badge } from "@/components/ui";
 import TranscribeButton from "@/components/TranscribeButton";
@@ -40,7 +40,7 @@ function EpisodeRow({
   const [nuggets, setNuggets] = useState<NuggetWithCuration[] | null>(null);
   const [loadingNuggets, setLoadingNuggets] = useState(false);
 
-  const isTranscribed = episode.status === "transcribed" || episode.status === "insights_extracted" || (!episode.status && !!episode.source);
+  const isTranscribed = isEpisodeProcessed(episode);
   const statusInfo = STATUS_BADGE[episode.status ?? (episode.source ? "transcribed" : "discovered")];
 
   const handleToggleOpen = useCallback(async () => {
@@ -330,9 +330,7 @@ export default function EpisodeWorkflowPanel({
     }
   }
 
-  const transcribed = episodes.filter(
-    (e) => e.status === "transcribed" || e.status === "insights_extracted" || (!e.status && !!e.source),
-  );
+  const transcribed = episodes.filter(isEpisodeProcessed);
 
   if (episodes.length === 0) {
     return (

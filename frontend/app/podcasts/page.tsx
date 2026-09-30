@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getShows, getEpisodes } from "@/lib/api";
+import { getShows, getEpisodes, isEpisodeProcessed } from "@/lib/api";
 import { fmtDate, fmtDuration } from "@/lib/format";
 import { Badge, SourceBadge } from "@/components/ui";
 import ShowGrid from "@/components/ShowGrid";
@@ -119,7 +119,7 @@ export default async function PodcastsPage({
                 </p>
               )}
               {list.episodes.map((e) => {
-                const isTranscribed = e.status === "transcribed" || e.status === "insights_extracted" || (!e.status && !!e.source);
+                const isTranscribed = isEpisodeProcessed(e);
                 const statusInfo = STATUS_BADGE[e.status ?? (e.source ? "transcribed" : "discovered")];
 
                 return (
