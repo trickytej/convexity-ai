@@ -728,3 +728,34 @@ def serve(
 
 if __name__ == "__main__":
     app()
+
+
+@app.command(name="brief-match")
+def brief_match(
+    days: int = typer.Option(2, "--days", "-d", help="Evaluate nuggets created in the last N days."),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Match recent nuggets against the 'What Matters' theses (daily catch-up
+    sweep — the episode pipeline also matches inline). Idempotent: nuggets are
+    evaluated at most once. Requires ANTHROPIC_API_KEY.
+    """
+    _setup_logging(verbose)
+    settings = get_settings()
+    settings.ensure_dirs()
+
+    if not settings.anthropic_api_key:
+        console.print("[red]ANTHROPIC_API_KEY is not set.[/red] Add it to .env.")
+        raise typer.Exit(code=1)
+
+    from .theses import run_brief_match
+
+    with get_conn(settings.resolved_db_path) as conn:
+        init_db(conn)
+        result = run_brief_match(conn, settings, days=days)
+
+    table = Table(title="Thesis matching", header_style="bold")
+    table.add_column("episodes", justify="right")
+    table.add_column("nuggets evaluated", justify="right")
+    table.add_column("hits", justify="right")
+    table.add_row(str(result["episodes"]), str(result["nuggets_evaluated"]), str(result["hits"]))
+    console.print(table)

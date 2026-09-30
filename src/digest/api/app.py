@@ -20,6 +20,7 @@ from .routers import (
     nuggets,
     report,
     scout,
+    theses,
 )
 
 # Open paths that never require the API key (health check + CORS preflight).
@@ -68,6 +69,7 @@ def create_app() -> FastAPI:
     app.include_router(newsletter.router, prefix="/api")
     app.include_router(ingest.router, prefix="/api")
     app.include_router(scout.router, prefix="/api")
+    app.include_router(theses.router, prefix="/api")
 
     # market-moves (vendored): price series + move detection + grounded attribution.
     # Guarded so a missing optional dep/data never takes down the core digest API.

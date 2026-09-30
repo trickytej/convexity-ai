@@ -589,6 +589,13 @@ def process_episode_pipeline(
                         generate_episode_digest(conn, episode_id, settings=settings)
                     except Exception as exc:
                         log.warning("digest synthesis failed for episode %s: %s", episode_id, exc)
+                # "What Matters" thesis matcher — best-effort like the digest
+                # hook; the daily `digest brief-match` sweep catches failures.
+                try:
+                    from .theses import match_episode_nuggets
+                    match_episode_nuggets(conn, episode_id, settings)
+                except Exception as exc:
+                    log.warning("thesis matching failed for episode %s: %s", episode_id, exc)
             else:
                 repo.set_status(conn, episode_id, EpisodeStatus.FAILED, error=result.error)
     except Exception as exc:

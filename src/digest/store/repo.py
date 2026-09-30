@@ -930,3 +930,167 @@ def status_matrix(conn: sqlite3.Connection) -> list[sqlite3.Row]:
         ORDER BY s.active DESC, s.tier, s.slug
         """
     ).fetchall()
+
+
+# --- "What Matters" theses ------------------------------------------------
+
+
+def list_theses(
+    conn: sqlite3.Connection, company: str | None = None, include_inactive: bool = False
+) -> list[sqlite3.Row]:
+    sql = "SELECT * FROM theses WHERE 1=1"
+    params: list = []
+    if not include_inactive:
+        sql += " AND active = 1"
+    if company:
+        sql += " AND company = ?"
+        params.append(company)
+    sql += " ORDER BY company, position, id"
+    return conn.execute(sql, params).fetchall()
+
+
+def save_company_theses(
+    conn: sqlite3.Connection, company: str, ticker: str | None, questions: list[dict]
+) -> list[sqlite3.Row]:
+    """Diff-based save of one company's question set.
+
+    *questions* is an ordered list of {"id"?: int, "question": str, "note"?: str}.
+    Rows with an id are updated in place (so editing a question's wording keeps
+    its id and therefore its accumulated thesis_hits); rows without are inserted;
+    the company's active rows whose ids are absent from the payload are
+    soft-deactivated, never deleted.
+    """
+    now = _now_iso()
+    keep_ids: set[int] = set()
+    for pos, q in enumerate(questions):
+        text = (q.get("question") or "").strip()
+        if not text:
+            continue
+        note = (q.get("note") or "").strip() or None
+        qid = q.get("id")
+        if qid is not None:
+            cur = conn.execute(
+                "UPDATE theses SET question = ?, note = ?, position = ?, ticker = ?, "
+                "active = 1, updated_at = ? WHERE id = ? AND company = ?",
+                (text, note, pos, ticker, now, qid, company),
+            )
+            if cur.rowcount:
+                keep_ids.add(int(qid))
+                continue
+        cur = conn.execute(
+            "INSERT INTO theses (company, ticker, question, note, position, active, "
+            "created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
+            (company, ticker, text, note, pos, now, now),
+        )
+        keep_ids.add(int(cur.lastrowid))
+    if keep_ids:
+        placeholders = ",".join("?" * len(keep_ids))
+        conn.execute(
+            f"UPDATE theses SET active = 0, updated_at = ? "
+            f"WHERE company = ? AND active = 1 AND id NOT IN ({placeholders})",
+            (now, company, *keep_ids),
+        )
+    else:
+        conn.execute(
+            "UPDATE theses SET active = 0, updated_at = ? WHERE company = ? AND active = 1",
+            (now, company),
+        )
+    conn.commit()
+    return list_theses(conn, company=company)
+
+
+def record_thesis_hits(conn: sqlite3.Connection, hits: list[dict]) -> int:
+    """UPSERT matcher hits keyed on (question_id, claim_hash) — re-running the
+    matcher after a re-extraction heals the stale nugget_id instead of duplicating."""
+    now = _now_iso()
+    conn.executemany(
+        """
+        INSERT INTO thesis_hits (question_id, nugget_id, episode_id, claim_hash,
+                                 relevance, direction, why, model, matched_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(question_id, claim_hash) DO UPDATE SET
+            nugget_id = excluded.nugget_id,
+            relevance = excluded.relevance,
+            direction = excluded.direction,
+            why = excluded.why,
+            model = excluded.model,
+            matched_at = excluded.matched_at
+        """,
+        [
+            (
+                h["question_id"], h["nugget_id"], h["episode_id"], h["claim_hash"],
+                h["relevance"], h["direction"], h.get("why"), h.get("model"), now,
+            )
+            for h in hits
+        ],
+    )
+    conn.commit()
+    return len(hits)
+
+
+def mark_nuggets_seen(conn: sqlite3.Connection, pairs: list[tuple[int, int]]) -> None:
+    """pairs = [(nugget_id, episode_id)] — records that the matcher evaluated them."""
+    now = _now_iso()
+    conn.executemany(
+        "INSERT OR IGNORE INTO thesis_match_seen (nugget_id, episode_id, matched_at) "
+        "VALUES (?, ?, ?)",
+        [(nid, eid, now) for nid, eid in pairs],
+    )
+    conn.commit()
+
+
+def unseen_nuggets(
+    conn: sqlite3.Connection,
+    episode_id: int | None = None,
+    created_since: str | None = None,
+) -> list[sqlite3.Row]:
+    """Nuggets the thesis matcher has not evaluated yet, joined with their show."""
+    sql = """
+        SELECT n.*, e.show_slug, e.title AS episode_title
+        FROM nuggets n
+        JOIN episodes e ON e.id = n.episode_id
+        LEFT JOIN thesis_match_seen s ON s.nugget_id = n.id
+        WHERE s.nugget_id IS NULL
+    """
+    params: list = []
+    if episode_id is not None:
+        sql += " AND n.episode_id = ?"
+        params.append(episode_id)
+    if created_since is not None:
+        sql += " AND n.created_at >= ?"
+        params.append(created_since)
+    sql += " ORDER BY n.episode_id, n.id"
+    return conn.execute(sql, params).fetchall()
+
+
+def thesis_hits_since(
+    conn: sqlite3.Connection,
+    since: str,
+    until: str | None = None,
+    min_relevance: float = 0.5,
+) -> list[sqlite3.Row]:
+    """Brief query: hits in the window with question, nugget, episode, and (for
+    X posts) tweet context. INNER JOIN on nuggets drops hits orphaned by a
+    re-extraction until the matcher re-runs and heals them."""
+    sql = """
+        SELECT h.id AS hit_id, h.relevance, h.direction, h.why, h.matched_at,
+               t.id AS question_id, t.company, t.ticker, t.question,
+               t.note AS question_note, t.position,
+               n.id AS nugget_id, n.claim, n.quote, n.speaker_name, n.start_ms,
+               n.signal_score, n.type AS nugget_type,
+               e.id AS episode_id, e.show_slug, e.title AS episode_title,
+               e.published_at,
+               st.url AS tweet_url, st.created_at AS tweet_created_at
+        FROM thesis_hits h
+        JOIN theses t   ON t.id = h.question_id
+        JOIN nuggets n  ON n.id = h.nugget_id
+        JOIN episodes e ON e.id = n.episode_id
+        LEFT JOIN scout_tweets st ON st.nugget_id = n.id
+        WHERE h.matched_at >= ? AND h.relevance >= ? AND t.active = 1
+    """
+    params: list = [since, min_relevance]
+    if until is not None:
+        sql += " AND h.matched_at < ?"
+        params.append(until)
+    sql += " ORDER BY t.company, t.position, h.relevance DESC"
+    return conn.execute(sql, params).fetchall()

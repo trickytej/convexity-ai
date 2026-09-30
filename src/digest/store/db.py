@@ -161,6 +161,48 @@ CREATE TABLE IF NOT EXISTS scout_tweets (
 CREATE INDEX IF NOT EXISTS idx_scout_tweets_handle  ON scout_tweets(handle);
 CREATE INDEX IF NOT EXISTS idx_scout_tweets_created ON scout_tweets(created_at DESC);
 
+-- "What Matters" theses: the 4-5 hand-authored key questions per followed company.
+-- Soft-deactivated (active=0) rather than deleted so thesis_hits keep a valid target.
+CREATE TABLE IF NOT EXISTS theses (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    company    TEXT NOT NULL,               -- canonical Scout-watchlist name
+    ticker     TEXT,                        -- denormalized from the watchlist at save time
+    question   TEXT NOT NULL,
+    note       TEXT,                        -- optional why-it-matters
+    position   INTEGER NOT NULL DEFAULT 0,  -- ordering within a company
+    active     INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_theses_company ON theses(company);
+
+CREATE TABLE IF NOT EXISTS thesis_hits (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    question_id INTEGER NOT NULL REFERENCES theses(id) ON DELETE CASCADE,
+    -- Intentionally NO FK on nugget_id (see nugget_curation below): nugget ids are
+    -- unstable across replace_nuggets. claim_hash is the durable identity; the
+    -- UPSERT in repo.record_thesis_hits heals nugget_id after re-extraction.
+    nugget_id   INTEGER NOT NULL,
+    episode_id  INTEGER NOT NULL,
+    claim_hash  TEXT NOT NULL,              -- sha1(f"{episode_id}:{claim}")[:16]
+    relevance   REAL NOT NULL,              -- 0..1 from the matcher
+    direction   TEXT NOT NULL,              -- supports | contradicts | unclear
+    why         TEXT,                       -- one sentence: what this changes
+    model       TEXT,
+    matched_at  TEXT NOT NULL,
+    UNIQUE(question_id, claim_hash)
+);
+CREATE INDEX IF NOT EXISTS idx_thesis_hits_matched  ON thesis_hits(matched_at);
+CREATE INDEX IF NOT EXISTS idx_thesis_hits_question ON thesis_hits(question_id);
+
+-- Evaluated-once ledger for the matcher (even zero-match evaluations), so the
+-- daily catch-up sweep never re-sends a nugget to the LLM. No FK by design.
+CREATE TABLE IF NOT EXISTS thesis_match_seen (
+    nugget_id  INTEGER PRIMARY KEY,
+    episode_id INTEGER NOT NULL,
+    matched_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS nugget_curation (
     nugget_id             INTEGER PRIMARY KEY,
     -- Intentionally NO "REFERENCES nuggets(id) ON DELETE CASCADE": curator decisions

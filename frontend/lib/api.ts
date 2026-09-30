@@ -732,3 +732,103 @@ export function getNewsletter(params: {
   (params.episode_ids ?? []).forEach((id) => q.append("episode_ids", String(id)));
   return getJSON<Newsletter>(`/api/newsletter?${q.toString()}`);
 }
+
+// ─── "What Matters" theses + daily Brief ─────────────────────────────────────
+
+export type ThesisQuestion = {
+  id: number;
+  question: string;
+  note: string | null;
+  position: number;
+  active: boolean;
+};
+
+export type CompanyTheses = {
+  company: string;
+  ticker?: string | null;
+  questions: ThesisQuestion[];
+};
+
+export function getTheses(): Promise<{ companies: CompanyTheses[] }> {
+  return getJSON<{ companies: CompanyTheses[] }>("/api/theses");
+}
+
+export async function putCompanyTheses(block: {
+  company: string;
+  ticker?: string | null;
+  questions: { id?: number; question: string; note?: string | null }[];
+}): Promise<{ companies: CompanyTheses[] }> {
+  const res = await apiFetch(`/api/theses`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(block),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `Save failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function draftTheses(
+  company: string,
+  ticker?: string | null,
+): Promise<{ questions: { question: string; note: string | null }[] }> {
+  const res = await apiFetch(`/api/theses/draft`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ company, ticker }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `Draft failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export interface BriefHit {
+  relevance: number;
+  direction: "supports" | "contradicts" | "unclear";
+  why: string | null;
+  matched_at: string;
+  nugget: {
+    id: number;
+    claim: string;
+    quote: string | null;
+    speaker_name: string | null;
+    episode_id: number;
+    show_slug: string;
+    episode_title: string;
+    published_at: string | null;
+    start_ms: number | null;
+    tweet_url: string | null;
+  };
+}
+
+export interface BriefQuestion {
+  question_id: number;
+  question: string;
+  note: string | null;
+  hits: BriefHit[];
+}
+
+export interface BriefCompany {
+  company: string;
+  ticker: string | null;
+  hit_count: number;
+  questions: BriefQuestion[];
+}
+
+export interface Brief {
+  since: string;
+  until: string;
+  companies: BriefCompany[];
+}
+
+export function getBrief(params: { days?: number; since?: string; min_relevance?: number } = {}): Promise<Brief> {
+  const q = new URLSearchParams();
+  if (params.days) q.set("days", String(params.days));
+  if (params.since) q.set("since", params.since);
+  if (params.min_relevance !== undefined) q.set("min_relevance", String(params.min_relevance));
+  return getJSON<Brief>(`/api/brief?${q.toString()}`);
+}

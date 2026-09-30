@@ -48,3 +48,6 @@ jobs:
 
       - name: Extract insights
         run: digest insights
+
+      - name: Match nuggets to theses
+        run: digest brief-match --days 2 -v

@@ -347,6 +347,14 @@ def refresh_x(
                 errors=result.errors[:5],
                 handles_synced=result.handles_synced,
             )
+            # Freshly minted tweet nuggets should reach the "What Matters"
+            # Brief same-day, not at the next nightly sweep. Best-effort.
+            if result.new:
+                try:
+                    from ...theses import run_brief_match
+                    run_brief_match(conn, settings, days=1)
+                except Exception as exc:
+                    log.warning("thesis matching after X sync failed: %s", exc)
         except Exception as exc:
             _x_refresh_state.update(status="error", finished_at=_now_iso(), errors=[str(exc)])
         finally:
