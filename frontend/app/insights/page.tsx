@@ -97,6 +97,11 @@ export default async function HomePage() {
         professional managers.
       </p>
 
+      <p className="mt-3 max-w-2xl text-[15px] font-light leading-relaxed text-zinc-500">
+        Convexity parses the research flow — podcasts, newsletters, posts — and flags
+        the newsflow that hits <span className="text-[#00d4ff]/80">the signals you&apos;re watching</span>.
+      </p>
+
       {/* destinations */}
       <p className="mt-14 flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
         <span className="inline-block h-px w-8 bg-[#00d4ff]/50" />
@@ -107,37 +112,37 @@ export default async function HomePage() {
         <NavCard
           href="/brief"
           title="Brief"
-          description="What moved your thesis questions since yesterday — every new insight weighed against the 4–5 things that matter per stock."
+          description="Summary of new research that impacts your theses."
           stat={stats.brief}
         />
         <NavCard
           href="/hub"
           title="Model"
-          description="Per-security view: price moves with LLM-grounded attribution, the financial model, and a jump into that name's thesis questions."
+          description="Per-security view on how news influences your forecast."
           stat={stats.model}
         />
         <NavCard
           href="/episodes"
           title="Episodes"
-          description="The week's episodes — transcribe, review nuggets, and curate what surfaces downstream."
+          description="Curate and review nuggets from the episodes you track."
           stat={stats.episodes}
         />
         <NavCard
           href="/scout"
           title="Scout"
-          description="Watchlist executives tracked across podcasts and X — every appearance and post, distilled into insights."
+          description="A watchlist of companies and executives, distilled into insights."
           stat={stats.scout}
         />
         <NavCard
           href="/podcasts"
           title="Podcasts"
-          description="The show registry — manage tracked feeds, import new podcasts, and browse by show."
+          description="Manage tracked feeds, import new podcasts, browse by show."
           stat={stats.podcasts}
         />
         <NavCard
           href="/newsletters"
           title="Newsletters"
-          description="Investment newsletters ingested alongside the podcast flow, mined with the same insight extraction."
+          description="Varied sources of news, ingested alongside your positions."
           stat={stats.newsletters}
         />
       </div>
