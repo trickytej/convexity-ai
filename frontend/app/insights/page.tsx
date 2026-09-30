@@ -52,7 +52,7 @@ function NavCard({
   return (
     <Link
       href={href}
-      className="group flex flex-col rounded-2xl border border-[#00d4ff]/[0.14] bg-[#0b1420]/80 p-6 transition hover:border-[#00d4ff]/40 hover:bg-[#0d1929]/90"
+      className="group flex flex-col rounded-2xl border border-[#00d4ff]/[0.18] bg-[#0d1a2e]/85 p-6 transition hover:border-[#00d4ff]/45 hover:bg-[#102038]/90"
     >
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="text-xl font-light tracking-tight text-zinc-50 transition [font-family:var(--font-display)] group-hover:text-[#00d4ff]">
@@ -63,12 +63,12 @@ function NavCard({
             <span className="font-[family-name:var(--font-mono)] text-lg tabular-nums text-[#00d4ff]">
               {stat.value}
             </span>
-            <span className="ml-1.5 text-[11px] text-zinc-600">{stat.label}</span>
+            <span className="ml-1.5 text-[11px] text-zinc-400">{stat.label}</span>
           </span>
         )}
       </div>
-      <p className="mt-2 flex-1 text-[13px] leading-relaxed text-zinc-500">{description}</p>
-      <span className="mt-4 text-[12px] font-medium text-zinc-600 transition group-hover:text-[#00d4ff]">
+      <p className="mt-2 flex-1 text-[13px] leading-relaxed text-zinc-200">{description}</p>
+      <span className="mt-4 text-[12px] font-medium text-zinc-400 transition group-hover:text-[#00d4ff]">
         Open →
       </span>
     </Link>
