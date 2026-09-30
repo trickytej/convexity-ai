@@ -21,6 +21,8 @@ services:
         sync: false # needed for on-demand report/digest/newsletter generation
       - key: PODSCAN_API_KEY
         sync: false # used by Scout to search podcast appearances
+      - key: ASSEMBLYAI_API_KEY
+        sync: false # needed by the in-app Transcribe button (server-side transcription)
       - key: DIGEST_CORS_ORIGINS
         sync: false # e.g. https://your-app.vercel.app
       - key: DIGEST_SYNTHESIS_MODEL
