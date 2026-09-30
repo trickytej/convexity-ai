@@ -43,16 +43,19 @@ function NavCard({
   title,
   description,
   stat,
+  delay,
 }: {
   href: string;
   title: string;
   description: string;
   stat: Stat;
+  delay: number;
 }) {
   return (
     <Link
       href={href}
-      className="group flex flex-col rounded-2xl border border-[#00d4ff]/[0.18] bg-[#0d1a2e]/85 p-6 transition hover:border-[#00d4ff]/45 hover:bg-[#102038]/90"
+      style={{ animationDelay: `${delay}ms` }}
+      className="fade-rise group flex flex-col rounded-2xl border border-[#00d4ff]/[0.18] bg-[#0d1a2e]/85 p-6 transition hover:border-[#00d4ff]/45 hover:bg-[#102038]/90"
     >
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="text-xl font-light tracking-tight text-zinc-50 transition [font-family:var(--font-display)] group-hover:text-[#00d4ff]">
@@ -80,75 +83,119 @@ export default async function HomePage() {
 
   return (
     <div>
-      {/* masthead */}
-      <p className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
-        <span className="inline-block h-px w-8 bg-[#00d4ff]" />
-        <span className="text-[#00d4ff]">ConvexityAI</span>
-      </p>
+      {/* ── hero ── */}
+      <section className="pt-8 sm:pt-14">
+        <p className="fade-rise flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
+          <span className="inline-block h-px w-8 bg-[#00d4ff]" />
+          <span className="text-[#00d4ff]">ConvexityAI</span>
+        </p>
 
-      <h1 className="mt-5 max-w-3xl text-5xl font-light leading-[1.04] tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-6xl">
-        Uncover narratives. Sharpen theses.
-        <br />
-        <span className="text-[#00d4ff]">Real time.</span>
-      </h1>
+        <h1 className="mt-7 text-6xl font-light leading-[1.02] tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-7xl lg:text-8xl">
+          <span className="reveal-line">
+            <span style={{ animationDelay: "80ms" }}>Uncover narratives.</span>
+          </span>
+          <span className="reveal-line">
+            <span style={{ animationDelay: "220ms" }}>Sharpen theses.</span>
+          </span>
+          <span className="reveal-line">
+            <span style={{ animationDelay: "360ms" }} className="text-[#00d4ff]">
+              Real time.
+            </span>
+          </span>
+        </h1>
 
-      <p className="mt-4 max-w-2xl text-xl font-light text-zinc-300">
-        A position-aware <span className="text-[#00d4ff]">system of research</span> for
-        professional managers.
-      </p>
+        <p
+          className="fade-rise mt-8 max-w-2xl text-xl font-light text-zinc-300"
+          style={{ animationDelay: "560ms" }}
+        >
+          A position-aware <span className="text-[#00d4ff]">system of research</span> for
+          professional managers.
+        </p>
 
-      <p className="mt-3 text-[15px] font-light leading-relaxed text-zinc-500 sm:whitespace-nowrap">
-        Convexity parses through the deluge of news flow and flags the information
-        that influences <span className="text-[#00d4ff]/80">the theses you&apos;re watching</span>.
-      </p>
+        <div className="fade-rise mt-10 flex flex-wrap items-center gap-3" style={{ animationDelay: "680ms" }}>
+          <Link
+            href="/brief"
+            className="rounded-full bg-[#00d4ff]/90 px-5 py-2.5 text-[13px] font-semibold text-black transition hover:bg-[#00d4ff]"
+          >
+            Open the Brief →
+          </Link>
+          <Link
+            href="/about"
+            className="rounded-full border border-white/[0.12] px-5 py-2.5 text-[13px] font-medium text-zinc-300 transition hover:border-[#00d4ff]/40 hover:text-[#00d4ff]"
+          >
+            How it works
+          </Link>
+        </div>
+      </section>
 
-      {/* destinations */}
-      <p className="mt-14 flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
-        <span className="inline-block h-px w-8 bg-[#00d4ff]/50" />
-        <span className="text-zinc-500">Workspace</span>
-      </p>
+      {/* ── claim beat ── */}
+      <section className="mt-24 border-t border-white/[0.08] pt-16 sm:mt-32">
+        <p className="max-w-3xl text-3xl font-light leading-[1.15] tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-4xl">
+          Four or five questions decide most securities.
+          <span className="text-zinc-600"> Everything else is noise.</span>
+        </p>
+        <p className="mt-6 max-w-2xl text-[15px] font-light leading-relaxed text-zinc-400">
+          Convexity parses through the deluge of news flow and flags the information that
+          influences <span className="text-[#00d4ff]/80">the theses you&apos;re watching</span> —
+          so your time goes to differentiated insight and judgement, not listening.
+        </p>
+      </section>
 
-      <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <NavCard
-          href="/brief"
-          title="Brief"
-          description="Summary of new research that impacts your theses."
-          stat={stats.brief}
-        />
-        <NavCard
-          href="/hub"
-          title="Model"
-          description="Per-security view on how news influences your forecast."
-          stat={stats.model}
-        />
-        <NavCard
-          href="/episodes"
-          title="Episodes"
-          description="Curate and review nuggets from the episodes you track."
-          stat={stats.episodes}
-        />
-        <NavCard
-          href="/scout"
-          title="Scout"
-          description="A watchlist of companies and executives, distilled into insights."
-          stat={stats.scout}
-        />
-        <NavCard
-          href="/podcasts"
-          title="Podcasts"
-          description="Manage tracked feeds, import new podcasts, browse by show."
-          stat={stats.podcasts}
-        />
-        <NavCard
-          href="/newsletters"
-          title="Newsletters"
-          description="Varied sources of news, ingested alongside your positions."
-          stat={stats.newsletters}
-        />
-      </div>
+      {/* ── workspace ── */}
+      <section className="mt-24 border-t border-white/[0.08] pt-16 sm:mt-28">
+        <p className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
+          <span className="inline-block h-px w-8 bg-[#00d4ff]/50" />
+          <span className="text-zinc-500">Workspace</span>
+        </p>
 
-      {/* quiet secondary links */}
-      <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-white/[0.06] pt-6 text-[13px]">
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <NavCard
+            href="/brief"
+            title="Brief"
+            description="Summary of new research that impacts your theses."
+            stat={stats.brief}
+            delay={0}
+          />
+          <NavCard
+            href="/hub"
+            title="Model"
+            description="Per-security view on how news influences your forecast."
+            stat={stats.model}
+            delay={70}
+          />
+          <NavCard
+            href="/episodes"
+            title="Episodes"
+            description="Curate and review nuggets from the episodes you track."
+            stat={stats.episodes}
+            delay={140}
+          />
+          <NavCard
+            href="/scout"
+            title="Scout"
+            description="A watchlist of companies and executives, distilled into insights."
+            stat={stats.scout}
+            delay={210}
+          />
+          <NavCard
+            href="/podcasts"
+            title="Podcasts"
+            description="Manage tracked feeds, import new podcasts, browse by show."
+            stat={stats.podcasts}
+            delay={280}
+          />
+          <NavCard
+            href="/newsletters"
+            title="Newsletters"
+            description="Varied sources of news, ingested alongside your positions."
+            stat={stats.newsletters}
+            delay={350}
+          />
+        </div>
+      </section>
+
+      {/* ── quiet secondary links ── */}
+      <div className="mt-16 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-white/[0.06] pt-6 text-[13px]">
         <span className="text-[11px] font-medium uppercase tracking-[0.2em] text-zinc-700">
           More
         </span>

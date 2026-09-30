@@ -24,3 +24,22 @@ html {
     text-decoration: none;
   }
 }
+
+/* Home hero: staggered line reveals (Cortex-style editorial entrance). */
+@keyframes reveal-up {
+  from { transform: translateY(110%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+@keyframes fade-rise {
+  from { transform: translateY(14px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.reveal-line { display: block; overflow: hidden; }
+.reveal-line > span {
+  display: inline-block;
+  animation: reveal-up 0.8s cubic-bezier(0.2, 0.65, 0.2, 1) both;
+}
+.fade-rise { animation: fade-rise 0.7s cubic-bezier(0.2, 0.65, 0.2, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .reveal-line > span, .fade-rise { animation: none; }
+}
