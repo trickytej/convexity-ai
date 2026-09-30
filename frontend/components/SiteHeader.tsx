@@ -12,7 +12,7 @@ const NAV = [
   { href: "/securities",  label: "Securities",  match: (p: string) => p.startsWith("/securities") },
   { href: "/podcasts",    label: "Podcasts",    match: (p: string) => p === "/podcasts" || p.startsWith("/podcasts?") },
   { href: "/newsletters", label: "Newsletters", match: (p: string) => p.startsWith("/newsletters") },
-  { href: "/newsletter",  label: "Report",      match: (p: string) => p === "/newsletter" },
+  { href: "/about",       label: "About",       match: (p: string) => p.startsWith("/about") },
 ];
 
 export default function SiteHeader() {
