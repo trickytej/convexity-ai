@@ -40,7 +40,7 @@ function EpisodeRow({
   const [nuggets, setNuggets] = useState<NuggetWithCuration[] | null>(null);
   const [loadingNuggets, setLoadingNuggets] = useState(false);
 
-  const isTranscribed = episode.status === "transcribed" || (!episode.status && !!episode.source);
+  const isTranscribed = episode.status === "transcribed" || episode.status === "insights_extracted" || (!episode.status && !!episode.source);
   const statusInfo = STATUS_BADGE[episode.status ?? (episode.source ? "transcribed" : "discovered")];
 
   const handleToggleOpen = useCallback(async () => {
@@ -331,7 +331,7 @@ export default function EpisodeWorkflowPanel({
   }
 
   const transcribed = episodes.filter(
-    (e) => e.status === "transcribed" || (!e.status && !!e.source),
+    (e) => e.status === "transcribed" || e.status === "insights_extracted" || (!e.status && !!e.source),
   );
 
   if (episodes.length === 0) {
