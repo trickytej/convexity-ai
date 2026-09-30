@@ -98,8 +98,8 @@ export default async function HomePage() {
       </p>
 
       <p className="mt-3 max-w-2xl text-[15px] font-light leading-relaxed text-zinc-500">
-        Convexity parses the research flow — podcasts, newsletters, posts — and flags
-        the newsflow that hits <span className="text-[#00d4ff]/80">the signals you&apos;re watching</span>.
+        Convexity parses through the deluge of news flow and flags the information
+        that influences <span className="text-[#00d4ff]/80">the theses you&apos;re watching</span>.
       </p>
 
       {/* destinations */}
