@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getBrief, getEpisodes, getScoutAppearances, getShows } from "@/lib/api";
+import { getBrief, getEpisodes, getScoutAppearances, getShows, getTheses } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -7,29 +7,35 @@ type Stat = { value: string; label: string } | null;
 
 async function safeStats(): Promise<{
   episodes: Stat;
+  podcasts: Stat;
   newsletters: Stat;
   scout: Stat;
   brief: Stat;
+  model: Stat;
 }> {
   const since = new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10);
-  const [episodes, newsletters, scout, brief] = await Promise.all([
-    getEpisodes({ since, limit: 1, all: true })
-      .then((r): Stat => ({ value: String(r.total), label: "this week" }))
-      .catch((): Stat => null),
-    getShows({ format: "newsletter" })
-      .then((r): Stat => ({ value: String(r.length), label: "sources" }))
-      .catch((): Stat => null),
-    getScoutAppearances({ days: 7 })
-      .then((r): Stat => ({ value: String(r.length), label: "appearances, 7d" }))
-      .catch((): Stat => null),
-    getBrief({ days: 1 })
-      .then((r): Stat => {
-        const hits = r.companies.reduce((s, c) => s + c.hit_count, 0);
-        return { value: String(hits), label: "developments, 24h" };
-      })
-      .catch((): Stat => null),
+  const [episodes, shows, scout, brief, theses] = await Promise.all([
+    getEpisodes({ since, limit: 1, all: true }).catch(() => null),
+    getShows().catch(() => null),
+    getScoutAppearances({ days: 7 }).catch(() => null),
+    getBrief({ days: 1 }).catch(() => null),
+    getTheses().catch(() => null),
   ]);
-  return { episodes, newsletters, scout, brief };
+  const podcastShows = shows?.filter((s) => s.format !== "newsletter") ?? null;
+  const newsletterShows = shows?.filter((s) => s.format === "newsletter") ?? null;
+  return {
+    episodes: episodes ? { value: String(episodes.total), label: "this week" } : null,
+    podcasts: podcastShows ? { value: String(podcastShows.length), label: "shows" } : null,
+    newsletters: newsletterShows ? { value: String(newsletterShows.length), label: "sources" } : null,
+    scout: scout ? { value: String(scout.length), label: "appearances, 7d" } : null,
+    brief: brief
+      ? {
+          value: String(brief.companies.reduce((s, c) => s + c.hit_count, 0)),
+          label: "developments, 24h",
+        }
+      : null,
+    model: theses ? { value: String(theses.companies.length), label: "with theses" } : null,
+  };
 }
 
 function NavCard({
@@ -46,7 +52,7 @@ function NavCard({
   return (
     <Link
       href={href}
-      className="group flex flex-col rounded-2xl border border-white/[0.08] bg-[#0b0c10]/75 p-6 transition hover:border-[#00d4ff]/35 hover:bg-[#0e1016]/85"
+      className="group flex flex-col rounded-2xl border border-[#00d4ff]/[0.14] bg-[#0b1420]/80 p-6 transition hover:border-[#00d4ff]/40 hover:bg-[#0d1929]/90"
     >
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="text-xl font-light tracking-tight text-zinc-50 transition [font-family:var(--font-display)] group-hover:text-[#00d4ff]">
@@ -61,7 +67,7 @@ function NavCard({
           </span>
         )}
       </div>
-      <p className="mt-2 text-[13px] leading-relaxed text-zinc-500">{description}</p>
+      <p className="mt-2 flex-1 text-[13px] leading-relaxed text-zinc-500">{description}</p>
       <span className="mt-4 text-[12px] font-medium text-zinc-600 transition group-hover:text-[#00d4ff]">
         Open →
       </span>
@@ -92,7 +98,12 @@ export default async function HomePage() {
       </p>
 
       {/* destinations */}
-      <div className="mt-14 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <p className="mt-14 flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
+        <span className="inline-block h-px w-8 bg-[#00d4ff]/50" />
+        <span className="text-zinc-500">Workspace</span>
+      </p>
+
+      <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <NavCard
           href="/brief"
           title="Brief"
@@ -100,9 +111,15 @@ export default async function HomePage() {
           stat={stats.brief}
         />
         <NavCard
+          href="/hub"
+          title="Model"
+          description="Per-security view: price moves with LLM-grounded attribution, the financial model, and a jump into that name's thesis questions."
+          stat={stats.model}
+        />
+        <NavCard
           href="/episodes"
           title="Episodes"
-          description="The week's podcast episodes — transcribe, review nuggets, and curate what surfaces downstream."
+          description="The week's episodes — transcribe, review nuggets, and curate what surfaces downstream."
           stat={stats.episodes}
         />
         <NavCard
@@ -112,11 +129,38 @@ export default async function HomePage() {
           stat={stats.scout}
         />
         <NavCard
+          href="/podcasts"
+          title="Podcasts"
+          description="The show registry — manage tracked feeds, import new podcasts, and browse by show."
+          stat={stats.podcasts}
+        />
+        <NavCard
           href="/newsletters"
           title="Newsletters"
           description="Investment newsletters ingested alongside the podcast flow, mined with the same insight extraction."
           stat={stats.newsletters}
         />
+      </div>
+
+      {/* quiet secondary links */}
+      <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-white/[0.06] pt-6 text-[13px]">
+        <span className="text-[11px] font-medium uppercase tracking-[0.2em] text-zinc-700">
+          More
+        </span>
+        {[
+          { href: "/securities", label: "Securities" },
+          { href: "/newsletter", label: "Weekly Report" },
+          { href: "/theses", label: "Edit Theses" },
+          { href: "/library", label: "Episode Library" },
+        ].map((l) => (
+          <Link
+            key={l.href}
+            href={l.href}
+            className="text-zinc-500 transition hover:text-[#00d4ff]"
+          >
+            {l.label}
+          </Link>
+        ))}
       </div>
     </div>
   );
