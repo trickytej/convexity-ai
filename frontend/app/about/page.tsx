@@ -5,19 +5,19 @@ export const metadata = { title: "About — ConvexityAI" };
 const PIPELINE = [
   {
     step: "Listen",
-    text: "Podcasts, investment newsletters, and X are ingested continuously — transcribed, speaker-mapped, and corrected so nothing said off the record of a filing gets lost.",
+    text: "Podcasts, investment newsletters, and X are ingested continuously, transcribed, speaker-mapped, and corrected so nothing said off the record of a filing gets lost.",
   },
   {
     step: "Distill",
-    text: "Every hour of audio and page of text is reduced to discrete, sourced insights — claims with the quote behind them, scored for novelty, conviction, and materiality.",
+    text: "Every hour of audio and page of text is reduced to discrete, sourced insights, scored for novelty, conviction, and materiality.",
   },
   {
     step: "Weigh",
-    text: "Each new insight is weighed against the questions that actually decide your positions — the four or five things that matter for every stock you follow.",
+    text: "Each new insight is weighed against the questions that actually decide your positions.",
   },
   {
     step: "Surface",
-    text: "You wake up to a Brief: what happened, which thesis it touches, and why it matters — with a straight line back to the source.",
+    text: "You wake up to a Brief: what happened, which thesis it touches, and why it matters.",
   },
 ];
 
@@ -32,21 +32,20 @@ export default function AboutPage() {
       <h1 className="mt-5 max-w-3xl text-5xl font-light leading-[1.04] tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-6xl">
         Research is abundant.
         <br />
-        <span className="text-[#00d4ff]">Attention isn&apos;t.</span>
+        <span className="text-[#00d4ff]">Judgement is rare.</span>
       </h1>
 
       <div className="mt-8 max-w-2xl space-y-5 text-[15px] leading-relaxed text-zinc-400">
         <p>
-          For most stocks, four or five questions decide the outcome. Everything else is
-          noise. But the evidence that answers those questions doesn&apos;t arrive neatly —
-          it&apos;s scattered across a two-hour podcast, a paragraph in a newsletter, a
-          throwaway line from a CEO on someone else&apos;s show.
+          For most securities, four or five questions decide the outcome. Analysts spend
+          hours crafting the theses, but the evidence that answers those questions is
+          scattered across X, newsletters, podcasts, or broker reports.
         </p>
         <p>
-          ConvexityAI is built on a simple premise: do the thinking up front — write down
-          what actually matters for each name you follow — and let the machine do the
-          listening. It reads the flow so you don&apos;t have to, and tells you when
-          something touches a question you care about.
+          ConvexityAI is built on a simple premise: do the thinking up front, and let the
+          machine do the listening. It reads the flow so you don&apos;t have to, and tells
+          you when something touches a question you care about. That frees your time to
+          focus on finding differentiated insight and exercising judgement.
         </p>
       </div>
 
@@ -91,8 +90,7 @@ export default function AboutPage() {
           Crossover Convexity
         </h2>
         <p className="mt-2 text-[13px] leading-relaxed text-zinc-300">
-          The ideas behind this platform, in long form — theses, post-mortems, and notes
-          on what matters, published on Substack.
+          The ideas behind this platform, in long form analysis, published on Substack.
         </p>
         <span className="mt-4 text-[12px] font-medium text-zinc-400 transition group-hover:text-[#00d4ff]">
           crossoverconvexity.substack.com ↗
