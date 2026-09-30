@@ -119,7 +119,7 @@ export default async function PodcastsPage({
                 </p>
               )}
               {list.episodes.map((e) => {
-                const isTranscribed = e.status === "transcribed" || (!e.status && !!e.source);
+                const isTranscribed = e.status === "transcribed" || e.status === "insights_extracted" || (!e.status && !!e.source);
                 const statusInfo = STATUS_BADGE[e.status ?? (e.source ? "transcribed" : "discovered")];
 
                 return (

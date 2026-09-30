@@ -40,6 +40,8 @@ export default function TranscribeButton({
     if (initialStatus === "acquired") {
       setPhase("transcribing");
       startPolling();
+    } else if (initialStatus === "insights_extracted") {
+      setPhase("done");
     }
     return () => stopPolling();
   }, []);
@@ -66,7 +68,7 @@ export default function TranscribeButton({
       }
       try {
         const s = await getEpisodeStatus(episodeId);
-        if (s.status === "transcribed" && s.nugget_count > 0) {
+        if (s.status === "insights_extracted" || (s.status === "transcribed" && s.nugget_count > 0)) {
           setPhase("done");
           stopPolling();
           router.refresh();

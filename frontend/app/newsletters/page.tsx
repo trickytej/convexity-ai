@@ -103,7 +103,7 @@ export default async function NewslettersPage({
               </p>
             )}
             {list.episodes.map((ep) => {
-              const isTranscribed = ep.status === "transcribed" || (!ep.status && !!ep.source);
+              const isTranscribed = ep.status === "transcribed" || ep.status === "insights_extracted" || (!ep.status && !!ep.source);
               return (
                 <div
                   key={ep.id}
