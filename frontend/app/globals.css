@@ -73,3 +73,38 @@ html {
   .sf-noise, .sf-hit { animation: none; opacity: 0.5; }
   .sf-chip { animation: none; opacity: 1; transform: none; }
 }
+
+/* SignalRadar (home hero). Period must match PERIOD in SignalRadar.tsx. */
+@keyframes radar-sweep {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes radar-blip {
+  0%, 1% { opacity: 0; }
+  3%     { opacity: 0.9; }
+  26%    { opacity: 0; }
+  100%   { opacity: 0; }
+}
+@keyframes radar-signal-blip {
+  0%, 1% { opacity: 0; }
+  3%     { opacity: 1; }
+  60%    { opacity: 0.85; }
+  85%    { opacity: 0; }
+  100%   { opacity: 0; }
+}
+@keyframes radar-ping-ring {
+  0%, 2% { opacity: 0; transform: scale(0.3); }
+  5%     { opacity: 0.8; }
+  35%    { opacity: 0; transform: scale(2.4); }
+  100%   { opacity: 0; transform: scale(2.4); }
+}
+.radar-sweep  { animation: radar-sweep 6s linear infinite; }
+.radar-blip   { animation: radar-blip 6s linear infinite; }
+.radar-signal { animation: radar-signal-blip 6s linear infinite; }
+.radar-ping   { animation: radar-ping-ring 6s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .radar-sweep { animation: none; }
+  .radar-blip  { animation: none; opacity: 0.5; }
+  .radar-signal { animation: none; opacity: 0.9; }
+  .radar-ping  { animation: none; opacity: 0; }
+}

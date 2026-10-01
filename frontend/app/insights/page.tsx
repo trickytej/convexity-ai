@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getBrief, getEpisodes, getScoutAppearances, getShows, getTheses } from "@/lib/api";
-import AmbientBackdrop from "@/components/AmbientBackdrop";
 import SignalFlow from "@/components/SignalFlow";
+import SignalRadar from "@/components/SignalRadar";
 
 export const dynamic = "force-dynamic";
 
@@ -85,10 +85,9 @@ export default async function HomePage() {
 
   return (
     <div>
-      <AmbientBackdrop />
-      <div className="relative z-[4]">
       {/* ── hero ── */}
-      <section className="pt-8 sm:pt-14">
+      <section className="grid grid-cols-1 items-center gap-10 pt-8 sm:pt-14 lg:grid-cols-[1fr_auto]">
+        <div>
         <p className="fade-rise flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
           <span className="inline-block h-px w-8 bg-[#00d4ff]" />
           <span className="text-[#00d4ff]">ConvexityAI</span>
@@ -129,6 +128,10 @@ export default async function HomePage() {
           >
             How it works
           </Link>
+        </div>
+        </div>
+        <div className="fade-rise hidden justify-self-center lg:block" style={{ animationDelay: "420ms" }}>
+          <SignalRadar />
         </div>
       </section>
 
@@ -222,7 +225,6 @@ export default async function HomePage() {
             {l.label}
           </Link>
         ))}
-      </div>
       </div>
     </div>
   );
