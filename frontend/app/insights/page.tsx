@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { getBrief, getEpisodes, getScoutAppearances, getShows, getTheses } from "@/lib/api";
+import AmbientBackdrop from "@/components/AmbientBackdrop";
+import SignalFlow from "@/components/SignalFlow";
 
 export const dynamic = "force-dynamic";
 
@@ -83,6 +85,8 @@ export default async function HomePage() {
 
   return (
     <div>
+      <AmbientBackdrop />
+      <div className="relative z-[4]">
       {/* ── hero ── */}
       <section className="pt-8 sm:pt-14">
         <p className="fade-rise flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
@@ -130,15 +134,20 @@ export default async function HomePage() {
 
       {/* ── claim beat ── */}
       <section className="mt-24 border-t border-white/[0.08] pt-16 sm:mt-32">
-        <p className="max-w-3xl text-3xl font-light leading-[1.15] tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-4xl">
-          Four or five questions decide most securities.
-          <span className="text-zinc-600"> Everything else is noise.</span>
-        </p>
-        <p className="mt-6 max-w-2xl text-[15px] font-light leading-relaxed text-zinc-400">
-          Convexity parses through the deluge of news flow and flags the information that
-          influences <span className="text-[#00d4ff]/80">the theses you&apos;re watching</span> —
-          so your time goes to differentiated insight and judgement, not listening.
-        </p>
+        <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
+          <div>
+            <p className="max-w-3xl text-3xl font-light leading-[1.15] tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-4xl">
+              Four or five questions decide most securities.
+              <span className="text-zinc-600"> Everything else is noise.</span>
+            </p>
+            <p className="mt-6 max-w-2xl text-[15px] font-light leading-relaxed text-zinc-400">
+              Convexity parses through the deluge of news flow and flags the information that
+              influences <span className="text-[#00d4ff]/80">the theses you&apos;re watching</span> —
+              so your time goes to differentiated insight and judgement, not listening.
+            </p>
+          </div>
+          <SignalFlow />
+        </div>
       </section>
 
       {/* ── workspace ── */}
@@ -213,6 +222,7 @@ export default async function HomePage() {
             {l.label}
           </Link>
         ))}
+      </div>
       </div>
     </div>
   );
