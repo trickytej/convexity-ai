@@ -1165,3 +1165,66 @@ export async function uploadOwnModel(key: string, file: File): Promise<void> {
 export async function revertOwnModel(key: string): Promise<void> {
   await sendJSON(`/api/model/${encodeURIComponent(key)}/upload`, "DELETE");
 }
+
+// ─── CIO Brain ──────────────────────────────────────────────────────────────
+
+export type Position = "long" | "short" | null;
+
+export interface BrainSecurity {
+  company: string;
+  ticker: string | null;
+  key: string;
+  category: string;
+  position: Position;
+  status: QuestionStatus;
+  /** Status as it reads for the user's position (inverted for shorts). */
+  display_status: QuestionStatus;
+  signals_7d: number;
+  signals_30d: number;
+  supports: number;
+  contradicts: number;
+  by_class: Record<SourceClass, { supports: number; contradicts: number }>;
+  impacts: { line: ModelLine; year: number | null; label: string; up: number; down: number }[];
+  ahead_of_print: { line: ModelLine; year: number | null; net: number; label: string; note: string }[];
+  flips: { question: string; from: QuestionStatus; to: QuestionStatus; at: string }[];
+  questions: { id: number; question: string; status: QuestionStatus }[];
+}
+
+export interface Brain {
+  generated_at: string;
+  since_last_visit: { last_visit: string | null; new_signals: number; flips: number };
+  velocity: { sector: string; last7: number; weekly_avg: number; acceleration: number | null }[];
+  sectors: {
+    category: string;
+    status: QuestionStatus;
+    securities: number;
+    signals_7d: number;
+    signals_30d: number;
+    acceleration: number | null;
+  }[];
+  securities: BrainSecurity[];
+  best_long: { company: string; ticker: string | null; key: string } | null;
+  best_short: { company: string; ticker: string | null; key: string } | null;
+  short_candidate: { company: string; ticker: string | null; key: string } | null;
+  tape: {
+    hit_id: number;
+    company: string;
+    ticker: string | null;
+    question: string;
+    claim: string;
+    direction: "supports" | "contradicts" | "unclear";
+    impact: string | null;
+    source_class: SourceClass;
+    source: string;
+    published_at: string;
+    new: boolean;
+  }[];
+}
+
+export function getBrain(opts: { touch?: boolean } = {}): Promise<Brain> {
+  return getJSON<Brain>(`/api/brain${opts.touch === false ? "?touch=false" : ""}`);
+}
+
+export function setPosition(company: string, position: Position): Promise<void> {
+  return sendJSON(`/api/me/securities/${encodeURIComponent(company)}/position`, "PUT", { position });
+}

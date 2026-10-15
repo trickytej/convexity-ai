@@ -324,6 +324,38 @@ def get_board(
     return {"securities": rows}
 
 
+class PositionIn(BaseModel):
+    position: str | None = Field(None, pattern="^(long|short)$")
+
+
+@router.put("/me/securities/{company}/position")
+def set_position(
+    company: str,
+    body: PositionIn,
+    user_id: int = Depends(current_user_id),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Mark a followed security long, short, or neither (colors invert for shorts)."""
+    db.execute(
+        "UPDATE user_securities SET position = ? WHERE user_id = ? AND company = ?",
+        (body.position, user_id, company),
+    )
+    db.commit()
+    return {"company": company, "position": body.position}
+
+
+@router.get("/brain")
+def get_brain(
+    touch: bool = True,
+    user_id: int = Depends(current_user_id),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """The CIO Brain screen (see digest.brain). touch=false for live refreshes."""
+    from ...brain import build_brain
+
+    return build_brain(db, user_id, touch=touch)
+
+
 class TokenIn(BaseModel):
     name: str = Field(min_length=1, max_length=80)
 

@@ -8,6 +8,7 @@ type NavItem = { href: string; label: string; match: (p: string) => boolean };
 
 const USER_NAV: NavItem[] = [
   { href: "/", label: "Home", match: (p) => p === "/" },
+  { href: "/brain", label: "CIO Brain", match: (p) => p.startsWith("/brain") },
   { href: "/brief", label: "Brief", match: (p) => p.startsWith("/brief") },
   { href: "/model", label: "Model", match: (p) => p.startsWith("/model") },
   { href: "/research", label: "Research", match: (p) => p.startsWith("/research") },

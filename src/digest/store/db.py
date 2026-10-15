@@ -273,6 +273,16 @@ CREATE TABLE IF NOT EXISTS consensus_snapshots (
 );
 CREATE INDEX IF NOT EXISTS idx_consensus_snapshots ON consensus_snapshots(company, as_of);
 
+-- Last known status per question, so the CIO Brain can show what just flipped.
+CREATE TABLE IF NOT EXISTS question_status (
+    user_id     INTEGER NOT NULL,
+    question_id INTEGER NOT NULL,
+    status      TEXT NOT NULL,
+    prev_status TEXT,
+    changed_at  TEXT NOT NULL,
+    PRIMARY KEY (user_id, question_id)
+);
+
 CREATE TABLE IF NOT EXISTS security_models (
     user_id    INTEGER NOT NULL,
     company    TEXT NOT NULL,
@@ -641,6 +651,12 @@ def _migrate_users(conn: _Conn) -> None:
         )
     if "drivers" not in thesis_cols:
         conn.execute("ALTER TABLE theses ADD COLUMN drivers TEXT")
+    sec_cols = {row[1] for row in conn.execute("PRAGMA table_info(user_securities)").fetchall()}
+    if "position" not in sec_cols:  # long | short | NULL
+        conn.execute("ALTER TABLE user_securities ADD COLUMN position TEXT")
+    user_cols = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+    if "last_brain_at" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN last_brain_at TEXT")
     ep_cols = {row[1] for row in conn.execute("PRAGMA table_info(episodes)").fetchall()}
     if "owner_user_id" not in ep_cols:
         conn.execute("ALTER TABLE episodes ADD COLUMN owner_user_id INTEGER")

@@ -774,6 +774,26 @@ def house_questions(
     console.print("Run `digest brief-match --days 30` to score recent evidence against them.")
 
 
+@app.command(name="x-sync")
+def x_sync(
+    days: int = typer.Option(1, "--days", "-d", help="Posts from the last N days."),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Pull recent posts from tracked X accounts (one nugget per post). Matching
+    happens in `digest brief-match`. Requires X_BEARER_TOKEN."""
+    _setup_logging(verbose)
+    settings = get_settings()
+    if not settings.x_bearer_token:
+        console.print("[yellow]X_BEARER_TOKEN not set — skipping X sync.[/yellow]")
+        return
+    from .scout.x import sync_x_accounts
+
+    with get_conn(settings.resolved_db_path) as conn:
+        init_db(conn)
+        result = sync_x_accounts(conn, settings, days=days)
+    console.print(f"[green]X sync[/green]: {result}")
+
+
 @app.command(name="sec-sync")
 def sec_sync(
     days: int = typer.Option(7, "--days", "-d", help="Filings from the last N days."),
