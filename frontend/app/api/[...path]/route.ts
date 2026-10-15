@@ -16,10 +16,11 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
 
   const init: RequestInit = { method: req.method };
   if (req.method !== "GET" && req.method !== "HEAD") {
-    const body = await req.text();
-    if (body) {
+    // Bytes, not text: multipart uploads (research PDFs) must pass through intact.
+    const body = await req.arrayBuffer();
+    if (body.byteLength) {
       init.body = body;
-      const ct = req.headers.get("content-type");
+      const ct = req.headers.get("content-type"); // carries the multipart boundary
       if (ct) init.headers = { "content-type": ct };
     }
   }

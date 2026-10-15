@@ -1,7 +1,8 @@
 import Link from "next/link";
-import type { BriefHit } from "@/lib/api";
+import { auth } from "@/auth";
 import { getBrief } from "@/lib/api";
-import { fmtDate } from "@/lib/format";
+import { HitList } from "@/components/signals";
+import DateRangeFilter from "@/components/DateRangeFilter";
 import { Badge } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -10,70 +11,30 @@ const WINDOWS = [
   { days: 1, label: "24h" },
   { days: 3, label: "3d" },
   { days: 7, label: "7d" },
+  { days: 30, label: "30d" },
 ];
 
-const DIRECTION_CLS: Record<string, string> = {
-  supports: "bg-emerald-500/10 text-emerald-300 ring-emerald-500/25",
-  contradicts: "bg-rose-500/10 text-rose-300 ring-rose-500/25",
-  unclear: "bg-white/[0.06] text-zinc-400 ring-white/10",
-};
-
-function hitSourceHref(h: BriefHit): string {
-  if (h.nugget.tweet_url) return h.nugget.tweet_url;
-  const t = h.nugget.start_ms != null ? `#t-${h.nugget.start_ms}` : "";
-  return `/episode/${h.nugget.episode_id}${t}`;
-}
-
-function HitCard({ h }: { h: BriefHit }) {
-  const external = !!h.nugget.tweet_url;
-  const quote = (h.nugget.quote || "").trim();
-  return (
-    <div className="rounded-xl border border-white/[0.06] bg-[#0b0c10]/80 p-4">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <span
-          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${DIRECTION_CLS[h.direction] ?? DIRECTION_CLS.unclear}`}
-        >
-          {h.direction}
-        </span>
-        <span className="font-[family-name:var(--font-mono)] text-[11px] text-zinc-600">
-          {Math.round(h.relevance * 100)}%
-        </span>
-        <span className="ml-auto text-[11px] text-zinc-600">
-          {h.nugget.speaker_name ? `${h.nugget.speaker_name} · ` : ""}
-          {h.nugget.show_slug}
-          {h.nugget.published_at ? ` · ${fmtDate(h.nugget.published_at)}` : ""}
-        </span>
-      </div>
-      {h.why && <p className="mb-2 text-[13px] leading-relaxed text-[#00d4ff]/90">{h.why}</p>}
-      <p className="text-[14px] leading-relaxed text-zinc-200">{h.nugget.claim}</p>
-      {quote && quote !== h.nugget.claim && (
-        <p className="mt-2 border-l-2 border-white/10 pl-3 text-[12px] leading-relaxed text-zinc-500">
-          “{quote.length > 320 ? quote.slice(0, 320) + "…" : quote}”
-        </p>
-      )}
-      <div className="mt-3">
-        <Link
-          href={hitSourceHref(h)}
-          target={external ? "_blank" : undefined}
-          rel={external ? "noopener noreferrer" : undefined}
-          className="text-[11px] text-zinc-600 transition hover:text-[#00d4ff]"
-        >
-          {external ? "View post on X ↗" : "In context →"}
-        </Link>
-      </div>
-    </div>
-  );
-}
+const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
 export default async function BriefPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ days?: string }>;
+  searchParams?: Promise<{ days?: string; from?: string; to?: string }>;
 }) {
   const params = await searchParams;
-  const days = Math.max(1, Math.min(30, Number(params?.days) || 1));
-  const brief = await getBrief({ days });
+  // A custom From/To range wins over the quick windows; dates are when the
+  // source was published.
+  const custom = !!(params?.from || params?.to);
+  const days = custom ? 0 : Math.max(1, Math.min(365, Number(params?.days) || 7));
+  const from = params?.from || isoDay(new Date(Date.now() - (days || 7) * 86_400_000));
+  const to = params?.to || isoDay(new Date());
+  const [brief, session] = await Promise.all([
+    getBrief(custom ? { since: from, until: to, status: "pending" } : { days, status: "pending" }),
+    auth(),
+  ]);
+  const isAdmin = !!session?.user?.isAdmin;
   const totalHits = brief.companies.reduce((s, c) => s + c.hit_count, 0);
+  const totalSignals = brief.companies.reduce((s, c) => s + c.signal_count, 0);
 
   return (
     <div>
@@ -87,14 +48,15 @@ export default async function BriefPage({
           What moved <span className="text-[#00d4ff]">your questions</span>
         </h1>
         <Link
-          href="/theses"
+          href="/model"
           className="rounded-full border border-white/[0.1] px-3.5 py-1.5 text-[12px] font-medium text-zinc-300 transition hover:border-[#00d4ff]/40 hover:text-[#00d4ff]"
         >
-          Edit theses
+          Your securities
         </Link>
       </div>
 
-      <div className="mt-6 flex items-center gap-2">
+      <div className="mt-6 flex flex-wrap items-end gap-x-6 gap-y-4">
+      <div className="flex items-center gap-2">
         {WINDOWS.map((w) => (
           <Link
             key={w.days}
@@ -108,24 +70,26 @@ export default async function BriefPage({
             {w.label}
           </Link>
         ))}
-        <span className="ml-3 font-[family-name:var(--font-mono)] text-xs tabular-nums text-zinc-600">
-          {totalHits} development{totalHits === 1 ? "" : "s"}
+      </div>
+      <DateRangeFilter basePath="/brief" initialFrom={from} initialTo={to} />
+        <span className="font-[family-name:var(--font-mono)] text-xs tabular-nums text-zinc-600">
+          {totalSignals} signal{totalSignals === 1 ? "" : "s"} · {totalHits - totalSignals} reference
         </span>
       </div>
 
       {brief.companies.length === 0 && (
         <div className="mt-14 max-w-xl">
           <p className="text-[15px] leading-relaxed text-zinc-400">
-            Nothing new touched your thesis questions in this window.
+            Nothing left to review in this window.
           </p>
           <p className="mt-3 text-[13px] leading-relaxed text-zinc-600">
-            No theses yet? Define the 4–5 questions that matter for each company you
-            follow on the{" "}
-            <Link href="/theses" className="text-[#00d4ff] transition hover:text-[#33ddff]">
-              theses page
-            </Link>
-            , and every new podcast insight, newsletter, and X post gets weighed
-            against them automatically.
+            No questions yet? Pick the securities you follow on the{" "}
+            <Link href="/model" className="text-[#00d4ff] transition hover:text-[#33ddff]">
+              Model page
+            </Link>{" "}
+            and write the 4–5 questions that matter for each. Every new podcast
+            insight, newsletter, and X post gets weighed against them, and what you
+            keep builds each security&apos;s tracker.
           </p>
         </div>
       )}
@@ -138,9 +102,12 @@ export default async function BriefPage({
             className="scroll-mt-20"
           >
             <div className="mb-5 flex items-baseline gap-3 border-b border-white/[0.08] pb-3">
-              <h2 className="text-2xl font-light tracking-tight text-zinc-50 [font-family:var(--font-display)]">
+              <Link
+                href={`/model/${encodeURIComponent(c.ticker || c.company.toLowerCase().replace(/[^a-z0-9]+/g, "-"))}`}
+                className="text-2xl font-light tracking-tight text-zinc-50 transition [font-family:var(--font-display)] hover:text-[#00d4ff]"
+              >
                 {c.company}
-              </h2>
+              </Link>
               {c.ticker && (
                 <span className="font-[family-name:var(--font-mono)] text-xs text-zinc-500">
                   {c.ticker}
@@ -148,7 +115,7 @@ export default async function BriefPage({
               )}
               <span className="ml-auto">
                 <Badge tone="indigo">
-                  {c.hit_count} hit{c.hit_count === 1 ? "" : "s"}
+                  {c.signal_count} signal{c.signal_count === 1 ? "" : "s"}
                 </Badge>
               </span>
             </div>
@@ -161,11 +128,7 @@ export default async function BriefPage({
                   {q.note && (
                     <p className="mt-1 text-[12px] leading-relaxed text-zinc-600">{q.note}</p>
                   )}
-                  <div className="mt-3 space-y-2.5">
-                    {q.hits.map((h, i) => (
-                      <HitCard key={`${q.question_id}-${h.nugget.id}-${i}`} h={h} />
-                    ))}
-                  </div>
+                  <HitList hits={q.hits} sourceLinks={isAdmin} />
                 </div>
               ))}
             </div>

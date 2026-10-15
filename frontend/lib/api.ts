@@ -4,8 +4,9 @@ const BACKEND = process.env.API_BASE_URL ?? "http://127.0.0.1:8000";
 /**
  * Isomorphic API call.
  * - Server (RSC / route handlers): hit the backend directly and attach the secret
- *   `DIGEST_API_KEY` (never exposed to the browser).
- * - Browser: hit the same-origin Next proxy at `/api/...`, which injects the key
+ *   `DIGEST_API_KEY` (never exposed to the browser) plus the signed-in user's id,
+ *   which proxy.ts injected into the incoming request as `x-user-id`.
+ * - Browser: hit the same-origin Next proxy at `/api/...`, which injects both
  *   server-side. This keeps the API key out of the client bundle and avoids CORS.
  */
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
@@ -15,8 +16,19 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
     url = `${BACKEND}${path}`;
     const key = process.env.DIGEST_API_KEY;
     if (key) headers.set("x-api-key", key);
+    const userId = await requestUserId();
+    if (userId) headers.set("x-user-id", userId);
   }
   return fetch(url, { cache: "no-store", ...init, headers });
+}
+
+async function requestUserId(): Promise<string | null> {
+  try {
+    const { headers } = await import("next/headers");
+    return (await headers()).get("x-user-id");
+  } catch {
+    return null; // outside a request scope (e.g. build time)
+  }
 }
 
 /** Backend base URL, for the server-side proxy route only. */
@@ -735,10 +747,18 @@ export function getNewsletter(params: {
 
 // ─── "What Matters" theses + daily Brief ─────────────────────────────────────
 
+export type ModelLine = "revenue" | "gross_margin" | "op_margin" | "eps" | "multiple";
+
+export interface Driver {
+  line: ModelLine;
+  year: number | null;
+}
+
 export type ThesisQuestion = {
   id: number;
   question: string;
   note: string | null;
+  drivers: Driver[];
   position: number;
   active: boolean;
 };
@@ -756,7 +776,7 @@ export function getTheses(): Promise<{ companies: CompanyTheses[] }> {
 export async function putCompanyTheses(block: {
   company: string;
   ticker?: string | null;
-  questions: { id?: number; question: string; note?: string | null }[];
+  questions: { id?: number; question: string; note?: string | null; drivers?: Driver[] }[];
 }): Promise<{ companies: CompanyTheses[] }> {
   const res = await apiFetch(`/api/theses`, {
     method: "PUT",
@@ -773,7 +793,7 @@ export async function putCompanyTheses(block: {
 export async function draftTheses(
   company: string,
   ticker?: string | null,
-): Promise<{ questions: { question: string; note: string | null }[] }> {
+): Promise<{ questions: { question: string; note: string | null; drivers: Driver[] }[] }> {
   const res = await apiFetch(`/api/theses/draft`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -786,8 +806,20 @@ export async function draftTheses(
   return res.json();
 }
 
+export type HitDecision = "pending" | "kept" | "dropped";
+
+export type SourceClass = "print" | "chatter" | "inside";
+
 export interface BriefHit {
+  hit_id: number;
+  decision: HitDecision;
+  decided_at: string | null;
   relevance: number;
+  evidence: number | null;
+  /** "signal" = strong, high-quality evidence; everything else is "reference". */
+  tier: "signal" | "reference";
+  impact: { line: ModelLine; year: number | null; direction: "up" | "down"; label: string } | null;
+  source_class: SourceClass;
   direction: "supports" | "contradicts" | "unclear";
   why: string | null;
   matched_at: string;
@@ -816,6 +848,7 @@ export interface BriefCompany {
   company: string;
   ticker: string | null;
   hit_count: number;
+  signal_count: number;
   questions: BriefQuestion[];
 }
 
@@ -825,10 +858,256 @@ export interface Brief {
   companies: BriefCompany[];
 }
 
-export function getBrief(params: { days?: number; since?: string; min_relevance?: number } = {}): Promise<Brief> {
+export function getBrief(
+  params: {
+    days?: number;
+    since?: string;
+    until?: string;
+    min_relevance?: number;
+    status?: HitDecision | "all";
+  } = {},
+): Promise<Brief> {
   const q = new URLSearchParams();
+  if (params.until) q.set("until", params.until);
   if (params.days) q.set("days", String(params.days));
+  if (params.status) q.set("status", params.status);
   if (params.since) q.set("since", params.since);
   if (params.min_relevance !== undefined) q.set("min_relevance", String(params.min_relevance));
   return getJSON<Brief>(`/api/brief?${q.toString()}`);
+}
+
+export async function decideHit(hitId: number, decision: HitDecision): Promise<void> {
+  const res = await apiFetch(`/api/hits/${hitId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ decision }),
+  });
+  if (!res.ok) throw new Error(`Could not save decision: ${res.status}`);
+}
+
+// ─── Securities universe + per-security Model page ──────────────────────────
+
+export interface Security {
+  company: string;
+  ticker: string | null;
+  key: string;
+  category: string | null;
+  followed?: boolean;
+  question_count?: number;
+}
+
+export interface SecurityCategory {
+  label: string;
+  companies: Security[];
+}
+
+export function getUniverse(): Promise<{ categories: SecurityCategory[] }> {
+  return getJSON<{ categories: SecurityCategory[] }>("/api/securities/universe");
+}
+
+export async function followSecurity(company: string): Promise<void> {
+  const res = await apiFetch(`/api/me/securities`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ company }),
+  });
+  if (!res.ok) throw new Error(`Follow failed: ${res.status}`);
+}
+
+export async function unfollowSecurity(company: string): Promise<void> {
+  const res = await apiFetch(`/api/me/securities/${encodeURIComponent(company)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`Unfollow failed: ${res.status}`);
+}
+
+export type QuestionStatus = "green" | "yellow" | "red" | "none";
+
+export interface CellImpact {
+  up: number;
+  down: number;
+  hits: { hit_id: number; claim: string; why: string | null; impact_dir: "up" | "down"; decision: HitDecision; label: string }[];
+}
+
+export interface FinColumn {
+  id: string;
+  label: string;
+  calendar: string;
+  kind: "Q" | "FY";
+  actual: boolean;
+}
+
+export interface FinRow {
+  id: string;
+  label: string;
+  fmt: "num" | "pct" | "eps" | "x";
+  style?: "bold" | "sub" | "margin" | "total";
+  values: Record<string, number | null>;
+  driver?: string;
+  base?: Record<string, number | null>;
+  overridden?: string[];
+}
+
+export interface FinModel {
+  source: string | null;
+  file: string | null;
+  imported_at: string | null;
+  columns: FinColumn[];
+  sections: { id: string; title: string; rows: FinRow[]; annual_only?: boolean }[];
+  market: {
+    price: number | null;
+    market_price: number | null;
+    price_override: number | null;
+    market_cap: number | null;
+    net_cash: number | null;
+    ev: number | null;
+    target_pe: number | null;
+  };
+  impact_cells: Record<string, { row: string; cols: string[] }>;
+  impacts: Record<string, CellImpact>;
+  editable: string[];
+  override_count: number;
+}
+
+export async function putModelNumbers(
+  key: string,
+  body: { overrides: Record<string, number>; target_pe: number | null; price: number | null },
+): Promise<FinModel> {
+  const res = await apiFetch(`/api/model/${encodeURIComponent(key)}/numbers`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+  return res.json();
+}
+
+export async function importModel(key: string, file: File): Promise<void> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await apiFetch(`/api/model/${encodeURIComponent(key)}/import`, { method: "POST", body: form });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `Import failed: ${res.status}`);
+  }
+}
+
+export interface SecurityModel extends Security {
+  followed: boolean;
+  questions: {
+    id: number;
+    question: string;
+    note: string | null;
+    drivers: Driver[];
+    position: number;
+    status: QuestionStatus;
+    signals: number;
+    references: number;
+  }[];
+  pending: BriefQuestion[];
+  kept: BriefQuestion[];
+  /** Every non-dropped development on the user's questions (90 days), newest first. */
+  feed: FeedHit[];
+  /** null until a base model (e.g. Canalyst) is imported for this security. */
+  numbers: FinModel | null;
+}
+
+export type FeedHit = BriefHit & { question_id: number; question: string };
+
+export function getSecurityModel(key: string): Promise<SecurityModel> {
+  return getJSON<SecurityModel>(`/api/model/${encodeURIComponent(key)}`);
+}
+
+export interface BoardQuestion {
+  id: number;
+  question: string;
+  drivers: Driver[];
+  status: QuestionStatus;
+  signals: number;
+  references: number;
+  by_class: Record<SourceClass, { supports: number; contradicts: number }>;
+}
+
+export interface BoardSecurity {
+  company: string;
+  ticker: string | null;
+  key: string;
+  category: string | null;
+  has_model: boolean;
+  questions: BoardQuestion[];
+}
+
+export function getBoard(): Promise<{ securities: BoardSecurity[] }> {
+  return getJSON<{ securities: BoardSecurity[] }>("/api/board");
+}
+
+// ─── Private research ("inside view") + personal API tokens ─────────────────
+
+export interface ResearchDoc {
+  id: number;
+  title: string;
+  url: string | null;
+  status: string;
+  error: string | null;
+  created_at: string;
+  nugget_count: number;
+  signal_count: number;
+  hit_count: number;
+}
+
+async function sendJSON<T>(path: string, method: string, body?: unknown): Promise<T> {
+  const res = await apiFetch(path, {
+    method,
+    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `Request failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export function listResearch(): Promise<{ documents: ResearchDoc[] }> {
+  return getJSON<{ documents: ResearchDoc[] }>("/api/research");
+}
+
+export function addResearch(body: { title: string; text?: string; url?: string }): Promise<{ id: number }> {
+  return sendJSON("/api/research", "POST", body);
+}
+
+export async function uploadResearch(file: File, title: string): Promise<{ id: number }> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("title", title);
+  const res = await apiFetch("/api/research/upload", { method: "POST", body: form });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `Upload failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export function deleteResearch(id: number): Promise<void> {
+  return sendJSON(`/api/research/${id}`, "DELETE");
+}
+
+export interface ApiToken {
+  id: number;
+  name: string;
+  prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export function listTokens(): Promise<{ tokens: ApiToken[] }> {
+  return getJSON<{ tokens: ApiToken[] }>("/api/me/tokens");
+}
+
+export function createToken(name: string): Promise<{ id: number; token: string }> {
+  return sendJSON("/api/me/tokens", "POST", { name });
+}
+
+export function revokeToken(id: number): Promise<void> {
+  return sendJSON(`/api/me/tokens/${id}`, "DELETE");
 }
