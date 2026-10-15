@@ -583,7 +583,10 @@ def process_episode_pipeline(
                 # newsletter's Stock Read-Through falls back to grouping raw
                 # nuggets, which can only ever label companies "mentioned" —
                 # the bullish/bearish/owned calls come from this synthesis.
-                if repo.get_episode_digest(conn, episode_id) is None:
+                # Filings and private research feed the matcher only, not the newsletter.
+                if show.format not in ("filing", "research") and (
+                    repo.get_episode_digest(conn, episode_id) is None
+                ):
                     try:
                         from .synthesis import generate_episode_digest
                         generate_episode_digest(conn, episode_id, settings=settings)

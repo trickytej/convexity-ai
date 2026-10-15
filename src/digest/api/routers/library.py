@@ -18,7 +18,7 @@ from ...pipeline import discover_show, process_episode_pipeline
 from ...registry import Show
 from ...store import repo
 from ...store.models import Episode, EpisodeStatus
-from ..deps import get_db
+from ..deps import get_db, require_admin
 from ..schemas import EpisodeListOut, EpisodeOut, SegmentOut, ShowOut, TranscriptOut
 
 router = APIRouter(tags=["library"])
@@ -147,7 +147,7 @@ def get_episode(
     return _episode_out(ep, transcript, nugget_count)
 
 
-@router.delete("/episodes/{episode_id}")
+@router.delete("/episodes/{episode_id}", dependencies=[Depends(require_admin)])
 def delete_episode(episode_id: int, db: sqlite3.Connection = Depends(get_db)) -> dict:
     if db.execute("SELECT id FROM episodes WHERE id = ?", (episode_id,)).fetchone() is None:
         raise HTTPException(status_code=404, detail="episode not found")
@@ -164,7 +164,7 @@ class EpisodePatch(BaseModel):
     title: str
 
 
-@router.patch("/episodes/{episode_id}", response_model=EpisodeOut)
+@router.patch("/episodes/{episode_id}", response_model=EpisodeOut, dependencies=[Depends(require_admin)])
 def patch_episode(
     episode_id: int, body: EpisodePatch, db: sqlite3.Connection = Depends(get_db)
 ) -> EpisodeOut:
@@ -244,7 +244,7 @@ def _show_from_db(db: sqlite3.Connection, slug: str) -> Show:
     )
 
 
-@router.delete("/shows/{slug}")
+@router.delete("/shows/{slug}", dependencies=[Depends(require_admin)])
 def delete_show(slug: str, db: sqlite3.Connection = Depends(get_db)) -> dict:
     """Remove a show and all its associated data."""
     episode_ids = [r["id"] for r in db.execute("SELECT id FROM episodes WHERE show_slug = ?", (slug,)).fetchall()]
@@ -259,7 +259,7 @@ def delete_show(slug: str, db: sqlite3.Connection = Depends(get_db)) -> dict:
     return {"deleted": slug}
 
 
-@router.post("/shows/{slug}/poll")
+@router.post("/shows/{slug}/poll", dependencies=[Depends(require_admin)])
 def poll_show(slug: str, db: sqlite3.Connection = Depends(get_db)) -> dict:
     """Discover new episodes for a show from its RSS feed."""
     show = _show_from_db(db, slug)
@@ -271,7 +271,7 @@ def poll_show(slug: str, db: sqlite3.Connection = Depends(get_db)) -> dict:
     return {"new": result.new, "seen": result.seen, "total": result.total_in_feed}
 
 
-@router.post("/shows/poll-all")
+@router.post("/shows/poll-all", dependencies=[Depends(require_admin)])
 def poll_all_shows(db: sqlite3.Connection = Depends(get_db)) -> dict:
     """Poll every active show and newsletter for new episodes."""
     rows = db.execute("SELECT * FROM shows WHERE active = 1").fetchall()
@@ -308,7 +308,7 @@ def _run_process(episode_id: int) -> None:
         conn.close()
 
 
-@router.post("/episodes/{episode_id}/process")
+@router.post("/episodes/{episode_id}/process", dependencies=[Depends(require_admin)])
 def process_episode(
     episode_id: int,
     background_tasks: BackgroundTasks,
@@ -335,7 +335,7 @@ def get_episode_status(episode_id: int, db: sqlite3.Connection = Depends(get_db)
     return {"status": ep.status, "error": ep.error, "nugget_count": nugget_count, "updated_at": updated_at}
 
 
-@router.post("/episodes/{episode_id}/reset")
+@router.post("/episodes/{episode_id}/reset", dependencies=[Depends(require_admin)])
 def reset_episode(episode_id: int, db: sqlite3.Connection = Depends(get_db)) -> dict:
     """Reset a stuck ACQUIRED or FAILED episode back to discovered so it can be reprocessed."""
     ep = repo.get_episode(db, episode_id)
@@ -364,7 +364,7 @@ class ImportPodcastOut(BaseModel):
     created: bool
 
 
-@router.post("/shows/import", response_model=ImportPodcastOut)
+@router.post("/shows/import", response_model=ImportPodcastOut, dependencies=[Depends(require_admin)])
 def import_podcast(body: ImportPodcastIn, db: sqlite3.Connection = Depends(get_db)) -> ImportPodcastOut:
     """Accept an RSS feed URL, register the show, and import its episode list."""
     url = body.url.strip()
@@ -434,7 +434,7 @@ class ImportNewsletterOut(BaseModel):
     created: bool
 
 
-@router.post("/newsletters/import", response_model=ImportNewsletterOut)
+@router.post("/newsletters/import", response_model=ImportNewsletterOut, dependencies=[Depends(require_admin)])
 def import_newsletter(body: ImportPodcastIn, db: sqlite3.Connection = Depends(get_db)) -> ImportNewsletterOut:
     """Register a newsletter RSS feed and import its articles as episodes."""
     url = body.url.strip()
@@ -516,7 +516,7 @@ class ImportEpisodeOut(BaseModel):
     created: bool
 
 
-@router.post("/episodes/import", response_model=ImportEpisodeOut)
+@router.post("/episodes/import", response_model=ImportEpisodeOut, dependencies=[Depends(require_admin)])
 def import_episode(body: ImportEpisodeIn, db: sqlite3.Connection = Depends(get_db)) -> ImportEpisodeOut:
     """Add a single interview or audio URL as an importable episode."""
     url = body.url.strip()

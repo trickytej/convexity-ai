@@ -8,7 +8,7 @@ import sqlite3
 from fastapi import APIRouter, Depends, HTTPException
 
 from ...store import repo
-from ..deps import get_db
+from ..deps import get_db, require_admin
 from ..schemas import (
     CurationOut,
     CurationPatch,
@@ -93,7 +93,7 @@ def nugget_curation_stats(
     return CurationStatsOut(**repo.nugget_curation_stats(db, episode_id))
 
 
-@router.patch("/nuggets/{nugget_id}/curation", response_model=CurationOut)
+@router.patch("/nuggets/{nugget_id}/curation", response_model=CurationOut, dependencies=[Depends(require_admin)])
 def patch_curation(
     nugget_id: int, body: CurationPatch, db: sqlite3.Connection = Depends(get_db)
 ) -> CurationOut:

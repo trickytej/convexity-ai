@@ -49,5 +49,10 @@ jobs:
       - name: Extract insights
         run: digest insights
 
+      - name: SEC filings for followed tickers
+        # Best-effort: EDGAR hiccups shouldn't block the thesis sweep.
+        continue-on-error: true
+        run: digest sec-sync --days 2 -v
+
       - name: Match nuggets to theses
         run: digest brief-match --days 2 -v

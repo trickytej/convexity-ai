@@ -59,6 +59,11 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("PODSCAN_API_KEY", "DIGEST_PODSCAN_API_KEY"),
     )
+    # SEC EDGAR requires a descriptive User-Agent with contact info.
+    sec_user_agent: str = Field(
+        default="ConvexityAI research tool admin@convexity.ai",
+        validation_alias=AliasChoices("SEC_USER_AGENT", "DIGEST_SEC_USER_AGENT"),
+    )
     x_bearer_token: str | None = Field(
         default=None,
         validation_alias=AliasChoices("X_BEARER_TOKEN", "DIGEST_X_BEARER_TOKEN"),

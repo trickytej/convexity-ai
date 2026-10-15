@@ -19,8 +19,10 @@ import os
 from datetime import date
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+
+from ..deps import require_admin
 
 router = APIRouter(tags=["ingest"])
 
@@ -53,7 +55,7 @@ def _days_from_since(since: str) -> int:
     return max(1, (date.today() - start).days + 1)
 
 
-@router.post("/ingest/dispatch", response_model=IngestDispatchOut, status_code=202)
+@router.post("/ingest/dispatch", response_model=IngestDispatchOut, status_code=202, dependencies=[Depends(require_admin)])
 def dispatch_ingest(body: IngestDispatchIn) -> IngestDispatchOut:
     """Kick off the ingest workflow for a date range. Returns immediately; the
     workflow runs on a GitHub runner and episodes/nuggets appear as it completes."""

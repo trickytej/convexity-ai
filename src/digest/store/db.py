@@ -11,10 +11,15 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import libsql
+
+# Owner account seeded as admin by the multi-user migration; pre-existing
+# single-tenant theses are assigned to it. Override with OWNER_EMAIL.
+DEFAULT_OWNER_EMAIL = "tejaschoudhary1729@gmail.com"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS shows (
@@ -46,6 +51,9 @@ CREATE TABLE IF NOT EXISTS episodes (
     error            TEXT,
     created_at       TEXT NOT NULL,
     updated_at       TEXT NOT NULL,
+    -- NULL = shared corpus. Set = a user's private research ("inside view"):
+    -- matched only against that user's questions and excluded from every listing.
+    owner_user_id    INTEGER,
     UNIQUE(show_slug, guid)
 );
 CREATE INDEX IF NOT EXISTS idx_episodes_show ON episodes(show_slug);
@@ -167,7 +175,9 @@ CREATE TABLE IF NOT EXISTS theses (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     company    TEXT NOT NULL,               -- canonical Scout-watchlist name
     ticker     TEXT,                        -- denormalized from the watchlist at save time
+    user_id    INTEGER,                     -- owner; every query is scoped by it
     question   TEXT NOT NULL,
+    drivers    TEXT,                        -- json [{"line": eps|revenue|..., "year": 1-3|null}]
     note       TEXT,                        -- optional why-it-matters
     position   INTEGER NOT NULL DEFAULT 0,  -- ordering within a company
     active     INTEGER NOT NULL DEFAULT 1,
@@ -190,17 +200,84 @@ CREATE TABLE IF NOT EXISTS thesis_hits (
     why         TEXT,                       -- one sentence: what this changes
     model       TEXT,
     matched_at  TEXT NOT NULL,
+    decision    TEXT NOT NULL DEFAULT 'pending',  -- pending | kept | dropped (owner's call)
+    decided_at  TEXT,
+    -- Strictness: only 'signal' hits (high relevance AND high-quality evidence,
+    -- with a supports/contradicts call) count toward a question's status;
+    -- everything else is kept as 'reference'. See theses.classify_tier.
+    evidence    REAL,                       -- 0..1 evidence quality from the matcher
+    tier        TEXT NOT NULL DEFAULT 'reference',  -- signal | reference
+    impact_line TEXT,                       -- revenue | gross_margin | op_margin | eps | multiple
+    impact_year INTEGER,                    -- 1..3 (NULL for multiple)
+    impact_dir  TEXT,                       -- up | down
     UNIQUE(question_id, claim_hash)
 );
 CREATE INDEX IF NOT EXISTS idx_thesis_hits_matched  ON thesis_hits(matched_at);
 CREATE INDEX IF NOT EXISTS idx_thesis_hits_question ON thesis_hits(question_id);
 
 -- Evaluated-once ledger for the matcher (even zero-match evaluations), so the
--- daily catch-up sweep never re-sends a nugget to the LLM. No FK by design.
+-- daily catch-up sweep never re-sends a nugget to the LLM. Per user: each user's
+-- questions are evaluated independently. No FK by design.
 CREATE TABLE IF NOT EXISTS thesis_match_seen (
-    nugget_id  INTEGER PRIMARY KEY,
+    user_id    INTEGER NOT NULL,
+    nugget_id  INTEGER NOT NULL,
     episode_id INTEGER NOT NULL,
-    matched_at TEXT NOT NULL
+    matched_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, nugget_id)
+);
+
+-- Accounts. Auth itself lives in the frontend (Auth.js, JWT sessions); this is the
+-- system of record it upserts into on sign-in. The corpus (shows/episodes/nuggets)
+-- is shared; theses, hit decisions and followed securities are per user.
+CREATE TABLE IF NOT EXISTS users (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    email               TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    name                TEXT,
+    image               TEXT,
+    provider            TEXT,
+    provider_account_id TEXT,
+    is_admin            INTEGER NOT NULL DEFAULT 0,
+    created_at          TEXT NOT NULL,
+    last_login_at       TEXT
+);
+
+-- Per-security model. The base (an imported vendor model, e.g. Canalyst) is
+-- shared per company; each user's driver overrides and target multiple are private.
+CREATE TABLE IF NOT EXISTS model_bases (
+    company     TEXT PRIMARY KEY,           -- canonical Scout-watchlist name
+    ticker      TEXT,
+    data        TEXT NOT NULL,              -- json from finmodel.parse_canalyst
+    imported_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS security_models (
+    user_id    INTEGER NOT NULL,
+    company    TEXT NOT NULL,
+    data       TEXT NOT NULL,               -- json {"overrides": {"gm@Q3-2027": 0.76}, "target_pe": 30}
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, company)
+);
+
+-- Personal API tokens (MCP servers, scripts). Only a SHA-256 of the token is
+-- stored; the plaintext is shown once at creation.
+CREATE TABLE IF NOT EXISTS api_tokens (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name         TEXT NOT NULL,
+    token_hash   TEXT NOT NULL UNIQUE,
+    prefix       TEXT NOT NULL,             -- first chars, for display
+    created_at   TEXT NOT NULL,
+    last_used_at TEXT
+);
+
+-- Securities a user follows, picked from the Scout watchlist universe.
+CREATE TABLE IF NOT EXISTS user_securities (
+    user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    company  TEXT NOT NULL,                 -- canonical Scout-watchlist name
+    ticker   TEXT,
+    category TEXT,                          -- watchlist category at follow time
+    added_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, company)
 );
 
 CREATE TABLE IF NOT EXISTS nugget_curation (
@@ -506,7 +583,76 @@ def _migrate(conn: _Conn) -> None:
     if "dismissed" not in scout_cols:
         conn.execute("ALTER TABLE scout_appearances ADD COLUMN dismissed INTEGER NOT NULL DEFAULT 0")
 
+    _migrate_users(conn)
     conn.commit()
+
+
+def _migrate_users(conn: _Conn) -> None:
+    """Multi-user migration: give theses an owner, hits a keep/drop decision, and
+    the matcher ledger a per-user key. Pre-existing rows go to the owner account
+    (OWNER_EMAIL), which is seeded as admin."""
+    thesis_cols = {row[1] for row in conn.execute("PRAGMA table_info(theses)").fetchall()}
+    if "user_id" not in thesis_cols:
+        conn.execute("ALTER TABLE theses ADD COLUMN user_id INTEGER")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_theses_user_company ON theses(user_id, company)")
+
+    hit_cols = {row[1] for row in conn.execute("PRAGMA table_info(thesis_hits)").fetchall()}
+    if "decision" not in hit_cols:
+        conn.execute("ALTER TABLE thesis_hits ADD COLUMN decision TEXT NOT NULL DEFAULT 'pending'")
+    if "decided_at" not in hit_cols:
+        conn.execute("ALTER TABLE thesis_hits ADD COLUMN decided_at TEXT")
+    if "tier" not in hit_cols:
+        for col in (
+            "evidence REAL",
+            "tier TEXT NOT NULL DEFAULT 'reference'",
+            "impact_line TEXT",
+            "impact_year INTEGER",
+            "impact_dir TEXT",
+        ):
+            conn.execute(f"ALTER TABLE thesis_hits ADD COLUMN {col}")
+        # Pre-strictness hits have no evidence grade: only the very strongest
+        # directional calls survive as signal until `digest brief-match --rematch`.
+        conn.execute(
+            "UPDATE thesis_hits SET tier = 'signal' "
+            "WHERE relevance >= 0.85 AND direction IN ('supports', 'contradicts')"
+        )
+    if "drivers" not in thesis_cols:
+        conn.execute("ALTER TABLE theses ADD COLUMN drivers TEXT")
+    ep_cols = {row[1] for row in conn.execute("PRAGMA table_info(episodes)").fetchall()}
+    if "owner_user_id" not in ep_cols:
+        conn.execute("ALTER TABLE episodes ADD COLUMN owner_user_id INTEGER")
+
+    now = datetime.now(timezone.utc).isoformat()
+    owner_email = os.environ.get("OWNER_EMAIL") or DEFAULT_OWNER_EMAIL
+    conn.execute(
+        "INSERT OR IGNORE INTO users (email, is_admin, created_at) VALUES (?, 1, ?)",
+        (owner_email, now),
+    )
+    owner_id = conn.execute(
+        "SELECT id FROM users WHERE email = ?", (owner_email,)
+    ).fetchone()[0]
+
+    seen_cols = {row[1] for row in conn.execute("PRAGMA table_info(thesis_match_seen)").fetchall()}
+    if "user_id" not in seen_cols:
+        conn.execute("ALTER TABLE thesis_match_seen RENAME TO thesis_match_seen_old")
+        conn.execute(
+            "CREATE TABLE thesis_match_seen (user_id INTEGER NOT NULL, nugget_id INTEGER NOT NULL, "
+            "episode_id INTEGER NOT NULL, matched_at TEXT NOT NULL, PRIMARY KEY (user_id, nugget_id))"
+        )
+        conn.execute(
+            "INSERT INTO thesis_match_seen (user_id, nugget_id, episode_id, matched_at) "
+            "SELECT ?, nugget_id, episode_id, matched_at FROM thesis_match_seen_old",
+            (owner_id,),
+        )
+        conn.execute("DROP TABLE thesis_match_seen_old")
+
+    if conn.execute("SELECT 1 FROM theses WHERE user_id IS NULL LIMIT 1").fetchone():
+        conn.execute("UPDATE theses SET user_id = ? WHERE user_id IS NULL", (owner_id,))
+        conn.execute(
+            "INSERT OR IGNORE INTO user_securities (user_id, company, ticker, added_at) "
+            "SELECT ?, company, MAX(ticker), ? FROM theses WHERE active = 1 GROUP BY company",
+            (owner_id, now),
+        )
 
 
 def init_db(conn: _Conn) -> None:
