@@ -58,9 +58,12 @@ export default function QuestionsEditor({
   company,
   ticker,
   initial,
+  asHouse = false,
 }: {
   company: string;
   ticker: string | null;
+  /** Edit ConvexityAI's default questions (admins) instead of the user's own. */
+  asHouse?: boolean;
   initial: {
     id: number;
     question: string;
@@ -125,7 +128,7 @@ export default function QuestionsEditor({
           note: q.note.trim() || null,
           drivers: q.drivers,
         }));
-      const res = await putCompanyTheses({ company, ticker, questions: payload });
+      const res = await putCompanyTheses({ company, ticker, questions: payload }, { asHouse });
       const saved = res.companies.find((c) => c.company === company)?.questions ?? [];
       const prior = new Map(questions.filter((q) => q.id).map((q) => [q.id, q]));
       setQuestions(

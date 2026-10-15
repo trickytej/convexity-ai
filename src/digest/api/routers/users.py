@@ -101,7 +101,11 @@ def follow(
     if not sec:
         raise HTTPException(status_code=404, detail="not in the security universe")
     repo.follow_security(db, user_id, sec["company"], sec["ticker"], sec["category"])
-    return {"followed": True, **sec}
+    # First follow: start from ConvexityAI's default questions (and their evidence).
+    adopted = 0
+    if not repo.has_any_theses(db, user_id, sec["company"]):
+        adopted = repo.adopt_house_questions(db, user_id, sec["company"])
+    return {"followed": True, "adopted_questions": adopted, **sec}
 
 
 @router.delete("/me/securities/{company}")
@@ -160,6 +164,8 @@ def get_model(
         if h["decision"] != "dropped"
     ]
     feed.sort(key=lambda h: h["nugget"]["published_at"] or h["matched_at"], reverse=True)
+    house = repo.house_user_id(db)
+    house_rows = repo.list_theses(db, house, company=company) if house else []
 
     return {
         **sec,
@@ -169,8 +175,26 @@ def get_model(
         "pending": _questions(pending),
         "kept": _questions(kept),
         "feed": feed,
+        "house_questions": [
+            {"id": t["id"], "question": t["question"], "note": t["note"],
+             "drivers": json.loads(t["drivers"]) if t["drivers"] else [], "position": t["position"]}
+            for t in house_rows
+        ],
         "numbers": build_model(db, user_id, company, sec["ticker"]),
     }
+
+
+@router.post("/model/{key}/adopt-house")
+def adopt_house(
+    key: str, user_id: int = Depends(current_user_id), db: sqlite3.Connection = Depends(get_db)
+) -> dict:
+    """Replace the user's questions for this security with ConvexityAI's defaults
+    (and the evidence already matched to them)."""
+    sec = resolve(db, key)
+    if not sec:
+        raise HTTPException(status_code=404, detail="unknown security")
+    repo.follow_security(db, user_id, sec["company"], sec["ticker"], sec["category"])
+    return {"adopted_questions": repo.adopt_house_questions(db, user_id, sec["company"])}
 
 
 @router.put("/model/{key}/numbers")

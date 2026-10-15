@@ -1,11 +1,13 @@
+import { auth } from "@/auth";
 import { getBoard, getUniverse } from "@/lib/api";
+import AdminImports from "@/components/AdminImports";
 import Board from "@/components/Board";
 import FollowPicker from "@/components/FollowPicker";
 
 export const dynamic = "force-dynamic";
 
 export default async function ModelPage() {
-  const [{ categories }, { securities }] = await Promise.all([getUniverse(), getBoard()]);
+  const [{ categories }, { securities }, session] = await Promise.all([getUniverse(), getBoard(), auth()]);
 
   return (
     <div>
@@ -44,6 +46,7 @@ export default async function ModelPage() {
           <FollowPicker categories={categories} />
         </div>
       </section>
+      {session?.user?.isAdmin && <AdminImports />}
     </div>
   );
 }

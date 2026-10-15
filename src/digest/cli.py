@@ -736,27 +736,42 @@ if __name__ == "__main__":
 
 @app.command(name="model-import")
 def model_import(
-    path: Path = typer.Argument(..., exists=True, help="Canalyst-format .xlsx model"),
-    company: str = typer.Option(None, "--company", "-c", help="Watchlist name or ticker (default: the file's ticker)."),
+    paths: list[Path] = typer.Argument(..., exists=True, help="Canalyst-format .xlsx files or folders of them"),
 ) -> None:
-    """Load a vendor model as a security's shared base model."""
+    """Load vendor models as securities' shared base models (matched by ticker)."""
     settings = get_settings()
-    from .finmodel import parse_canalyst
-    from .model import save_base
-    from .securities import resolve
+    from .house import import_models
 
-    base = parse_canalyst(path)
+    files = []
+    for p in paths:
+        files += sorted(p.glob("*.xls[xm]")) if p.is_dir() else [p]
     with get_conn(settings.resolved_db_path) as conn:
         init_db(conn)
-        sec = resolve(conn, company or base.get("ticker") or "")
-        if not sec:
-            console.print(f"[red]No watchlist security matches {company or base.get('ticker')!r}.[/red]")
-            raise typer.Exit(code=1)
-        save_base(conn, sec["company"], sec["ticker"], base)
-    console.print(
-        f"[green]Imported[/green] {path.name} → {sec['company']}: {len(base['periods'])} periods, "
-        f"{len(base['segments'])} revenue segments."
-    )
+        results = import_models(conn, [(f.name, f) for f in files if not f.name.startswith("~$")])
+    for r in results:
+        if r["ok"]:
+            console.print(f"[green]✓[/green] {r['file']} → {r['company']} ({r['periods']} periods, {r['segments']} segments)")
+        else:
+            console.print(f"[red]✗[/red] {r['file']}: {r['error']}")
+
+
+@app.command(name="house-questions")
+def house_questions(
+    path: Path = typer.Argument(..., exists=True, help="CSV: ticker, question, note, drivers"),
+) -> None:
+    """Load ConvexityAI's default What Matters questions from a CSV (see digest/house.py)."""
+    settings = get_settings()
+    from .house import import_house_questions
+
+    with get_conn(settings.resolved_db_path) as conn:
+        init_db(conn)
+        results = import_house_questions(conn, path.read_text(encoding="utf-8-sig"))
+    for r in results:
+        if "error" in r:
+            console.print(f"[red]✗[/red] {r['company']}: {r['error']}")
+        else:
+            console.print(f"[green]✓[/green] {r['company']}: {r['questions']} questions")
+    console.print("Run `digest brief-match --days 30` to score recent evidence against them.")
 
 
 @app.command(name="sec-sync")

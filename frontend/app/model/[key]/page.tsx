@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { getBoard, getSecurityModel } from "@/lib/api";
 import FollowToggle from "@/components/FollowToggle";
-import QuestionsEditor from "@/components/QuestionsEditor";
+import WhatMattersPanel from "@/components/WhatMattersPanel";
 import SecurityWorkspace from "@/components/SecurityWorkspace";
 
 export const dynamic = "force-dynamic";
@@ -85,7 +85,7 @@ export default async function SecurityPage({ params }: { params: Promise<{ key: 
             your own research are weighed against them every day.
           </p>
           <div className="mt-6 max-w-3xl">
-            <QuestionsEditor company={model.company} ticker={model.ticker} initial={model.questions} />
+            <WhatMattersPanel model={model} isAdmin={!!session?.user?.isAdmin} />
           </div>
         </section>
         }

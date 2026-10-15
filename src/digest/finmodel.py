@@ -60,11 +60,16 @@ def parse_canalyst(path: str | Path) -> dict:
     import openpyxl
 
     wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    if "Model" not in wb.sheetnames:
+        raise ValueError("not a Canalyst-format model (no 'Model' sheet)")
     rows = list(wb["Model"].iter_rows(values_only=True))
     hdr_i = next(
-        i for i, r in enumerate(rows[:15])
-        if sum(1 for c in r if isinstance(c, str) and _PERIOD_RE.match(c)) > 8
+        (i for i, r in enumerate(rows[:15])
+         if sum(1 for c in r if isinstance(c, str) and _PERIOD_RE.match(c)) > 8),
+        None,
     )
+    if hdr_i is None:
+        raise ValueError("not a Canalyst-format model (no Q1-2027 / FY2027 period header row)")
     header = rows[hdr_i]
     ends = next(
         (r for r in rows[:hdr_i] if sum(isinstance(c, datetime) for c in r) > 8), [None] * len(header)
@@ -123,8 +128,10 @@ def parse_canalyst(path: str | Path) -> dict:
 
     # Segment revenue: the revenue-build rows before the first total that the
     # vendor actually forecasts.
-    first_fc = next(c["id"] for c in kept if not is_actual(c))
-    total_i = next(i for i, lab, _ in labelled if lab.lower() == "total revenue, mm")
+    first_fc = next((c["id"] for c in kept if not is_actual(c)), None)
+    total_i = next((i for i, lab, _ in labelled if lab.lower() == "total revenue, mm"), None)
+    if first_fc is None or total_i is None:
+        raise ValueError("not a Canalyst-format model (no forecast periods or 'Total Revenue, mm' row)")
     segs: list[dict] = []
     for i, lab, r in labelled:
         if i >= total_i:

@@ -1360,3 +1360,55 @@ def delete_research(conn: sqlite3.Connection, user_id: int, episode_id: int) -> 
     conn.execute("DELETE FROM episodes WHERE id = ?", (episode_id,))
     conn.commit()
     return True
+
+
+# --- House (default) questions ---------------------------------------------------
+
+
+def house_user_id(conn: sqlite3.Connection) -> int | None:
+    from .db import HOUSE_EMAIL
+
+    row = conn.execute("SELECT id FROM users WHERE email = ?", (HOUSE_EMAIL,)).fetchone()
+    return int(row["id"]) if row else None
+
+
+def adopt_house_questions(conn: sqlite3.Connection, user_id: int, company: str) -> int:
+    """Give *user_id* their own copy of the house questions for *company*, plus
+    every non-dropped hit already matched to them. Replaces (soft-deactivates)
+    the user's current questions for that company. Returns questions copied."""
+    house = house_user_id(conn)
+    if house is None or house == user_id:
+        return 0
+    source = list_theses(conn, house, company=company)
+    if not source:
+        return 0
+    now = _now_iso()
+    conn.execute(
+        "UPDATE theses SET active = 0, updated_at = ? WHERE user_id = ? AND company = ? AND active = 1",
+        (now, user_id, company),
+    )
+    for t in source:
+        cur = conn.execute(
+            "INSERT INTO theses (user_id, company, ticker, question, note, drivers, position, active, "
+            "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)",
+            (user_id, company, t["ticker"], t["question"], t["note"], t["drivers"], t["position"], now, now),
+        )
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO thesis_hits (question_id, nugget_id, episode_id, claim_hash, relevance,
+                direction, why, model, matched_at, evidence, tier, impact_line, impact_year, impact_dir)
+            SELECT ?, nugget_id, episode_id, claim_hash, relevance, direction, why, model, matched_at,
+                   evidence, tier, impact_line, impact_year, impact_dir
+            FROM thesis_hits WHERE question_id = ?
+            """,
+            (cur.lastrowid, t["id"]),
+        )
+    conn.commit()
+    return len(source)
+
+
+def has_any_theses(conn: sqlite3.Connection, user_id: int, company: str) -> bool:
+    """True if the user ever had questions for *company* (active or not)."""
+    return bool(conn.execute(
+        "SELECT 1 FROM theses WHERE user_id = ? AND company = ? LIMIT 1", (user_id, company)
+    ).fetchone())

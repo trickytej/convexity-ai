@@ -19,7 +19,7 @@ from ...store import repo
 from ...store.db import connect
 from ...theses import build_brief, clean_drivers, draft_questions, run_brief_match
 from ...transcribe.llm import LLMError
-from ..deps import current_user_id, get_db
+from ..deps import current_user_id, get_db, require_admin
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["theses"])
@@ -99,11 +99,25 @@ def get_theses(
     return {"companies": _grouped_theses(repo.list_theses(db, user_id))}
 
 
+def _owner_for_edit(
+    as_house: bool = Query(False, description="Admins: edit ConvexityAI's default questions"),
+    user_id: int = Depends(current_user_id),
+    db: sqlite3.Connection = Depends(get_db),
+) -> int:
+    if not as_house:
+        return user_id
+    require_admin(user_id, db)
+    house = repo.house_user_id(db)
+    if house is None:
+        raise HTTPException(status_code=500, detail="house account missing")
+    return house
+
+
 @router.put("/theses")
 def put_theses(
     body: CompanyThesesIn,
     background_tasks: BackgroundTasks,
-    user_id: int = Depends(current_user_id),
+    user_id: int = Depends(_owner_for_edit),
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     """Save one company's ordered question set (array order = position).

@@ -773,12 +773,15 @@ export function getTheses(): Promise<{ companies: CompanyTheses[] }> {
   return getJSON<{ companies: CompanyTheses[] }>("/api/theses");
 }
 
-export async function putCompanyTheses(block: {
+export async function putCompanyTheses(
+  block: {
   company: string;
   ticker?: string | null;
   questions: { id?: number; question: string; note?: string | null; drivers?: Driver[] }[];
-}): Promise<{ companies: CompanyTheses[] }> {
-  const res = await apiFetch(`/api/theses`, {
+  },
+  opts: { asHouse?: boolean } = {},
+): Promise<{ companies: CompanyTheses[] }> {
+  const res = await apiFetch(`/api/theses${opts.asHouse ? "?as_house=true" : ""}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(block),
@@ -1008,6 +1011,8 @@ export interface SecurityModel extends Security {
   kept: BriefQuestion[];
   /** Every non-dropped development on the user's questions (90 days), newest first. */
   feed: FeedHit[];
+  /** ConvexityAI's default questions for this security (copied to new followers). */
+  house_questions: { id: number; question: string; note: string | null; drivers: Driver[]; position: number }[];
   /** null until a base model (e.g. Canalyst) is imported for this security. */
   numbers: FinModel | null;
 }
@@ -1110,4 +1115,39 @@ export function createToken(name: string): Promise<{ id: number; token: string }
 
 export function revokeToken(id: number): Promise<void> {
   return sendJSON(`/api/me/tokens/${id}`, "DELETE");
+}
+
+export async function adoptHouseQuestions(key: string): Promise<{ adopted_questions: number }> {
+  return sendJSON(`/api/model/${encodeURIComponent(key)}/adopt-house`, "POST");
+}
+
+export interface ImportResult {
+  file?: string;
+  company?: string;
+  ok?: boolean;
+  error?: string;
+  questions?: number;
+  periods?: number;
+  segments?: number;
+}
+
+async function uploadForm<T>(path: string, form: FormData): Promise<T> {
+  const res = await apiFetch(path, { method: "POST", body: form });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `Upload failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export function adminImportModels(files: File[]): Promise<{ results: ImportResult[] }> {
+  const form = new FormData();
+  files.forEach((f) => form.append("files", f));
+  return uploadForm("/api/admin/models/import", form);
+}
+
+export function adminImportHouseQuestions(file: File): Promise<{ results: ImportResult[] }> {
+  const form = new FormData();
+  form.append("file", file);
+  return uploadForm("/api/admin/house-questions/import", form);
 }

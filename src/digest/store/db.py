@@ -20,6 +20,10 @@ import libsql
 # Owner account seeded as admin by the multi-user migration; pre-existing
 # single-tenant theses are assigned to it. Override with OWNER_EMAIL.
 DEFAULT_OWNER_EMAIL = "tejaschoudhary1729@gmail.com"
+# The house account owns ConvexityAI's default What Matters questions. It never
+# signs in; the matcher scores evidence against its questions like any user's,
+# and followers get a copy (questions + matched evidence) to edit as their own.
+HOUSE_EMAIL = "house@convexityai.xyz"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS shows (
@@ -631,6 +635,11 @@ def _migrate_users(conn: _Conn) -> None:
     owner_id = conn.execute(
         "SELECT id FROM users WHERE email = ?", (owner_email,)
     ).fetchone()[0]
+
+    conn.execute(
+        "INSERT OR IGNORE INTO users (email, name, is_admin, created_at) VALUES (?, 'ConvexityAI', 0, ?)",
+        (HOUSE_EMAIL, now),
+    )
 
     seen_cols = {row[1] for row in conn.execute("PRAGMA table_info(thesis_match_seen)").fetchall()}
     if "user_id" not in seen_cols:

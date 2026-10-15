@@ -16,6 +16,7 @@ from ..config import get_settings
 from ..store import repo
 from ..store.db import connect, init_db
 from .routers import (
+    admin,
     curation,
     digests,
     ingest,
@@ -116,6 +117,7 @@ def create_app() -> FastAPI:
     app.include_router(theses.router, prefix="/api")
     app.include_router(users.router, prefix="/api")
     app.include_router(research.router, prefix="/api")
+    app.include_router(admin.router, prefix="/api")
 
     # market-moves (vendored): price series + move detection + grounded attribution.
     # Guarded so a missing optional dep/data never takes down the core digest API.
