@@ -334,6 +334,24 @@ def get_segments(conn: sqlite3.Connection, transcript_id: int) -> list[Segment]:
 # --- read helpers for the web API ----------------------------------------
 
 
+def get_show(conn: sqlite3.Connection, slug: str) -> Show | None:
+    """A show from the DB — covers shows that exist only there (Scout, X,
+    imports, SEC filings, private research), not in config/shows.yaml."""
+    row = conn.execute("SELECT * FROM shows WHERE slug = ?", (slug,)).fetchone()
+    if row is None:
+        return None
+    return Show(
+        slug=row["slug"],
+        name=row["name"],
+        rss_url=row["rss_url"] or "",
+        tier=row["tier"],
+        transcript_source=row["transcript_source"] or "asr",
+        hosts=json.loads(row["hosts"]) if row["hosts"] else [],
+        format=row["format"] or "interview",
+        active=bool(row["active"]),
+    )
+
+
 def list_shows_with_counts(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
         """

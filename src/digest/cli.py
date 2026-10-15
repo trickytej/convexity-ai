@@ -436,7 +436,10 @@ def insights(
         with console.status("[bold]Extracting nuggets...[/bold]") as widget:
             for ep in episodes_list:
                 widget.update(f"[bold]Insights[/bold] {ep.show_slug} ep {ep.id}...")
-                res = generate_insights(conn, ep, show_by_slug[ep.show_slug], settings, force=force)
+                show = show_by_slug.get(ep.show_slug) or repo.get_show(conn, ep.show_slug)
+                if show is None:
+                    continue
+                res = generate_insights(conn, ep, show, settings, force=force)
                 if res.ok and not res.skipped:
                     total += res.count
                 style = "dim" if res.skipped else ("green" if res.ok else "red")
