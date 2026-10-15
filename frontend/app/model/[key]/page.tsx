@@ -69,19 +69,7 @@ export default async function SecurityPage({ params }: { params: Promise<{ key: 
       </div>
       {model.category && <p className="mt-2 text-[12px] text-zinc-600">{model.category}</p>}
 
-      {/* ── what matters ── */}
-      <section className="mt-12">
-        <SectionLabel count={model.questions.length}>What Matters</SectionLabel>
-        <p className="mt-3 max-w-2xl text-[13px] leading-relaxed text-zinc-500">
-          The 4–5 questions that decide this investment. New podcasts, X posts, filings and
-          your own research are weighed against them every day.
-        </p>
-        <div className="mt-6 max-w-3xl">
-          <QuestionsEditor company={model.company} ticker={model.ticker} initial={model.questions} />
-        </div>
-      </section>
-
-      {/* ── model + developments (shared selection state) ── */}
+      {/* ── model → what matters → developments (model + feed share selection state) ── */}
       <SecurityWorkspace
         securityKey={model.key}
         company={model.company}
@@ -89,6 +77,18 @@ export default async function SecurityPage({ params }: { params: Promise<{ key: 
         numbers={model.numbers}
         feed={model.feed}
         questions={model.questions.map((q) => ({ id: q.id, question: q.question }))}
+        whatMatters={
+        <section className="mt-14">
+          <SectionLabel count={model.questions.length}>What Matters</SectionLabel>
+          <p className="mt-3 max-w-2xl text-[13px] leading-relaxed text-zinc-500">
+            The 4–5 questions that decide this investment. New podcasts, X posts, filings and
+            your own research are weighed against them every day.
+          </p>
+          <div className="mt-6 max-w-3xl">
+            <QuestionsEditor company={model.company} ticker={model.ticker} initial={model.questions} />
+          </div>
+        </section>
+        }
       />
     </div>
   );

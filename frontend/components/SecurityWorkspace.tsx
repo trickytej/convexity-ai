@@ -58,6 +58,7 @@ export default function SecurityWorkspace({
   numbers,
   feed,
   questions,
+  whatMatters,
 }: {
   securityKey: string;
   company: string;
@@ -65,6 +66,8 @@ export default function SecurityWorkspace({
   numbers: FinModel | null;
   feed: FeedHit[];
   questions: { id: number; question: string }[];
+  /** The What Matters editor, rendered between the model and the feed. */
+  whatMatters?: React.ReactNode;
 }) {
   const [items, setItems] = useState(feed);
   const [view, setView] = useState<View>("signals");
@@ -131,7 +134,7 @@ export default function SecurityWorkspace({
   return (
     <div>
       {/* ── model ── */}
-      <section ref={modelRef} className="mt-14 scroll-mt-20">
+      <section ref={modelRef} className="mt-10 scroll-mt-20">
         <div className="mb-3 flex flex-wrap items-baseline gap-3">
           <p className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
             <span className="inline-block h-px w-8 bg-[#00d4ff]/50" />
@@ -140,6 +143,8 @@ export default function SecurityWorkspace({
         </div>
         <FinModelSheet securityKey={securityKey} company={company} initial={numbers} isAdmin={isAdmin} highlight={highlight} />
       </section>
+
+      {whatMatters}
 
       {/* floating explainer while a development is selected */}
       {selectedHit && (

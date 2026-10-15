@@ -77,6 +77,9 @@ export default function QuestionsEditor({
       : [{ question: "", note: "", drivers: [] }],
   );
   const [dirty, setDirty] = useState(false);
+  // Compact read view by default; the full editor opens on demand (or straight
+  // away when there are no questions yet).
+  const [editing, setEditing] = useState(initial.length === 0);
   const [saving, setSaving] = useState(false);
   const [drafting, setDrafting] = useState(false);
   const [savedNote, setSavedNote] = useState("");
@@ -136,6 +139,7 @@ export default function QuestionsEditor({
         })),
       );
       setDirty(false);
+      setEditing(false);
       setSavedNote(
         saved.length
           ? "Saved. Re-checking the last two days of research against these questions — new hits appear below shortly."
@@ -147,6 +151,41 @@ export default function QuestionsEditor({
     } finally {
       setSaving(false);
     }
+  }
+
+  if (!editing) {
+    return (
+      <div>
+        <ol className="divide-y divide-white/[0.05] rounded-xl border border-white/[0.06] bg-[#0b0c10]/60">
+          {questions.map((q, i) => (
+            <li key={q.id ?? i} className="flex items-start gap-3 px-4 py-2.5">
+              <span className="mt-1.5">{q.status ? <StatusDot status={q.status} /> : null}</span>
+              <span className="mt-px font-[family-name:var(--font-mono)] text-[11px] text-zinc-600">Q{i + 1}</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[14px] leading-snug text-zinc-200">{q.question}</p>
+                {q.drivers.length > 0 && (
+                  <p className="mt-0.5 text-[11px] text-[#00d4ff]/60">{q.drivers.map(driverLabel).join(" · ")}</p>
+                )}
+              </div>
+              {q.signals ? (
+                <span className="shrink-0 text-[11px] text-zinc-600">
+                  {q.signals} signal{q.signals === 1 ? "" : "s"}
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+        <div className="mt-3 flex items-center gap-3">
+          <button
+            onClick={() => setEditing(true)}
+            className="rounded-full border border-white/[0.1] px-3.5 py-1.5 text-[12px] font-medium text-zinc-300 transition hover:border-[#00d4ff]/40 hover:text-[#00d4ff]"
+          >
+            Edit questions
+          </button>
+          {savedNote && <p className="text-[12px] text-zinc-500">{savedNote}</p>}
+        </div>
+      </div>
+    );
   }
 
   return (
