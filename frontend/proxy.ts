@@ -12,7 +12,7 @@ export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|robots.txt).*)"],
 };
 
-const PUBLIC_PATHS = ["/", "/about", "/signin"];
+const PUBLIC_PATHS = ["/", "/about", "/signin", "/privacy", "/terms"];
 
 // Curator tools: ingestion, scouting and the newsletter workflow.
 const ADMIN_PREFIXES = [
