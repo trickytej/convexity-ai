@@ -91,8 +91,9 @@ export default function TokenManager({ apiUrl }: { apiUrl: string }) {
         <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-zinc-500">MCP setup</p>
         <ol className="mt-4 list-decimal space-y-2 pl-5 text-[13px] leading-relaxed text-zinc-400">
           <li>
-            Install the server: <code className="text-zinc-200">pip install &quot;git+https://github.com/trickytej/convexity-ai&quot;</code>{" "}
-            (provides the <code className="text-zinc-200">convexity-mcp</code> command).
+            Install the server from a checkout of the ConvexityAI repo:{" "}
+            <code className="text-zinc-200">pip install -e .</code> (or <code className="text-zinc-200">uv sync</code>) provides the{" "}
+            <code className="text-zinc-200">convexity-mcp</code> command — use its full path in the config if it isn&apos;t on your PATH.
           </li>
           <li>Create a token above.</li>
           <li>Add this to your Claude Desktop / Claude Code MCP config:</li>
