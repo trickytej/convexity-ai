@@ -16,7 +16,7 @@ from ...scout import x as x_scout
 from ...scout.pipeline import ingest_appearance_row
 from ...store import repo
 from ...store.db import connect_turso
-from ..deps import get_scout_db
+from ..deps import get_scout_db, require_admin
 from .curation import _nugget_with_curation_out
 
 log = logging.getLogger(__name__)
@@ -118,7 +118,7 @@ def get_watchlist(db: sqlite3.Connection = Depends(get_scout_db)) -> dict:
     return {"watchlist": roster.load_watchlist(db)}
 
 
-@router.put("/scout/watchlist")
+@router.put("/scout/watchlist", dependencies=[Depends(require_admin)])
 def put_watchlist(watchlist: list[dict], db: sqlite3.Connection = Depends(get_scout_db)) -> dict:
     """Save the tracked companies/people — the single source of truth the next
     /scout/refresh scan searches against."""
@@ -126,7 +126,7 @@ def put_watchlist(watchlist: list[dict], db: sqlite3.Connection = Depends(get_sc
     return {"watchlist": watchlist}
 
 
-@router.post("/scout/refresh")
+@router.post("/scout/refresh", dependencies=[Depends(require_admin)])
 def refresh_appearances(
     background_tasks: BackgroundTasks,
     days: int = Query(30, description="Look-back window in days"),
@@ -225,7 +225,7 @@ def _reprocess_one(episode_id: int) -> None:
         conn.close()
 
 
-@router.post("/scout/reprocess-pending")
+@router.post("/scout/reprocess-pending", dependencies=[Depends(require_admin)])
 def reprocess_pending(background_tasks: BackgroundTasks, db: sqlite3.Connection = Depends(get_scout_db)) -> dict:
     """Retry insight extraction for appearances already ingested but not yet
     insights_extracted (e.g. the nightly scout-sync job's LLM call failed, or
@@ -248,7 +248,7 @@ def reprocess_pending(background_tasks: BackgroundTasks, db: sqlite3.Connection 
         raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}")
 
 
-@router.delete("/scout/appearances/{appearance_id}")
+@router.delete("/scout/appearances/{appearance_id}", dependencies=[Depends(require_admin)])
 def dismiss_appearance(
     appearance_id: int,
     db: sqlite3.Connection = Depends(get_scout_db),
@@ -269,7 +269,7 @@ def dismiss_appearance(
     return {"dismissed": True}
 
 
-@router.post("/scout/appearances/{appearance_id}/ingest")
+@router.post("/scout/appearances/{appearance_id}/ingest", dependencies=[Depends(require_admin)])
 def ingest_appearance(
     appearance_id: int,
     db: sqlite3.Connection = Depends(get_scout_db),
@@ -306,7 +306,7 @@ def get_x_accounts(db: sqlite3.Connection = Depends(get_scout_db)) -> dict:
     }
 
 
-@router.put("/scout/x-accounts")
+@router.put("/scout/x-accounts", dependencies=[Depends(require_admin)])
 def put_x_accounts(
     handles: list[str], db: sqlite3.Connection = Depends(get_scout_db)
 ) -> dict:
@@ -318,7 +318,7 @@ def put_x_accounts(
     }
 
 
-@router.post("/scout/refresh-x")
+@router.post("/scout/refresh-x", dependencies=[Depends(require_admin)])
 def refresh_x(
     background_tasks: BackgroundTasks,
     days: int = Query(7, description="Look-back window in days"),

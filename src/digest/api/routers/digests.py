@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from ...store import repo
 from ...synthesis import generate_episode_digest
 from ...transcribe.llm import LLMError
-from ..deps import get_db
+from ..deps import get_db, require_admin
 
 router = APIRouter(tags=["digests"])
 
@@ -25,7 +25,7 @@ def get_digest(episode_id: int, db: sqlite3.Connection = Depends(get_db)) -> dic
     return _row_to_digest(row) if row else None
 
 
-@router.post("/episodes/{episode_id}/digest")
+@router.post("/episodes/{episode_id}/digest", dependencies=[Depends(require_admin)])
 def make_digest(episode_id: int, db: sqlite3.Connection = Depends(get_db)) -> dict:
     try:
         return generate_episode_digest(db, episode_id)

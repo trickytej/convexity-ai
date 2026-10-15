@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import typer
 from rich.console import Console
@@ -730,14 +731,65 @@ if __name__ == "__main__":
     app()
 
 
+@app.command(name="model-import")
+def model_import(
+    path: Path = typer.Argument(..., exists=True, help="Canalyst-format .xlsx model"),
+    company: str = typer.Option(None, "--company", "-c", help="Watchlist name or ticker (default: the file's ticker)."),
+) -> None:
+    """Load a vendor model as a security's shared base model."""
+    settings = get_settings()
+    from .finmodel import parse_canalyst
+    from .model import save_base
+    from .securities import resolve
+
+    base = parse_canalyst(path)
+    with get_conn(settings.resolved_db_path) as conn:
+        init_db(conn)
+        sec = resolve(conn, company or base.get("ticker") or "")
+        if not sec:
+            console.print(f"[red]No watchlist security matches {company or base.get('ticker')!r}.[/red]")
+            raise typer.Exit(code=1)
+        save_base(conn, sec["company"], sec["ticker"], base)
+    console.print(
+        f"[green]Imported[/green] {path.name} → {sec['company']}: {len(base['periods'])} periods, "
+        f"{len(base['segments'])} revenue segments."
+    )
+
+
+@app.command(name="sec-sync")
+def sec_sync(
+    days: int = typer.Option(7, "--days", "-d", help="Filings from the last N days."),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Pull recent SEC filings (8-K/6-K events and earnings, 10-Q/10-K MD&A) for
+    every followed ticker, then extract nuggets and match them. Idempotent per
+    filing. Requires ANTHROPIC_API_KEY."""
+    _setup_logging(verbose)
+    settings = get_settings()
+    settings.ensure_dirs()
+    from .acquire.sec import sync_filings
+
+    with get_conn(settings.resolved_db_path) as conn:
+        init_db(conn)
+        result = sync_filings(conn, settings, days=days)
+    console.print(
+        f"[green]SEC sync[/green]: {result['tickers']} tickers, {result['filings']} filings "
+        f"in window, [bold]{result['new']}[/bold] new, {result['errors']} errors."
+    )
+
+
 @app.command(name="brief-match")
 def brief_match(
     days: int = typer.Option(2, "--days", "-d", help="Evaluate nuggets created in the last N days."),
+    rematch: bool = typer.Option(
+        False, "--rematch",
+        help="Re-grade every nugget in the window from scratch (after a matcher change).",
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """Match recent nuggets against the 'What Matters' theses (daily catch-up
     sweep — the episode pipeline also matches inline). Idempotent: nuggets are
-    evaluated at most once. Requires ANTHROPIC_API_KEY.
+    evaluated at most once unless --rematch. Requires ANTHROPIC_API_KEY.
     """
     _setup_logging(verbose)
     settings = get_settings()
@@ -751,11 +803,15 @@ def brief_match(
 
     with get_conn(settings.resolved_db_path) as conn:
         init_db(conn)
-        result = run_brief_match(conn, settings, days=days)
+        result = run_brief_match(conn, settings, days=days, rematch=rematch)
 
     table = Table(title="Thesis matching", header_style="bold")
+    table.add_column("users", justify="right")
     table.add_column("episodes", justify="right")
     table.add_column("nuggets evaluated", justify="right")
     table.add_column("hits", justify="right")
-    table.add_row(str(result["episodes"]), str(result["nuggets_evaluated"]), str(result["hits"]))
+    table.add_row(
+        str(result["users"]), str(result["episodes"]),
+        str(result["nuggets_evaluated"]), str(result["hits"]),
+    )
     console.print(table)

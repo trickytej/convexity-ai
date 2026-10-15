@@ -99,7 +99,7 @@ export default function AboutPage() {
 
       <p className="mt-14 border-t border-white/[0.06] pt-6 text-[12px] text-zinc-600">
         Built by{" "}
-        <Link href="/theses" className="text-zinc-500 transition hover:text-[#00d4ff]">
+        <Link href="/model" className="text-zinc-500 transition hover:text-[#00d4ff]">
           an investor
         </Link>
         , for the way investors actually work.

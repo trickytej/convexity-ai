@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from ...store import repo
 from ...synthesis import generate_report
 from ...transcribe.llm import LLMError
-from ..deps import get_db
+from ..deps import get_db, require_admin
 
 router = APIRouter(tags=["report"])
 
@@ -27,7 +27,7 @@ def _row_to_report(row: sqlite3.Row) -> dict:
     }
 
 
-@router.post("/report/generate")
+@router.post("/report/generate", dependencies=[Depends(require_admin)])
 def generate(
     days: int = Query(7, ge=1, le=90),
     since: str | None = Query(None),

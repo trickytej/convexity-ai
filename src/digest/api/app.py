@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +12,9 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from .. import __version__
+from ..config import get_settings
+from ..store import repo
+from ..store.db import connect, init_db
 from .routers import (
     curation,
     digests,
@@ -21,14 +26,30 @@ from .routers import (
     report,
     scout,
     theses,
+    research,
+    users,
 )
+
+log = logging.getLogger(__name__)
 
 # Open paths that never require the API key (health check + CORS preflight).
 _OPEN_PATHS = {"/api/health"}
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    # Apply idempotent schema migrations on boot so deploys never serve a stale
+    # schema (previously only CLI commands ran init_db).
+    conn = connect(get_settings().resolved_db_path)
+    try:
+        init_db(conn)
+    finally:
+        conn.close()
+    yield
+
+
 def create_app() -> FastAPI:
-    app = FastAPI(title="research-digest API", version=__version__)
+    app = FastAPI(title="research-digest API", version=__version__, lifespan=_lifespan)
 
     origins = os.environ.get(
         "DIGEST_CORS_ORIGINS",
@@ -45,9 +66,32 @@ def create_app() -> FastAPI:
     # must present it via `X-API-Key` (or `Authorization: Bearer`). Unset = open
     # (local dev). Added after CORS so it sits outermost; OPTIONS pass through.
     api_key = os.environ.get("DIGEST_API_KEY")
+    if not api_key:
+        log.warning(
+            "DIGEST_API_KEY is unset: the API is open and X-User-Id is unauthenticated. "
+            "Local dev only — never deploy like this."
+        )
+
+    def _token_user(token: str) -> int | None:
+        conn = connect(get_settings().resolved_db_path)
+        try:
+            return repo.user_for_token(conn, token)
+        finally:
+            conn.close()
 
     @app.middleware("http")
     async def require_api_key(request: Request, call_next):  # type: ignore[no-untyped-def]
+        # Personal tokens (MCP servers, scripts) authenticate as their user
+        # directly: the token's user replaces any client-supplied X-User-Id.
+        auth = request.headers.get("authorization", "")
+        if auth[:7].lower() == "bearer " and auth[7:].startswith("cvx_"):
+            uid = _token_user(auth[7:].strip())
+            if uid is None:
+                return JSONResponse({"detail": "invalid token"}, status_code=401)
+            request.scope["headers"] = [
+                (k, v) for k, v in request.scope["headers"] if k != b"x-user-id"
+            ] + [(b"x-user-id", str(uid).encode())]
+            return await call_next(request)
         if api_key and request.method != "OPTIONS":
             path = request.url.path
             if path.startswith("/api") and path not in _OPEN_PATHS:
@@ -70,6 +114,8 @@ def create_app() -> FastAPI:
     app.include_router(ingest.router, prefix="/api")
     app.include_router(scout.router, prefix="/api")
     app.include_router(theses.router, prefix="/api")
+    app.include_router(users.router, prefix="/api")
+    app.include_router(research.router, prefix="/api")
 
     # market-moves (vendored): price series + move detection + grounded attribution.
     # Guarded so a missing optional dep/data never takes down the core digest API.

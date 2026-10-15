@@ -1,6 +1,253 @@
-import { redirect } from "next/navigation";
+import Link from "next/link";
+import { auth } from "@/auth";
+import { getBoard, getBrief, getEpisodes, getScoutAppearances, getShows, listResearch } from "@/lib/api";
+import SignalFlow from "@/components/SignalFlow";
+import SignalRadar from "@/components/SignalRadar";
 
-// The site lands on the Home dashboard. The podcast library lives at /podcasts.
-export default function RootPage() {
-  redirect("/insights");
+export const dynamic = "force-dynamic";
+
+type Stat = { value: string; label: string } | null;
+
+async function safeStats(isAdmin: boolean): Promise<{
+  episodes: Stat;
+  podcasts: Stat;
+  newsletters: Stat;
+  scout: Stat;
+  brief: Stat;
+  model: Stat;
+  research: Stat;
+}> {
+  const since = new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10);
+  const [episodes, shows, scout, brief, board, research] = await Promise.all([
+    isAdmin ? getEpisodes({ since, limit: 1, all: true }).catch(() => null) : null,
+    isAdmin ? getShows().catch(() => null) : null,
+    isAdmin ? getScoutAppearances({ days: 7 }).catch(() => null) : null,
+    getBrief({ days: 1, status: "pending" }).catch(() => null),
+    getBoard().catch(() => null),
+    listResearch().catch(() => null),
+  ]);
+  const podcastShows = shows?.filter((s) => s.format !== "newsletter") ?? null;
+  const newsletterShows = shows?.filter((s) => s.format === "newsletter") ?? null;
+  return {
+    episodes: episodes ? { value: String(episodes.total), label: "this week" } : null,
+    podcasts: podcastShows ? { value: String(podcastShows.length), label: "shows" } : null,
+    newsletters: newsletterShows ? { value: String(newsletterShows.length), label: "sources" } : null,
+    scout: scout ? { value: String(scout.length), label: "appearances, 7d" } : null,
+    brief: brief
+      ? {
+          value: String(brief.companies.reduce((s, c) => s + c.signal_count, 0)),
+          label: "signals, 24h",
+        }
+      : null,
+    model: board ? { value: String(board.securities.length), label: "securities" } : null,
+    research: research ? { value: String(research.documents.length), label: "documents" } : null,
+  };
+}
+
+function NavCard({
+  href,
+  title,
+  description,
+  stat,
+  delay,
+}: {
+  href: string;
+  title: string;
+  description: string;
+  stat: Stat;
+  delay: number;
+}) {
+  return (
+    <Link
+      href={href}
+      style={{ animationDelay: `${delay}ms` }}
+      className="fade-rise group flex flex-col rounded-2xl border border-[#00d4ff]/[0.18] bg-[#0d1a2e]/85 p-6 transition hover:border-[#00d4ff]/45 hover:bg-[#102038]/90"
+    >
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-xl font-light tracking-tight text-zinc-50 transition [font-family:var(--font-display)] group-hover:text-[#00d4ff]">
+          {title}
+        </h2>
+        {stat && (
+          <span className="shrink-0 text-right">
+            <span className="font-[family-name:var(--font-mono)] text-lg tabular-nums text-[#00d4ff]">
+              {stat.value}
+            </span>
+            <span className="ml-1.5 text-[11px] text-zinc-400">{stat.label}</span>
+          </span>
+        )}
+      </div>
+      <p className="mt-2 flex-1 text-[13px] leading-relaxed text-zinc-200">{description}</p>
+      <span className="mt-4 text-[12px] font-medium text-zinc-400 transition group-hover:text-[#00d4ff]">
+        Open →
+      </span>
+    </Link>
+  );
+}
+
+// Signed out: the public landing (hero + claim). Signed in: the full home with
+// the workspace tiles.
+export default async function HomePage() {
+  const session = await auth();
+  const signedIn = !!session?.user?.id;
+  const isAdmin = !!session?.user?.isAdmin;
+  const stats = signedIn ? await safeStats(isAdmin) : null;
+
+  return (
+    <div>
+      {/* ── hero ── */}
+      <section className="grid grid-cols-1 items-center gap-10 pt-8 sm:pt-14 lg:grid-cols-[1fr_auto]">
+        <div>
+        <p className="fade-rise flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
+          <span className="inline-block h-px w-8 bg-[#00d4ff]" />
+          <span className="text-[#00d4ff]">ConvexityAI</span>
+        </p>
+
+        <h1 className="mt-7 text-6xl font-light leading-[1.02] tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-7xl lg:text-8xl">
+          <span className="reveal-line">
+            <span style={{ animationDelay: "80ms" }}>Uncover narratives.</span>
+          </span>
+          <span className="reveal-line">
+            <span style={{ animationDelay: "220ms" }}>Sharpen theses.</span>
+          </span>
+          <span className="reveal-line">
+            <span style={{ animationDelay: "360ms" }} className="text-[#00d4ff]">
+              Real time.
+            </span>
+          </span>
+        </h1>
+
+        <p
+          className="fade-rise mt-8 max-w-2xl text-xl font-light text-zinc-300"
+          style={{ animationDelay: "560ms" }}
+        >
+          A position-aware <span className="text-[#00d4ff]">system of research</span> for
+          professional managers.
+        </p>
+
+        <div className="fade-rise mt-10 flex flex-wrap items-center gap-3" style={{ animationDelay: "680ms" }}>
+          <Link
+            href={signedIn ? "/brief" : "/signin"}
+            className="rounded-full bg-[#00d4ff]/90 px-5 py-2.5 text-[13px] font-semibold text-black transition hover:bg-[#00d4ff]"
+          >
+            {signedIn ? "Open the Brief →" : "Get started →"}
+          </Link>
+          <Link
+            href="/about"
+            className="rounded-full border border-white/[0.12] px-5 py-2.5 text-[13px] font-medium text-zinc-300 transition hover:border-[#00d4ff]/40 hover:text-[#00d4ff]"
+          >
+            How it works
+          </Link>
+        </div>
+        </div>
+        <div className="fade-rise hidden justify-self-center lg:block" style={{ animationDelay: "420ms" }}>
+          <SignalRadar />
+        </div>
+      </section>
+
+      {/* ── claim beat ── */}
+      <section className="mt-24 border-t border-white/[0.08] pt-16 sm:mt-32">
+        <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
+          <div>
+            <p className="max-w-3xl text-3xl font-light leading-[1.15] tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-4xl">
+              Four or five questions decide most securities.
+              <span className="text-zinc-600"> Everything else is noise.</span>
+            </p>
+            <p className="mt-6 max-w-2xl text-[15px] font-light leading-relaxed text-zinc-400">
+              Convexity parses through the deluge of news flow and flags the information that
+              influences <span className="text-[#00d4ff]/80">the theses you&apos;re watching</span> —
+              so your time goes to differentiated insight and judgement, not listening.
+            </p>
+          </div>
+          <SignalFlow />
+        </div>
+      </section>
+
+      {/* ── workspace ── */}
+      {stats && (
+        <>
+          <section className="mt-24 border-t border-white/[0.08] pt-16 sm:mt-28">
+            <p className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
+              <span className="inline-block h-px w-8 bg-[#00d4ff]/50" />
+              <span className="text-zinc-500">Workspace</span>
+            </p>
+
+            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <NavCard
+                href="/brief"
+                title="Brief"
+                description="Summary of new research that impacts your theses."
+                stat={stats.brief}
+                delay={0}
+              />
+              <NavCard
+                href="/model"
+                title="Model"
+                description="Per-security view on how news influences your forecast."
+                stat={stats.model}
+                delay={70}
+              />
+              <NavCard
+                href="/research"
+                title="Research"
+                description="Your own notes, calls and reports — the inside view."
+                stat={stats.research}
+                delay={140}
+              />
+              {isAdmin && (
+                <>
+                  <NavCard
+                    href="/episodes"
+                    title="Episodes"
+                    description="Curate and review nuggets from the episodes you track."
+                    stat={stats.episodes}
+                    delay={210}
+                  />
+                  <NavCard
+                    href="/scout"
+                    title="Scout"
+                    description="A watchlist of companies and executives, distilled into insights."
+                    stat={stats.scout}
+                    delay={280}
+                  />
+                  <NavCard
+                    href="/podcasts"
+                    title="Podcasts"
+                    description="Manage tracked feeds, import new podcasts, browse by show."
+                    stat={stats.podcasts}
+                    delay={350}
+                  />
+                </>
+              )}
+            </div>
+          </section>
+
+          {/* ── quiet secondary links ── */}
+          <div className="mt-16 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-white/[0.06] pt-6 text-[13px]">
+            <span className="text-[11px] font-medium uppercase tracking-[0.2em] text-zinc-700">
+              More
+            </span>
+            {[
+              ...(isAdmin
+                ? [
+                    { href: "/newsletters", label: `Newsletters${stats.newsletters ? ` · ${stats.newsletters.value}` : ""}` },
+                    { href: "/newsletter", label: "Weekly Report" },
+                    { href: "/library", label: "Episode Library" },
+                  ]
+                : []),
+              { href: "/settings", label: "Settings · API & MCP" },
+              { href: "/about", label: "About" },
+            ].map((l) => (
+              <Link
+                key={l.href}
+                href={l.href}
+                className="text-zinc-500 transition hover:text-[#00d4ff]"
+              >
+                {l.label}
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }

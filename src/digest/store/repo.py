@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import secrets
 import sqlite3
 from datetime import datetime, timezone
 
@@ -213,7 +215,7 @@ def list_episodes(
     limit: int | None = None,
     published_since: datetime | None = None,
 ) -> list[Episode]:
-    clauses: list[str] = []
+    clauses: list[str] = ["owner_user_id IS NULL"]  # private research never lists
     params: list[object] = []
     if show_slug:
         clauses.append("show_slug = ?")
@@ -340,7 +342,8 @@ def list_shows_with_counts(conn: sqlite3.Connection) -> list[sqlite3.Row]:
                COUNT(e.id) AS total,
                SUM(CASE WHEN e.status IN ('transcribed', 'insights_extracted') THEN 1 ELSE 0 END) AS transcribed
         FROM shows s
-        LEFT JOIN episodes e ON e.show_slug = s.slug
+        LEFT JOIN episodes e ON e.show_slug = s.slug AND e.owner_user_id IS NULL
+        WHERE COALESCE(s.format, '') != 'research'
         GROUP BY s.slug
         ORDER BY s.active DESC, transcribed DESC, s.slug
         """
@@ -353,7 +356,7 @@ def _browse_where(
     with_transcript_only: bool,
     published_until: datetime | None = None,
 ) -> tuple[str, list[object]]:
-    clauses: list[str] = []
+    clauses: list[str] = ["e.owner_user_id IS NULL"]  # private research never lists
     params: list[object] = []
     if show_slug:
         clauses.append("e.show_slug = ?")
@@ -366,7 +369,7 @@ def _browse_where(
         params.append(_dt_to_iso(published_until))
     if with_transcript_only:
         clauses.append("EXISTS (SELECT 1 FROM transcripts t WHERE t.episode_id = e.id)")
-    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    where = f"WHERE {' AND '.join(clauses)}"
     return where, params
 
 
@@ -597,7 +600,7 @@ def nuggets_in_window(
     ``include_tweets``, and then only curator-kept ones qualify, windowed on
     the tweet's own post time (the per-handle episode's published_at is just
     the first sync date, so it can't be the window basis)."""
-    clauses = ["s.active = 1"]
+    clauses = ["s.active = 1", "e.owner_user_id IS NULL"]
     params: list[object] = []
     if include_tweets:
         joins = (
@@ -849,7 +852,7 @@ def list_kept_nuggets_for_newsletter(
     exclude_show_slugs: list[str] | None = None,
 ) -> list[sqlite3.Row]:
     """Kept nuggets ordered rank ASC then signal DESC. All filters are optional."""
-    clauses = ["nc.decision = 'kept'"]
+    clauses = ["nc.decision = 'kept'", "e.owner_user_id IS NULL"]
     params: list[object] = []
     if from_iso:
         clauses.append("e.published_at >= ?")
@@ -925,7 +928,8 @@ def status_matrix(conn: sqlite3.Connection) -> list[sqlite3.Row]:
                SUM(CASE WHEN e.status = 'insights_extracted' THEN 1 ELSE 0 END) AS insights_extracted,
                SUM(CASE WHEN e.status = 'failed'             THEN 1 ELSE 0 END) AS failed
         FROM shows s
-        LEFT JOIN episodes e ON e.show_slug = s.slug
+        LEFT JOIN episodes e ON e.show_slug = s.slug AND e.owner_user_id IS NULL
+        WHERE COALESCE(s.format, '') != 'research'
         GROUP BY s.slug
         ORDER BY s.active DESC, s.tier, s.slug
         """
@@ -936,10 +940,17 @@ def status_matrix(conn: sqlite3.Connection) -> list[sqlite3.Row]:
 
 
 def list_theses(
-    conn: sqlite3.Connection, company: str | None = None, include_inactive: bool = False
+    conn: sqlite3.Connection,
+    user_id: int | None,
+    company: str | None = None,
+    include_inactive: bool = False,
 ) -> list[sqlite3.Row]:
+    """user_id=None spans every user — matcher/internal use only, never an API path."""
     sql = "SELECT * FROM theses WHERE 1=1"
     params: list = []
+    if user_id is not None:
+        sql += " AND user_id = ?"
+        params.append(user_id)
     if not include_inactive:
         sql += " AND active = 1"
     if company:
@@ -950,15 +961,20 @@ def list_theses(
 
 
 def save_company_theses(
-    conn: sqlite3.Connection, company: str, ticker: str | None, questions: list[dict]
+    conn: sqlite3.Connection,
+    user_id: int,
+    company: str,
+    ticker: str | None,
+    questions: list[dict],
 ) -> list[sqlite3.Row]:
     """Diff-based save of one company's question set.
 
-    *questions* is an ordered list of {"id"?: int, "question": str, "note"?: str}.
+    *questions* is an ordered list of {"id"?: int, "question": str, "note"?: str,
+    "drivers"?: [{"line": str, "year": int | None}]}.
     Rows with an id are updated in place (so editing a question's wording keeps
     its id and therefore its accumulated thesis_hits); rows without are inserted;
     the company's active rows whose ids are absent from the payload are
-    soft-deactivated, never deleted.
+    soft-deactivated, never deleted. Everything is scoped to *user_id*.
     """
     now = _now_iso()
     keep_ids: set[int] = set()
@@ -967,36 +983,38 @@ def save_company_theses(
         if not text:
             continue
         note = (q.get("note") or "").strip() or None
+        drivers = json.dumps(q["drivers"]) if q.get("drivers") else None
         qid = q.get("id")
         if qid is not None:
             cur = conn.execute(
-                "UPDATE theses SET question = ?, note = ?, position = ?, ticker = ?, "
-                "active = 1, updated_at = ? WHERE id = ? AND company = ?",
-                (text, note, pos, ticker, now, qid, company),
+                "UPDATE theses SET question = ?, note = ?, drivers = ?, position = ?, ticker = ?, "
+                "active = 1, updated_at = ? WHERE id = ? AND company = ? AND user_id = ?",
+                (text, note, drivers, pos, ticker, now, qid, company, user_id),
             )
             if cur.rowcount:
                 keep_ids.add(int(qid))
                 continue
         cur = conn.execute(
-            "INSERT INTO theses (company, ticker, question, note, position, active, "
-            "created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
-            (company, ticker, text, note, pos, now, now),
+            "INSERT INTO theses (user_id, company, ticker, question, note, drivers, position, "
+            "active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)",
+            (user_id, company, ticker, text, note, drivers, pos, now, now),
         )
         keep_ids.add(int(cur.lastrowid))
     if keep_ids:
         placeholders = ",".join("?" * len(keep_ids))
         conn.execute(
             f"UPDATE theses SET active = 0, updated_at = ? "
-            f"WHERE company = ? AND active = 1 AND id NOT IN ({placeholders})",
-            (now, company, *keep_ids),
+            f"WHERE company = ? AND user_id = ? AND active = 1 AND id NOT IN ({placeholders})",
+            (now, company, user_id, *keep_ids),
         )
     else:
         conn.execute(
-            "UPDATE theses SET active = 0, updated_at = ? WHERE company = ? AND active = 1",
-            (now, company),
+            "UPDATE theses SET active = 0, updated_at = ? "
+            "WHERE company = ? AND user_id = ? AND active = 1",
+            (now, company, user_id),
         )
     conn.commit()
-    return list_theses(conn, company=company)
+    return list_theses(conn, user_id, company=company)
 
 
 def record_thesis_hits(conn: sqlite3.Connection, hits: list[dict]) -> int:
@@ -1006,20 +1024,28 @@ def record_thesis_hits(conn: sqlite3.Connection, hits: list[dict]) -> int:
     conn.executemany(
         """
         INSERT INTO thesis_hits (question_id, nugget_id, episode_id, claim_hash,
-                                 relevance, direction, why, model, matched_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                 relevance, direction, why, model, matched_at,
+                                 evidence, tier, impact_line, impact_year, impact_dir)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(question_id, claim_hash) DO UPDATE SET
             nugget_id = excluded.nugget_id,
             relevance = excluded.relevance,
             direction = excluded.direction,
             why = excluded.why,
             model = excluded.model,
-            matched_at = excluded.matched_at
+            matched_at = excluded.matched_at,
+            evidence = excluded.evidence,
+            tier = excluded.tier,
+            impact_line = excluded.impact_line,
+            impact_year = excluded.impact_year,
+            impact_dir = excluded.impact_dir
         """,
         [
             (
                 h["question_id"], h["nugget_id"], h["episode_id"], h["claim_hash"],
                 h["relevance"], h["direction"], h.get("why"), h.get("model"), now,
+                h.get("evidence"), h.get("tier", "reference"),
+                h.get("impact_line"), h.get("impact_year"), h.get("impact_dir"),
             )
             for h in hits
         ],
@@ -1028,31 +1054,60 @@ def record_thesis_hits(conn: sqlite3.Connection, hits: list[dict]) -> int:
     return len(hits)
 
 
-def mark_nuggets_seen(conn: sqlite3.Connection, pairs: list[tuple[int, int]]) -> None:
-    """pairs = [(nugget_id, episode_id)] — records that the matcher evaluated them."""
+def mark_nuggets_seen(
+    conn: sqlite3.Connection, user_id: int, pairs: list[tuple[int, int]]
+) -> None:
+    """pairs = [(nugget_id, episode_id)] — records that the matcher evaluated them
+    against *user_id*'s questions."""
     now = _now_iso()
     conn.executemany(
-        "INSERT OR IGNORE INTO thesis_match_seen (nugget_id, episode_id, matched_at) "
-        "VALUES (?, ?, ?)",
-        [(nid, eid, now) for nid, eid in pairs],
+        "INSERT OR IGNORE INTO thesis_match_seen (user_id, nugget_id, episode_id, matched_at) "
+        "VALUES (?, ?, ?, ?)",
+        [(user_id, nid, eid, now) for nid, eid in pairs],
+    )
+    conn.commit()
+
+
+def demote_hits_since(conn: sqlite3.Connection, user_id: int, since: str) -> None:
+    """Before a full re-grade: mark the user's hits on recent nuggets as reference,
+    so hits the stricter matcher no longer returns don't keep a stale signal tier."""
+    conn.execute(
+        "UPDATE thesis_hits SET tier = 'reference' WHERE question_id IN "
+        "(SELECT id FROM theses WHERE user_id = ?) AND nugget_id IN "
+        "(SELECT id FROM nuggets WHERE created_at >= ?)",
+        (user_id, since),
+    )
+    conn.commit()
+
+
+def reset_seen_window(conn: sqlite3.Connection, user_id: int, since: str) -> None:
+    """Forget which recent nuggets were evaluated for *user_id*, so the next sweep
+    re-checks them against new/edited questions. Safe: hits UPSERT."""
+    conn.execute(
+        "DELETE FROM thesis_match_seen WHERE user_id = ? AND nugget_id IN "
+        "(SELECT id FROM nuggets WHERE created_at >= ?)",
+        (user_id, since),
     )
     conn.commit()
 
 
 def unseen_nuggets(
     conn: sqlite3.Connection,
+    user_id: int,
     episode_id: int | None = None,
     created_since: str | None = None,
 ) -> list[sqlite3.Row]:
-    """Nuggets the thesis matcher has not evaluated yet, joined with their show."""
+    """Nuggets the thesis matcher has not yet evaluated for *user_id*: the shared
+    corpus plus the user's own private research (never anyone else's)."""
     sql = """
         SELECT n.*, e.show_slug, e.title AS episode_title
         FROM nuggets n
         JOIN episodes e ON e.id = n.episode_id
-        LEFT JOIN thesis_match_seen s ON s.nugget_id = n.id
+        LEFT JOIN thesis_match_seen s ON s.nugget_id = n.id AND s.user_id = ?
         WHERE s.nugget_id IS NULL
+          AND (e.owner_user_id IS NULL OR e.owner_user_id = ?)
     """
-    params: list = []
+    params: list = [user_id, user_id]
     if episode_id is not None:
         sql += " AND n.episode_id = ?"
         params.append(episode_id)
@@ -1063,17 +1118,29 @@ def unseen_nuggets(
     return conn.execute(sql, params).fetchall()
 
 
+# Windows are on when the *source* was published (tweet time for X posts), not
+# when the matcher ran — a re-grade must not make old evidence look new.
+_PUBLISHED = "COALESCE(st.created_at, e.published_at, h.matched_at)"
+
+
 def thesis_hits_since(
     conn: sqlite3.Connection,
-    since: str,
+    user_id: int,
+    since: str | None,
     until: str | None = None,
     min_relevance: float = 0.5,
+    decision: str | None = None,
+    company: str | None = None,
+    exclude_dropped: bool = False,
 ) -> list[sqlite3.Row]:
     """Brief query: hits in the window with question, nugget, episode, and (for
     X posts) tweet context. INNER JOIN on nuggets drops hits orphaned by a
     re-extraction until the matcher re-runs and heals them."""
     sql = """
         SELECT h.id AS hit_id, h.relevance, h.direction, h.why, h.matched_at,
+               h.decision, h.decided_at, h.evidence, h.tier,
+               h.impact_line, h.impact_year, h.impact_dir,
+               s.format AS show_format, e.owner_user_id,
                t.id AS question_id, t.company, t.ticker, t.question,
                t.note AS question_note, t.position,
                n.id AS nugget_id, n.claim, n.quote, n.speaker_name, n.start_ms,
@@ -1085,12 +1152,193 @@ def thesis_hits_since(
         JOIN theses t   ON t.id = h.question_id
         JOIN nuggets n  ON n.id = h.nugget_id
         JOIN episodes e ON e.id = n.episode_id
+        LEFT JOIN shows s ON s.slug = e.show_slug
         LEFT JOIN scout_tweets st ON st.nugget_id = n.id
-        WHERE h.matched_at >= ? AND h.relevance >= ? AND t.active = 1
+        WHERE t.user_id = ? AND h.relevance >= ? AND t.active = 1
     """
-    params: list = [since, min_relevance]
+    params: list = [user_id, min_relevance]
+    if since is not None:
+        sql += f" AND {_PUBLISHED} >= ?"
+        params.append(since)
+    if decision is not None:
+        sql += " AND h.decision = ?"
+        params.append(decision)
+    if company is not None:
+        sql += " AND t.company = ?"
+        params.append(company)
+    if exclude_dropped:
+        sql += " AND h.decision != 'dropped'"
     if until is not None:
-        sql += " AND h.matched_at < ?"
+        sql += f" AND {_PUBLISHED} < ?"
         params.append(until)
     sql += " ORDER BY t.company, t.position, h.relevance DESC"
     return conn.execute(sql, params).fetchall()
+
+
+def set_hit_decision(
+    conn: sqlite3.Connection, user_id: int, hit_id: int, decision: str
+) -> bool:
+    """Keep/drop a hit. Only the owner of the hit's question may decide it."""
+    cur = conn.execute(
+        "UPDATE thesis_hits SET decision = ?, decided_at = ? WHERE id = ? AND question_id IN "
+        "(SELECT id FROM theses WHERE user_id = ?)",
+        (decision, _now_iso() if decision != "pending" else None, hit_id, user_id),
+    )
+    conn.commit()
+    return bool(cur.rowcount)
+
+
+def list_users_with_active_theses(conn: sqlite3.Connection) -> list[int]:
+    rows = conn.execute(
+        "SELECT DISTINCT user_id FROM theses WHERE active = 1 AND user_id IS NOT NULL"
+    ).fetchall()
+    return [r["user_id"] for r in rows]
+
+
+# --- Users ------------------------------------------------------------------
+
+
+def upsert_user(
+    conn: sqlite3.Connection,
+    email: str,
+    name: str | None = None,
+    image: str | None = None,
+    provider: str | None = None,
+    provider_account_id: str | None = None,
+) -> sqlite3.Row:
+    """Sign-in upsert keyed by email (the owner row is pre-seeded by the migration).
+
+    UPDATE-then-INSERT rather than INSERT … ON CONFLICT, which would burn an
+    AUTOINCREMENT id on every sign-in."""
+    now = _now_iso()
+    email = email.strip()
+    cur = conn.execute(
+        """
+        UPDATE users SET
+            name = COALESCE(?, name),
+            image = COALESCE(?, image),
+            provider = COALESCE(?, provider),
+            provider_account_id = COALESCE(?, provider_account_id),
+            last_login_at = ?
+        WHERE email = ?
+        """,
+        (name, image, provider, provider_account_id, now, email),
+    )
+    if not cur.rowcount:
+        conn.execute(
+            "INSERT INTO users (email, name, image, provider, provider_account_id, "
+            "created_at, last_login_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (email, name, image, provider, provider_account_id, now, now),
+        )
+    conn.commit()
+    return conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+
+
+def get_user(conn: sqlite3.Connection, user_id: int) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+
+
+def list_user_securities(conn: sqlite3.Connection, user_id: int) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM user_securities WHERE user_id = ? ORDER BY company", (user_id,)
+    ).fetchall()
+
+
+def follow_security(
+    conn: sqlite3.Connection,
+    user_id: int,
+    company: str,
+    ticker: str | None,
+    category: str | None,
+) -> None:
+    conn.execute(
+        "INSERT INTO user_securities (user_id, company, ticker, category, added_at) "
+        "VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, company) DO UPDATE SET "
+        "ticker = excluded.ticker, category = COALESCE(excluded.category, user_securities.category)",
+        (user_id, company, ticker, category, _now_iso()),
+    )
+    conn.commit()
+
+
+def unfollow_security(conn: sqlite3.Connection, user_id: int, company: str) -> None:
+    conn.execute(
+        "DELETE FROM user_securities WHERE user_id = ? AND company = ?", (user_id, company)
+    )
+    conn.commit()
+
+
+# --- Personal API tokens ------------------------------------------------------
+
+
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def create_api_token(conn: sqlite3.Connection, user_id: int, name: str) -> tuple[int, str]:
+    """Mint a token; returns (id, plaintext). Only the hash is stored."""
+    token = "cvx_" + secrets.token_urlsafe(32)
+    cur = conn.execute(
+        "INSERT INTO api_tokens (user_id, name, token_hash, prefix, created_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (user_id, name, _token_hash(token), token[:10], _now_iso()),
+    )
+    conn.commit()
+    return int(cur.lastrowid), token
+
+
+def user_for_token(conn: sqlite3.Connection, token: str) -> int | None:
+    row = conn.execute(
+        "SELECT id, user_id FROM api_tokens WHERE token_hash = ?", (_token_hash(token),)
+    ).fetchone()
+    if not row:
+        return None
+    conn.execute("UPDATE api_tokens SET last_used_at = ? WHERE id = ?", (_now_iso(), row["id"]))
+    conn.commit()
+    return int(row["user_id"])
+
+
+def list_api_tokens(conn: sqlite3.Connection, user_id: int) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT id, name, prefix, created_at, last_used_at FROM api_tokens "
+        "WHERE user_id = ? ORDER BY id DESC",
+        (user_id,),
+    ).fetchall()
+
+
+def delete_api_token(conn: sqlite3.Connection, user_id: int, token_id: int) -> bool:
+    cur = conn.execute("DELETE FROM api_tokens WHERE id = ? AND user_id = ?", (token_id, user_id))
+    conn.commit()
+    return bool(cur.rowcount)
+
+
+# --- Private research ("inside view") -------------------------------------------
+
+
+def list_research(conn: sqlite3.Connection, user_id: int) -> list[sqlite3.Row]:
+    return conn.execute(
+        """
+        SELECT e.id, e.title, e.episode_url AS url, e.status, e.error, e.created_at,
+               (SELECT COUNT(*) FROM nuggets n WHERE n.episode_id = e.id) AS nugget_count,
+               (SELECT COUNT(*) FROM thesis_hits h WHERE h.episode_id = e.id AND h.tier = 'signal')
+                   AS signal_count,
+               (SELECT COUNT(*) FROM thesis_hits h WHERE h.episode_id = e.id) AS hit_count
+        FROM episodes e
+        WHERE e.owner_user_id = ?
+        ORDER BY e.id DESC
+        """,
+        (user_id,),
+    ).fetchall()
+
+
+def delete_research(conn: sqlite3.Connection, user_id: int, episode_id: int) -> bool:
+    """Delete one of the user's documents with its nuggets and thesis hits."""
+    if not conn.execute(
+        "SELECT 1 FROM episodes WHERE id = ? AND owner_user_id = ?", (episode_id, user_id)
+    ).fetchone():
+        return False
+    conn.execute("DELETE FROM thesis_hits WHERE episode_id = ?", (episode_id,))
+    conn.execute("DELETE FROM thesis_match_seen WHERE episode_id = ?", (episode_id,))
+    conn.execute("DELETE FROM nuggets WHERE episode_id = ?", (episode_id,))
+    conn.execute("DELETE FROM episodes WHERE id = ?", (episode_id,))
+    conn.commit()
+    return True

@@ -32,10 +32,15 @@ dependencies = [
     "duckdb>=1.1",
     "pyarrow>=16.0",
     "polygon-api-client>=1.14",
+    "pypdf>=6.20.1",
+    "python-multipart>=0.0.32",
+    "mcp>=2.0",  # MCP server for agents (bring-your-own research)
+    "openpyxl>=3.1.5",
 ]
 
 [project.scripts]
 digest = "digest.cli:app"
+convexity-mcp = "digest.mcp_server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from ...config import get_settings
 from ...store import repo
-from ..deps import get_db
+from ..deps import get_db, require_admin
 from ..schemas import NewsletterNuggetOut, NewsletterOut, StockMentionOut
 
 router = APIRouter(tags=["newsletter"])
@@ -347,7 +347,7 @@ def _build_html(body: NewsletterSendIn) -> str:
 </body></html>"""
 
 
-@router.post("/newsletter/send", status_code=200)
+@router.post("/newsletter/send", status_code=200, dependencies=[Depends(require_admin)])
 def send_newsletter(body: NewsletterSendIn) -> dict:
     settings = get_settings()
     if not settings.smtp_host or not settings.smtp_user:
