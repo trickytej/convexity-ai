@@ -11,13 +11,13 @@ const USER_NAV: NavItem[] = [
   { href: "/brief", label: "Brief", match: (p) => p.startsWith("/brief") },
   { href: "/model", label: "Model", match: (p) => p.startsWith("/model") },
   { href: "/research", label: "Research", match: (p) => p.startsWith("/research") },
+  { href: "/scout",    label: "Scout",    match: (p) => p.startsWith("/scout") },
+  { href: "/podcasts", label: "Podcasts", match: (p) => p === "/podcasts" || p.startsWith("/podcasts?") },
 ];
 
 // Curator tools, visible to admins only (proxy.ts enforces the same list).
 const ADMIN_NAV: NavItem[] = [
   { href: "/episodes",    label: "Episodes",    match: (p) => p.startsWith("/episodes") },
-  { href: "/scout",       label: "Scout",       match: (p) => p.startsWith("/scout") },
-  { href: "/podcasts",    label: "Podcasts",    match: (p) => p === "/podcasts" || p.startsWith("/podcasts?") },
   { href: "/newsletters", label: "Newsletters", match: (p) => p.startsWith("/newsletters") },
 ];
 

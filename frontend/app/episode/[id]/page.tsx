@@ -5,6 +5,7 @@ import { getEpisodeDigest, getEpisodeNuggets, getTranscript } from "@/lib/api";
 import { fmtDate, fmtDuration } from "@/lib/format";
 import { Badge, SourceBadge } from "@/components/ui";
 import { EpisodeTabs } from "@/components/EpisodeTabs";
+import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -34,11 +35,12 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
   }
 
   const e = data.episode;
+  const isAdmin = !!(await auth())?.user?.isAdmin;
 
   return (
     <div className="space-y-6">
-      <Link href="/episodes" className="text-sm text-[#00d4ff] transition hover:text-[#33ddff]">
-        ← All episodes
+      <Link href={isAdmin ? "/episodes" : "/podcasts"} className="text-sm text-[#00d4ff] transition hover:text-[#33ddff]">
+        ← {isAdmin ? "All episodes" : "Podcasts"}
       </Link>
 
       <header className="space-y-3">
@@ -80,6 +82,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
 
       <div className="rounded-2xl border border-white/[0.08] bg-[#0b0c10]/70 p-5 backdrop-blur-md sm:p-7">
         <EpisodeTabs
+          canReview={isAdmin}
           episodeId={e.id}
           segments={data.segments}
           speakers={data.speakers}

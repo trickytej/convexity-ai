@@ -129,7 +129,7 @@ export function NuggetReviewCard({
       <div className="flex flex-wrap items-center gap-3 pt-1">
         {/* Keep / Kill toggle */}
         <div className="flex rounded-md overflow-hidden border border-white/15 text-xs font-medium">
-          <button
+          <button data-edit
             type="button"
             onClick={() =>
               setDraft((c) => ({
@@ -143,7 +143,7 @@ export function NuggetReviewCard({
           >
             ✓ Keep
           </button>
-          <button
+          <button data-edit
             type="button"
             onClick={() =>
               setDraft((c) => ({
@@ -163,7 +163,7 @@ export function NuggetReviewCard({
         <div className="flex items-center gap-1 text-xs">
           <span className="text-zinc-500">Rank:</span>
           {([1, 2, 3] as const).map((r) => (
-            <button
+            <button data-edit
               key={r}
               type="button"
               onClick={() =>
@@ -198,7 +198,7 @@ export function NuggetReviewCard({
       </div>
 
       {/* Note */}
-      <textarea
+      <textarea data-edit
         rows={2}
         placeholder="Why it matters (curator note)…"
         value={draft.note ?? ""}
@@ -222,7 +222,7 @@ export function NuggetReviewCard({
           )}
         </span>
         <div className="flex gap-2">
-          <button
+          <button data-edit
             type="button"
             onClick={revisit}
             disabled={!dirty || saving}
@@ -230,7 +230,7 @@ export function NuggetReviewCard({
           >
             Revisit
           </button>
-          <button
+          <button data-edit
             type="button"
             onClick={submit}
             disabled={!dirty || saving}

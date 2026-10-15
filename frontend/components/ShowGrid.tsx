@@ -56,7 +56,8 @@ function DeleteButton({ slug, onDeleted }: { slug: string; onDeleted: () => void
   );
 }
 
-export default function ShowGrid({ initialShows }: { initialShows: Show[] }) {
+/** Show list. Admins can delete shows and jump to curation; everyone else browses. */
+export default function ShowGrid({ initialShows, canEdit = false }: { initialShows: Show[]; canEdit?: boolean }) {
   const [shows, setShows] = useState(initialShows);
 
   function removeShow(slug: string) {
@@ -91,7 +92,7 @@ export default function ShowGrid({ initialShows }: { initialShows: Show[] }) {
             key={s.slug}
             className="group grid grid-cols-[1fr_8rem_auto] items-center gap-x-6 border-b border-white/[0.05] py-4"
           >
-            <Link href={`/episodes?show=${s.slug}`}>
+            <Link href={canEdit ? `/episodes?show=${s.slug}` : `/podcasts?show=${s.slug}`}>
               <p className="text-sm font-medium text-zinc-100 transition-colors group-hover:text-[#00d4ff]">
                 {s.name}
               </p>
@@ -100,7 +101,7 @@ export default function ShowGrid({ initialShows }: { initialShows: Show[] }) {
               {s.transcribed}
             </span>
             <div className="flex w-8 items-center justify-end">
-              <DeleteButton slug={s.slug} onDeleted={() => removeShow(s.slug)} />
+              {canEdit && <DeleteButton slug={s.slug} onDeleted={() => removeShow(s.slug)} />}
             </div>
           </div>
         ))}

@@ -14,10 +14,10 @@ export const config = {
 
 const PUBLIC_PATHS = ["/", "/about", "/signin", "/privacy", "/terms"];
 
-// Curator tools: ingestion, scouting and the newsletter workflow.
+// Curator tools: nugget curation and the newsletter workflow. Podcasts, Scout
+// and episode pages are browsable by everyone (read-only for non-admins).
 const ADMIN_PREFIXES = [
-  "/episodes", "/episode", "/scout", "/podcasts",
-  "/newsletters", "/newsletter", "/library", "/report", "/preview",
+  "/episodes", "/newsletters", "/newsletter", "/library", "/report", "/preview",
 ];
 
 const startsWithSegment = (path: string, prefix: string) =>

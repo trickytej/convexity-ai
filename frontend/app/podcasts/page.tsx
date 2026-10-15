@@ -9,6 +9,8 @@ import TranscribeButton from "@/components/TranscribeButton";
 import PollButton from "@/components/PollButton";
 import ImportedEpisodeList from "@/components/ImportedEpisodeList";
 import DateRangeRefresh from "@/components/DateRangeRefresh";
+import DateRangeFilter from "@/components/DateRangeFilter";
+import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -39,10 +41,14 @@ export default async function PodcastsPage({
   const since = from || defaultFrom();
   const until = to || defaultTo();
 
-  const [shows, list] = await Promise.all([
+  // The shared corpus is browsable by everyone; adding, polling, transcribing
+  // and deleting are admin-only (the API enforces the same).
+  const [shows, list, session] = await Promise.all([
     getShows(),
     getEpisodes({ show, since, until, limit: 200, all: !!show }),
+    auth(),
   ]);
+  const isAdmin = !!session?.user?.isAdmin;
 
   const active = shows.filter((s) => s.active);
   const withTranscripts = shows.filter((s) => s.transcribed > 0);
@@ -50,12 +56,20 @@ export default async function PodcastsPage({
   return (
     <div className="space-y-12">
       {/* ── Podcasts ── */}
-      <ShowGrid initialShows={active} />
-      <ImportPodcast />
-      <ImportEpisode />
+      <ShowGrid initialShows={active} canEdit={isAdmin} />
+      {isAdmin && (
+        <>
+          <ImportPodcast />
+          <ImportEpisode />
+        </>
+      )}
 
-      {/* ── Date range + refresh ── */}
-      <DateRangeRefresh initialFrom={since} initialTo={until} />
+      {/* ── Date range (+ feed refresh for admins) ── */}
+      {isAdmin ? (
+        <DateRangeRefresh initialFrom={since} initialTo={until} />
+      ) : (
+        <DateRangeFilter basePath="/podcasts" initialFrom={since} initialTo={until} />
+      )}
 
       {/* ── Episodes ── */}
       <div>
@@ -72,7 +86,7 @@ export default async function PodcastsPage({
               {list.total} episode{list.total !== 1 ? "s" : ""} from {since} to {until}
             </p>
           </div>
-          {show && <PollButton slug={show} />}
+          {show && isAdmin && <PollButton slug={show} />}
         </div>
 
         {/* show filter pills */}
@@ -107,14 +121,14 @@ export default async function PodcastsPage({
 
         {/* episode list */}
         <div className="mt-8">
-          {show === "imported" ? (
+          {show === "imported" && isAdmin ? (
             <ImportedEpisodeList initialEpisodes={list.episodes} />
           ) : (
             <div className="divide-y divide-white/[0.06] overflow-hidden rounded-xl border border-white/[0.08] bg-[#0b0c10]/60">
               {list.episodes.length === 0 && (
                 <p className="px-4 py-10 text-center text-zinc-500">
                   {show
-                    ? "No episodes discovered yet. Use the Refresh button above to check for new episodes."
+                    ? "No episodes in this range yet."
                     : "No transcribed episodes yet."}
                 </p>
               )}
@@ -158,7 +172,7 @@ export default async function PodcastsPage({
                           {statusInfo.label}
                         </span>
                       )}
-                      {!isTranscribed && (
+                      {!isTranscribed && isAdmin && (
                         <TranscribeButton episodeId={e.id} initialStatus={e.status} />
                       )}
                     </div>

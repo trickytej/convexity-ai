@@ -61,3 +61,17 @@ def require_admin(
     if not user or not user["is_admin"]:
         raise HTTPException(status_code=403, detail="admin only")
     return user_id
+
+
+def visible_episode(
+    episode_id: int,
+    x_user_id: str | None = Header(None),
+    db: sqlite3.Connection = Depends(get_db),
+) -> None:
+    """404 for another user's private research episode — admins included.
+    Shared-corpus episodes are visible to everyone signed in."""
+    row = db.execute("SELECT owner_user_id FROM episodes WHERE id = ?", (episode_id,)).fetchone()
+    if row is None or row["owner_user_id"] is None:
+        return
+    if not x_user_id or str(row["owner_user_id"]) != x_user_id:
+        raise HTTPException(status_code=404, detail="episode not found")

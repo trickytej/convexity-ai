@@ -18,7 +18,7 @@ from ...pipeline import discover_show, process_episode_pipeline
 from ...registry import Show
 from ...store import repo
 from ...store.models import Episode, EpisodeStatus
-from ..deps import get_db, require_admin
+from ..deps import get_db, require_admin, visible_episode
 from ..schemas import EpisodeListOut, EpisodeOut, SegmentOut, ShowOut, TranscriptOut
 
 router = APIRouter(tags=["library"])
@@ -135,7 +135,7 @@ def list_episodes(
     )
 
 
-@router.get("/episodes/{episode_id}", response_model=EpisodeOut)
+@router.get("/episodes/{episode_id}", response_model=EpisodeOut, dependencies=[Depends(visible_episode)])
 def get_episode(
     episode_id: int, db: sqlite3.Connection = Depends(get_db)
 ) -> EpisodeOut:
@@ -185,7 +185,7 @@ def patch_episode(
     return _episode_out(ep, transcript, nugget_count)
 
 
-@router.get("/episodes/{episode_id}/transcript", response_model=TranscriptOut)
+@router.get("/episodes/{episode_id}/transcript", response_model=TranscriptOut, dependencies=[Depends(visible_episode)])
 def get_transcript(
     episode_id: int, db: sqlite3.Connection = Depends(get_db)
 ) -> TranscriptOut:
@@ -324,7 +324,7 @@ def process_episode(
     return {"status": "started"}
 
 
-@router.get("/episodes/{episode_id}/status")
+@router.get("/episodes/{episode_id}/status", dependencies=[Depends(visible_episode)])
 def get_episode_status(episode_id: int, db: sqlite3.Connection = Depends(get_db)) -> dict:
     ep = repo.get_episode(db, episode_id)
     if ep is None:

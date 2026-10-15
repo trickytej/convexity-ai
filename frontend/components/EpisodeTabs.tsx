@@ -9,12 +9,15 @@ import { GenerateEpisodeDigestButton } from "@/components/GenerateEpisodeDigestB
 import { ReviewTab } from "@/components/ReviewTab";
 
 export function EpisodeTabs({
+  canReview = true,
   episodeId,
   segments,
   speakers,
   digest,
   nuggets,
 }: {
+  /** Nugget curation (keep/kill) is an admin tool. */
+  canReview?: boolean;
   episodeId: number;
   segments: Segment[];
   speakers: string[];
@@ -43,18 +46,20 @@ export function EpisodeTabs({
         >
           Transcript
         </button>
-        <button
-          type="button"
-          onClick={() => setTab("review")}
-          className={tabCls(tab === "review")}
-        >
-          Review {nuggets.length > 0 && <span className="ml-1 text-xs text-zinc-500">({nuggets.length})</span>}
-        </button>
+        {canReview && (
+          <button
+            type="button"
+            onClick={() => setTab("review")}
+            className={tabCls(tab === "review")}
+          >
+            Review {nuggets.length > 0 && <span className="ml-1 text-xs text-zinc-500">({nuggets.length})</span>}
+          </button>
+        )}
       </div>
 
       {tab === "transcript" && <TranscriptView segments={segments} speakers={speakers} />}
 
-      {tab === "review" && <ReviewTab episodeId={episodeId} nuggets={nuggets} />}
+      {tab === "review" && canReview && <ReviewTab episodeId={episodeId} nuggets={nuggets} />}
 
       {tab === "digest" &&
         (digest ? (

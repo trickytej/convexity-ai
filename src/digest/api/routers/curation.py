@@ -8,7 +8,7 @@ import sqlite3
 from fastapi import APIRouter, Depends, HTTPException
 
 from ...store import repo
-from ..deps import get_db, require_admin
+from ..deps import get_db, require_admin, visible_episode
 from ..schemas import (
     CurationOut,
     CurationPatch,
@@ -74,7 +74,7 @@ def _nugget_with_curation_out(row: sqlite3.Row) -> NuggetWithCurationOut:
     )
 
 
-@router.get("/episodes/{episode_id}/nuggets", response_model=list[NuggetWithCurationOut])
+@router.get("/episodes/{episode_id}/nuggets", response_model=list[NuggetWithCurationOut], dependencies=[Depends(visible_episode)])
 def list_episode_nuggets(
     episode_id: int, db: sqlite3.Connection = Depends(get_db)
 ) -> list[NuggetWithCurationOut]:
@@ -84,7 +84,7 @@ def list_episode_nuggets(
     return [_nugget_with_curation_out(r) for r in rows]
 
 
-@router.get("/episodes/{episode_id}/nuggets/stats", response_model=CurationStatsOut)
+@router.get("/episodes/{episode_id}/nuggets/stats", response_model=CurationStatsOut, dependencies=[Depends(visible_episode)])
 def nugget_curation_stats(
     episode_id: int, db: sqlite3.Connection = Depends(get_db)
 ) -> CurationStatsOut:
