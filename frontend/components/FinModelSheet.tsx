@@ -16,6 +16,9 @@ const TONE: Record<CellTone, string> = {
   red: "!bg-rose-200 outline outline-2 -outline-offset-2 outline-rose-600",
 };
 
+const LABEL_COL_PX = 240;
+const DATA_COL_PX = 96; // fits "1,325,695" and "-12.3%" with padding
+
 function fmt(v: number | null | undefined, kind: FinRow["fmt"]): string {
   if (v == null || !Number.isFinite(v)) return "";
   switch (kind) {
@@ -287,10 +290,20 @@ export default function FinModelSheet({
       </div>
 
       <div ref={tableRef} className="max-h-[70vh] overflow-auto rounded-lg border border-zinc-300 bg-white shadow-xl">
-        <table className="w-max min-w-full border-collapse font-[family-name:var(--font-mono)] text-[12px] leading-tight">
+        {/* Fixed layout: every period column gets the same width. */}
+        <table
+          className="table-fixed border-collapse font-[family-name:var(--font-mono)] text-[12px] leading-tight"
+          style={{ width: LABEL_COL_PX + (quarters.length + years.length) * DATA_COL_PX }}
+        >
+          <colgroup>
+            <col style={{ width: LABEL_COL_PX }} />
+            {[...quarters, ...years].map((c) => (
+              <col key={c.id} style={{ width: DATA_COL_PX }} />
+            ))}
+          </colgroup>
           <thead className="sticky top-0 z-10">
             <tr className="bg-[#1f3864] text-white">
-              <th className="sticky left-0 z-20 min-w-[230px] bg-[#1f3864] px-2 py-1 text-left font-semibold">
+              <th className="sticky left-0 z-20 bg-[#1f3864] px-2 py-1 text-left font-semibold">
                 Fiscal period
               </th>
               {quarters.map((c, i) => (
@@ -323,7 +336,10 @@ export default function FinModelSheet({
                           : "pl-2 text-zinc-800";
                   return (
                     <tr key={r.id} className={`border-b border-zinc-100 ${r.style === "total" ? "border-t border-t-zinc-400" : ""}`}>
-                      <td className={`sticky left-0 z-[5] bg-white px-2 py-[3px] whitespace-nowrap [font-family:var(--font-body)] ${labelCls}`}>
+                      <td
+                        title={r.label}
+                        className={`sticky left-0 z-[5] overflow-hidden text-ellipsis bg-white px-2 py-[3px] whitespace-nowrap [font-family:var(--font-body)] ${labelCls}`}
+                      >
                         {r.label}
                       </td>
                       {quarters.map((c, i) => renderCell(r, c, !!s.annual_only, i === 0))}
