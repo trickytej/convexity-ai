@@ -944,7 +944,7 @@ export interface FinRow {
   id: string;
   label: string;
   fmt: "num" | "pct" | "eps" | "x";
-  style?: "bold" | "sub" | "margin" | "total";
+  style?: "bold" | "sub" | "margin" | "total" | "variance";
   values: Record<string, number | null>;
   driver?: string;
   base?: Record<string, number | null>;
@@ -970,6 +970,10 @@ export interface FinModel {
   impacts: Record<string, CellImpact>;
   editable: string[];
   override_count: number;
+  /** Whose model this is: ConvexityAI's ("house") or the user's own upload. */
+  base_owner: "house" | "user";
+  has_house_model: boolean;
+  has_consensus: boolean;
 }
 
 export async function putModelNumbers(
@@ -1150,4 +1154,14 @@ export function adminImportHouseQuestions(file: File): Promise<{ results: Import
   const form = new FormData();
   form.append("file", file);
   return uploadForm("/api/admin/house-questions/import", form);
+}
+
+export async function uploadOwnModel(key: string, file: File): Promise<void> {
+  const form = new FormData();
+  form.append("file", file);
+  await uploadForm(`/api/model/${encodeURIComponent(key)}/upload`, form);
+}
+
+export async function revertOwnModel(key: string): Promise<void> {
+  await sendJSON(`/api/model/${encodeURIComponent(key)}/upload`, "DELETE");
 }

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { FinColumn, FinModel, FinRow } from "@/lib/api";
-import { importModel, putModelNumbers } from "@/lib/api";
+import { importModel, putModelNumbers, revertOwnModel, uploadOwnModel } from "@/lib/api";
 import { fmtDate } from "@/lib/format";
 
 export type CellTone = "green" | "yellow" | "red";
@@ -105,7 +105,16 @@ function NumberField({
   );
 }
 
-function ImportButton({ securityKey, label }: { securityKey: string; label: string }) {
+/** File picker that uploads a model: the house model (admins) or the user's own. */
+function ImportButton({
+  securityKey,
+  label,
+  mode = "house",
+}: {
+  securityKey: string;
+  label: string;
+  mode?: "house" | "own";
+}) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -123,7 +132,7 @@ function ImportButton({ securityKey, label }: { securityKey: string; label: stri
           setBusy(true);
           setError("");
           try {
-            await importModel(securityKey, f);
+            await (mode === "house" ? importModel(securityKey, f) : uploadOwnModel(securityKey, f));
             router.refresh();
           } catch (err) {
             setError(err instanceof Error ? err.message : "Import failed");
@@ -142,6 +151,28 @@ function ImportButton({ securityKey, label }: { securityKey: string; label: stri
       </button>
       {error && <span className="text-[12px] text-rose-400">{error}</span>}
     </span>
+  );
+}
+
+function RevertButton({ securityKey }: { securityKey: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      onClick={async () => {
+        setBusy(true);
+        try {
+          await revertOwnModel(securityKey);
+          router.refresh();
+        } finally {
+          setBusy(false);
+        }
+      }}
+      disabled={busy}
+      className="text-[12px] text-zinc-500 transition hover:text-[#00d4ff] disabled:opacity-50"
+    >
+      {busy ? "Switching…" : "Use ConvexityAI's model instead"}
+    </button>
   );
 }
 
@@ -182,13 +213,13 @@ export default function FinModelSheet({
           No model loaded for {company} yet
         </p>
         <p className="mt-2 text-[12px] text-zinc-600">
-          The operating model (segment build, P&amp;L, cash flow, valuation) appears once a base model is imported.
+          The operating model (segment build, P&amp;L, consensus, cash flow, valuation) appears once a model is
+          loaded. Upload your own in the ConvexityAI template or Canalyst format.
         </p>
-        {isAdmin && (
-          <div className="mt-4">
-            <ImportButton securityKey={securityKey} label="Import Canalyst model (.xlsx)" />
-          </div>
-        )}
+        <div className="mt-4 flex flex-wrap justify-center gap-3">
+          <ImportButton securityKey={securityKey} label="Upload your model (.xlsx)" mode="own" />
+          {isAdmin && <ImportButton securityKey={securityKey} label="Import as ConvexityAI model" />}
+        </div>
       </div>
     );
   }
@@ -245,8 +276,11 @@ export default function FinModelSheet({
     const base = `px-2 py-[3px] text-right tabular-nums whitespace-nowrap ${firstOfBlock ? "border-l-2 border-l-zinc-400" : ""} ${
       c.actual ? "" : "bg-sky-50/60"
     }`;
+    const v = r.values[c.id];
     const text =
-      r.style === "margin" ? "text-red-600" : r.style === "sub" ? "text-zinc-500" : "text-zinc-900";
+      r.style === "variance"
+        ? v == null ? "" : v >= 0 ? "font-semibold text-emerald-700" : "font-semibold text-red-600"
+        : r.style === "margin" ? "text-red-600" : r.style === "sub" ? "text-zinc-500" : "text-zinc-900";
     if (annualOnly && c.kind === "Q") return <td key={c.id} className={base} />;
     return (
       <td
@@ -273,7 +307,11 @@ export default function FinModelSheet({
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-2">
         <span className="text-[12px] text-zinc-500">
-          Base: <span className="text-zinc-300">{model.source}</span>
+          {model.base_owner === "user" ? (
+            <span className="text-[#00d4ff]">Your model</span>
+          ) : (
+            <span className="text-zinc-300">ConvexityAI model</span>
+          )}
           {model.file ? ` · ${model.file}` : ""}
           {model.imported_at ? ` · ${fmtDate(model.imported_at)}` : ""}
         </span>
@@ -284,7 +322,15 @@ export default function FinModelSheet({
             {model.override_count} override{model.override_count === 1 ? "" : "s"} · reset all
           </button>
         )}
-        {isAdmin && <ImportButton securityKey={securityKey} label="Replace base model" />}
+        <a
+          href={`/api/model/${encodeURIComponent(securityKey)}/download`}
+          className="rounded-full border border-white/[0.12] px-3 py-1 text-[12px] text-zinc-300 transition hover:border-[#00d4ff]/40 hover:text-[#00d4ff]"
+        >
+          Download .xlsx
+        </a>
+        <ImportButton securityKey={securityKey} label="Upload your model" mode="own" />
+        {model.base_owner === "user" && model.has_house_model && <RevertButton securityKey={securityKey} />}
+        {isAdmin && <ImportButton securityKey={securityKey} label="Replace ConvexityAI model" />}
         {saving && <span className="text-[12px] text-zinc-500">Recalculating…</span>}
         {error && <span className="text-[12px] text-rose-400">{error}</span>}
       </div>

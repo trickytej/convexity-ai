@@ -36,10 +36,12 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
     return Response.json({ detail: `proxy: could not reach backend — ${message}` }, { status: 502 });
   }
   const buf = await res.arrayBuffer();
-  return new Response(buf, {
-    status: res.status,
-    headers: { "content-type": res.headers.get("content-type") ?? "application/json" },
-  });
+  const headers: Record<string, string> = {
+    "content-type": res.headers.get("content-type") ?? "application/json",
+  };
+  const disposition = res.headers.get("content-disposition"); // file downloads (models)
+  if (disposition) headers["content-disposition"] = disposition;
+  return new Response(buf, { status: res.status, headers });
 }
 
 export {

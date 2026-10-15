@@ -167,23 +167,196 @@ def parse_canalyst(path: str | Path) -> dict:
 
 
 def _mark_subtotals(segs: list[dict], periods: list[dict]) -> None:
-    """A segment equal to the sum of the leaf segments just before it is a subtotal."""
+    """A segment equal to the sum of the items just before it is a subtotal.
+    Nested subtotals work: a subtotal can sum earlier subtotals."""
     ids = [p["id"] for p in periods]
-    leaves: list[dict] = []
+    pending: list[dict] = []  # leaves and subtotals not yet rolled up
     for s in segs:
-        for n in range(len(leaves), 1, -1):
-            group = leaves[-n:]
+        for n in range(len(pending), 1, -1):
+            group = pending[-n:]
             checks = [
                 (sum(g["revenue"].get(pid, 0.0) for g in group), s["revenue"][pid])
                 for pid in ids if pid in s["revenue"]
             ]
-            if checks and all(abs(a - b) <= 0.005 * max(1.0, abs(b)) for a, b in checks):
+            if checks and any(abs(b) > 0 for _, b in checks) and all(
+                abs(a - b) <= 0.005 * max(1.0, abs(b)) for a, b in checks
+            ):
                 s["children"] = [g["id"] for g in group]
+                pending = pending[:-n]
                 break
-        if "children" in s:
-            leaves = [x for x in leaves if x["id"] not in s["children"]]
+        pending.append(s)
+
+
+# ── ConvexityAI template ("Model" + "Consensus Model" sheets) ────────────────
+
+_CVX_LINES: dict[str, tuple[str, ...]] = {
+    # line -> label prefixes (case-insensitive), first match wins
+    "revenue": ("net revenue", "total revenue", "revenue"),
+    "gross_profit": ("gross profit",),
+    "sga": ("selling, general", "sg&a"),
+    "rd": ("research & development", "r&d"),
+    "operating_income": ("ebit", "operating income", "operating profit"),
+    "da": ("add back: depreciation", "depreciation & amortization", "d&a"),
+    "ebt": ("pre-tax income", "income before tax", "ebt"),
+    "tax": ("income tax provision", "provision for income taxes", "tax expense"),
+    "net_income": ("net income for eps", "net income attributable", "net income"),
+    "shares": ("diluted shares",),
+    "eps": ("diluted eps", "eps"),
+    "ocf": ("operating cash flow", "cash from operations"),
+    "capex": ("capex", "capital expenditure"),
+}
+
+
+# Ratio rows ("Y/Y growth, %", "SG&A, % of revenue") — not "...(40% stake)".
+_PCT_ROW = re.compile(r"growth|,\s*%|%\s*$|% of ")
+
+
+def is_convexity_template(wb) -> bool:
+    if "Model" not in wb.sheetnames:
+        return False
+    for r in wb["Model"].iter_rows(max_row=40, values_only=True):
+        if any(isinstance(c, str) and c.strip().upper() == "REVENUE BY SEGMENT" for c in r):
+            return True
+    return False
+
+
+def _parse_cvx_sheet(ws) -> dict | None:
+    rows = list(ws.iter_rows(values_only=True))
+    hdr_i = next(
+        (i for i, r in enumerate(rows[:15])
+         if sum(1 for c in r if isinstance(c, str) and _PERIOD_RE.match(c.strip())) >= 4),
+        None,
+    )
+    if hdr_i is None:
+        return None
+    header = rows[hdr_i]
+    cols = []
+    for ci, h in enumerate(header):
+        m = _PERIOD_RE.match(h.strip()) if isinstance(h, str) else None
+        if not m:
+            continue
+        if m.group(2):
+            cols.append({"ci": ci, "id": h.strip(), "kind": "Q", "q": int(m.group(2)), "fy": int(m.group(3))})
         else:
-            leaves.append(s)
+            cols.append({"ci": ci, "id": h.strip(), "kind": "FY", "fy": int(m.group(4))})
+    marker = next((r for r in rows[hdr_i + 1 : hdr_i + 3]
+                   if any(isinstance(c, str) and c.strip().lower() == "forecast" for c in r)), None)
+    fc_col = next((ci for ci, c in enumerate(marker) if isinstance(c, str) and c.strip().lower() == "forecast"),
+                  None) if marker else None
+    first_col = cols[0]["ci"]
+
+    def label_of(r) -> str | None:
+        for c in r[:first_col]:
+            if isinstance(c, str) and c.strip():
+                return c.strip()
+        return None
+
+    def series(r) -> dict[str, float]:
+        return {c["id"]: v for c in cols if c["ci"] < len(r) and (v := _num(r[c["ci"]])) is not None}
+
+    labelled = [(label_of(r), r) for r in rows[hdr_i + 1 :]]
+    labelled = [(lab, r) for lab, r in labelled if lab]
+
+    lines: dict[str, dict[str, float]] = {}
+    for key, prefixes in _CVX_LINES.items():
+        for lab, r in labelled:
+            low = lab.lower()
+            if any(low == p or low.startswith(p) for p in prefixes) and not _PCT_ROW.search(low) and "margin" not in low:
+                ser = series(r)
+                if ser:
+                    lines[key] = ser
+                    break
+    if "capex" in lines:
+        lines["capex"] = {k: abs(v) for k, v in lines["capex"].items()}
+
+    # Segment revenue: "... revenue" rows between REVENUE BY SEGMENT and the total.
+    segs: list[dict] = []
+    in_seg = False
+    for lab, r in labelled:
+        low = lab.lower()
+        if low == "revenue by segment":
+            in_seg = True
+            continue
+        if not in_seg:
+            continue
+        if low.startswith(("net revenue", "total revenue")) or low in ("income statement",):
+            break
+        if "revenue" in low and not _PCT_ROW.search(low):
+            ser = series(r)
+            if ser:
+                name = re.sub(r"(?i)\s*revenue\b", "", lab).strip(" ,")
+                segs.append({"id": f"s{len(segs)}", "name": name or lab, "revenue": ser})
+
+    return {"cols": cols, "fc_col": fc_col, "lines": lines, "segments": segs}
+
+
+def parse_convexity(path: str | Path) -> dict:
+    """Read a ConvexityAI-template workbook: 'Model' (house/user forecast) and an
+    optional 'Consensus Model' sheet in the same layout."""
+    import openpyxl
+
+    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    model = _parse_cvx_sheet(wb["Model"])
+    if model is None or not model["lines"].get("revenue"):
+        raise ValueError("ConvexityAI template: no period header row or revenue line found in 'Model'")
+    fc_col = model["fc_col"]
+
+    def is_actual(c: dict) -> bool:
+        return fc_col is None or c["ci"] < fc_col
+
+    # Everything left of the "Forecast" marker is actual — fiscal-year columns
+    # included (a year whose last quarter is a forecast sits right of it).
+    cols = model["cols"]
+    periods = [
+        {"id": c["id"], "kind": c["kind"], "fy": c["fy"], **({"q": c["q"]} if c["kind"] == "Q" else {}),
+         "end": None, "actual": is_actual(c)}
+        for c in cols
+    ]
+    lines = model["lines"]
+    _fill_eps(lines)
+    segs = model["segments"]
+    _mark_subtotals(segs, periods)
+    _add_residual_segment(segs, lines.get("revenue", {}))
+
+    consensus = None
+    if "Consensus Model" in wb.sheetnames:
+        cons = _parse_cvx_sheet(wb["Consensus Model"])
+        if cons and cons["lines"]:
+            _fill_eps(cons["lines"])
+            consensus = {"lines": cons["lines"],
+                         "segments": {s["name"]: s["revenue"] for s in cons["segments"]}}
+
+    title = next((c for r in wb["Model"].iter_rows(max_row=3, values_only=True) for c in r
+                  if isinstance(c, str) and c.strip()), None)
+    return {
+        "source": "ConvexityAI model",
+        "file": Path(path).name,
+        "company_name": title,
+        "ticker": None,
+        "periods": periods,
+        "segments": segs,
+        "lines": lines,
+        "balance": {},
+        "consensus": consensus,
+        "imported_at": datetime.utcnow().isoformat(),
+    }
+
+
+def _fill_eps(lines: dict) -> None:
+    """EPS = net income / diluted shares wherever the sheet leaves EPS blank."""
+    ni, sh = lines.get("net_income", {}), lines.get("shares", {})
+    eps = lines.setdefault("eps", {})
+    for pid, v in ni.items():
+        if pid not in eps and sh.get(pid):
+            eps[pid] = v / sh[pid]
+
+
+def parse_model(path: str | Path) -> dict:
+    """Any supported model workbook: the ConvexityAI template or a Canalyst model."""
+    import openpyxl
+
+    wb = openpyxl.load_workbook(path, read_only=True)
+    return parse_convexity(path) if is_convexity_template(wb) else parse_canalyst(path)
 
 
 def _add_residual_segment(segs: list[dict], total: dict[str, float]) -> None:
@@ -252,6 +425,15 @@ def _label(p: dict) -> tuple[str, str]:
 def compute(base: dict, overrides: dict[str, float] | None = None, price: float | None = None,
             target_pe: float | None = None) -> dict:
     """Rebuild every forecast period from drivers and render the model."""
+    V, drivers, base_drivers = run_engine(base, overrides)
+    return _render(base, V, drivers, base_drivers, overrides or {}, price, target_pe)
+
+
+def run_engine(base: dict, overrides: dict[str, float] | None = None):
+    """Recompute every period of *base* under *overrides*.
+
+    Returns (V, drivers, base_drivers): V[key][period_id] -> value for keys
+    'revenue', 'gross_profit', ..., 'seg:<id>'."""
     overrides = overrides or {}
     periods = base["periods"]
     by_id = {p["id"]: p for p in periods}
@@ -341,13 +523,13 @@ def compute(base: dict, overrides: dict[str, float] | None = None, price: float 
                          ("ocf", ni * conv if conv is not None else None), ("capex", capex)):
             put(key, pid, val)
 
-    for p in order:  # subtotal segments
+    for p in order:  # subtotal segments (children precede their subtotal)
         for s in segs:
             if "children" in s:
                 put(f"seg:{s['id']}", p["id"],
                     sum(v(f"seg:{c}", p["id"]) or 0.0 for c in s["children"]) if p["id"] in V.get("revenue", {}) else None)
 
-    return _render(base, V, drivers, base_drivers, overrides, price, target_pe)
+    return V, drivers, base_drivers
 
 
 def _sum_fy(V: dict, fy_id: str, qids: list[str], leaves: list[dict]) -> None:
@@ -492,6 +674,42 @@ def _render(base, V, drivers, base_drivers, overrides, price, target_pe) -> dict
                                      for pid in fy_cols}, "pct", "margin"),
     ]
 
+    sections = [
+        {"id": "summary", "title": "Simplified financials (non-GAAP, $mm except per share)", "rows": summary},
+    ]
+    cons = base.get("consensus")
+    if cons and cons.get("lines"):
+        CL = cons["lines"]
+
+        def cval(line: str) -> dict:
+            return {pid: CL.get(line, {}).get(pid) for pid in col_ids}
+
+        def cratio(a: str, b: str) -> dict:
+            return {pid: _div(CL.get(a, {}).get(pid), CL.get(b, {}).get(pid)) for pid in col_ids}
+
+        def vs(line: str) -> dict:
+            out = {}
+            for pid in col_ids:
+                mine, theirs = V.get(line, {}).get(pid), CL.get(line, {}).get(pid)
+                out[pid] = (mine / theirs - 1) if mine is not None and theirs not in (None, 0) and not by_id[pid]["actual"] else None
+            return out
+
+        sections.append({"id": "consensus", "title": "Consensus vs your model", "rows": [
+            row("c_rev", "Revenue — consensus", cval("revenue"), style="bold"),
+            row("c_rev_vs", "Your revenue vs consensus", vs("revenue"), "pct", "variance"),
+            row("c_gpm", "GPM % — consensus", cratio("gross_profit", "revenue"), "pct", "margin"),
+            row("c_oi", "Operating profit — consensus", cval("operating_income")),
+            row("c_oi_vs", "Your op. profit vs consensus", vs("operating_income"), "pct", "variance"),
+            row("c_eps", "EPS — consensus", cval("eps"), "eps", "bold"),
+            row("c_eps_vs", "Your EPS vs consensus", vs("eps"), "pct", "variance"),
+        ]})
+    sections += [
+        {"id": "build", "title": "Revenue build", "rows": build},
+        {"id": "pnl", "title": "P&L", "rows": pnl},
+        {"id": "cash", "title": "Cash flow", "rows": cash},
+        {"id": "valuation", "title": "Valuation", "rows": valuation, "annual_only": True},
+    ]
+
     forecast_fy = [c["id"] for c in columns if c["kind"] == "FY" and not c["actual"]]
     line_rows = {"revenue": "revenue", "gross_margin": "gpm", "op_margin": "opm", "eps": "eps",
                  "multiple": "v_target_pe"}
@@ -508,13 +726,8 @@ def _render(base, V, drivers, base_drivers, overrides, price, target_pe) -> dict
         "file": base.get("file"),
         "imported_at": base.get("imported_at"),
         "columns": columns,
-        "sections": [
-            {"id": "summary", "title": "Simplified financials (non-GAAP, $mm except per share)", "rows": summary},
-            {"id": "build", "title": "Revenue build", "rows": build},
-            {"id": "pnl", "title": "P&L", "rows": pnl},
-            {"id": "cash", "title": "Cash flow", "rows": cash},
-            {"id": "valuation", "title": "Valuation", "rows": valuation, "annual_only": True},
-        ],
+        "sections": sections,
+        "has_consensus": bool(cons and cons.get("lines")),
         "market": {"price": price, "market_cap": mcap, "net_cash": net_cash if bal else None, "ev": ev,
                    "target_pe": target_pe},
         "impact_cells": impact_cells,

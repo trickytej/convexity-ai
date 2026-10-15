@@ -19,7 +19,7 @@ import sqlite3
 from collections import OrderedDict
 from pathlib import Path
 
-from .finmodel import parse_canalyst
+from .finmodel import parse_model
 from .model import save_base
 from .securities import resolve
 from .store import repo
@@ -50,13 +50,16 @@ def import_models(conn: sqlite3.Connection, files: list[tuple[str, Path]]) -> li
     results = []
     for name, path in files:
         try:
-            base = parse_canalyst(path)
+            base = parse_model(path)
         except Exception as exc:
             results.append({"file": name, "ok": False, "error": f"could not read: {exc}"})
             continue
-        sec = resolve(conn, base.get("ticker") or "")
+        # Canalyst files carry their ticker; ConvexityAI templates are matched by
+        # the file name's first word ("NVDA model v3.xlsx" → NVDA).
+        guess = base.get("ticker") or re.split(r"[\s_\-.]+", Path(name).stem)[0]
+        sec = resolve(conn, guess or "")
         if not sec:
-            results.append({"file": name, "ok": False, "error": f"ticker {base.get('ticker')!r} not in watchlist"})
+            results.append({"file": name, "ok": False, "error": f"{guess!r} isn't a watchlist ticker — name the file '<TICKER> …xlsx'"})
             continue
         base["file"] = name
         save_base(conn, sec["company"], sec["ticker"], base)

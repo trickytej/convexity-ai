@@ -254,6 +254,25 @@ CREATE TABLE IF NOT EXISTS model_bases (
     imported_at TEXT NOT NULL
 );
 
+-- A user's own uploaded model, used instead of the house base for them only.
+CREATE TABLE IF NOT EXISTS user_model_bases (
+    user_id     INTEGER NOT NULL,
+    company     TEXT NOT NULL,
+    data        TEXT NOT NULL,
+    imported_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, company)
+);
+
+-- Consensus as of each house import: the revision history behind the
+-- "chatter ahead of print" flag.
+CREATE TABLE IF NOT EXISTS consensus_snapshots (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    company TEXT NOT NULL,
+    as_of   TEXT NOT NULL,
+    data    TEXT NOT NULL                   -- json {"lines": {line: {period: value}}}
+);
+CREATE INDEX IF NOT EXISTS idx_consensus_snapshots ON consensus_snapshots(company, as_of);
+
 CREATE TABLE IF NOT EXISTS security_models (
     user_id    INTEGER NOT NULL,
     company    TEXT NOT NULL,

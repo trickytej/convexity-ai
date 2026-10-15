@@ -51,13 +51,52 @@ def last_close(ticker: str | None) -> float | None:
 
 
 def save_base(conn: sqlite3.Connection, company: str, ticker: str | None, base: dict) -> None:
+    now = _now()
     conn.execute(
         "INSERT INTO model_bases (company, ticker, data, imported_at) VALUES (?, ?, ?, ?) "
         "ON CONFLICT(company) DO UPDATE SET ticker = excluded.ticker, data = excluded.data, "
         "imported_at = excluded.imported_at",
-        (company, ticker, json.dumps(base), _now()),
+        (company, ticker, json.dumps(base), now),
     )
+    cons = base.get("consensus")
+    if cons and cons.get("lines"):
+        conn.execute(
+            "INSERT INTO consensus_snapshots (company, as_of, data) VALUES (?, ?, ?)",
+            (company, now, json.dumps({"lines": cons["lines"]})),
+        )
     conn.commit()
+
+
+def save_user_base(conn: sqlite3.Connection, user_id: int, company: str, base: dict) -> None:
+    conn.execute(
+        "INSERT INTO user_model_bases (user_id, company, data, imported_at) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(user_id, company) DO UPDATE SET data = excluded.data, imported_at = excluded.imported_at",
+        (user_id, company, json.dumps(base), _now()),
+    )
+    # Overrides were keyed to the previous base's drivers; start clean.
+    conn.execute("DELETE FROM security_models WHERE user_id = ? AND company = ?", (user_id, company))
+    conn.commit()
+
+
+def delete_user_base(conn: sqlite3.Connection, user_id: int, company: str) -> None:
+    conn.execute("DELETE FROM user_model_bases WHERE user_id = ? AND company = ?", (user_id, company))
+    conn.execute("DELETE FROM security_models WHERE user_id = ? AND company = ?", (user_id, company))
+    conn.commit()
+
+
+def effective_base(conn: sqlite3.Connection, user_id: int, company: str) -> tuple[dict | None, str | None]:
+    """(base, owner) — the user's own upload if any, else the house model.
+    A user model without consensus borrows the house consensus."""
+    row = conn.execute(
+        "SELECT data FROM user_model_bases WHERE user_id = ? AND company = ?", (user_id, company)
+    ).fetchone()
+    house = load_base(conn, company)
+    if row:
+        base = json.loads(row["data"])
+        if not (base.get("consensus") or {}).get("lines") and house and house.get("consensus"):
+            base["consensus"] = house["consensus"]
+        return base, "user"
+    return (house, "house") if house else (None, None)
 
 
 def load_base(conn: sqlite3.Connection, company: str) -> dict | None:
@@ -131,7 +170,7 @@ def _impacts(conn: sqlite3.Connection, user_id: int, company: str) -> dict[str, 
 
 def build_model(conn: sqlite3.Connection, user_id: int, company: str, ticker: str | None) -> dict | None:
     """The user's rendered model for a security, or None when no base is loaded."""
-    base = load_base(conn, company)
+    base, owner = effective_base(conn, user_id, company)
     if base is None:
         return None
     user = load_user_model(conn, user_id, company)
@@ -142,4 +181,6 @@ def build_model(conn: sqlite3.Connection, user_id: int, company: str, ticker: st
     model["market"]["price_override"] = user["price"]
     model["impacts"] = _impacts(conn, user_id, company)
     model["override_count"] = len(user["overrides"])
+    model["base_owner"] = owner
+    model["has_house_model"] = load_base(conn, company) is not None
     return model

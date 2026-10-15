@@ -9,11 +9,12 @@ from datetime import datetime, timedelta, timezone
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from pydantic import BaseModel, Field
 
-from ...finmodel import parse_canalyst
-from ...model import build_model, save_base, save_user_model
+from ...finmodel import parse_model
+from ...model import build_model, delete_user_base, effective_base, load_user_model, save_base, save_user_base, save_user_model
+from ...model_export import export_workbook
 from ...securities import resolve, security_key, universe
 from ...store import repo
 from ...theses import build_brief, question_statuses
@@ -212,24 +213,77 @@ def put_model_numbers(
     return build_model(db, user_id, sec["company"], sec["ticker"])
 
 
-@router.post("/model/{key}/import", dependencies=[Depends(require_admin)])
-async def import_model(
-    key: str, file: UploadFile = File(...), db: sqlite3.Connection = Depends(get_db)
-) -> dict:
-    """Load a Canalyst-format .xlsx as this security's shared base model."""
-    sec = resolve(db, key)
-    if not sec:
-        raise HTTPException(status_code=404, detail="unknown security")
+async def _parse_upload(file: UploadFile) -> dict:
     with tempfile.NamedTemporaryFile(suffix=".xlsx") as tmp:
         tmp.write(await file.read())
         tmp.flush()
         try:
-            base = parse_canalyst(Path(tmp.name))
+            base = parse_model(Path(tmp.name))
         except Exception as exc:
             raise HTTPException(status_code=422, detail=f"could not read model: {exc}")
     base["file"] = file.filename
+    return base
+
+
+@router.post("/model/{key}/import", dependencies=[Depends(require_admin)])
+async def import_model(
+    key: str, file: UploadFile = File(...), db: sqlite3.Connection = Depends(get_db)
+) -> dict:
+    """Load a model (.xlsx: ConvexityAI template or Canalyst) as this security's house model."""
+    sec = resolve(db, key)
+    if not sec:
+        raise HTTPException(status_code=404, detail="unknown security")
+    base = await _parse_upload(file)
     save_base(db, sec["company"], sec["ticker"], base)
     return {"company": sec["company"], "periods": len(base["periods"]), "segments": len(base["segments"])}
+
+
+@router.post("/model/{key}/upload")
+async def upload_own_model(
+    key: str,
+    file: UploadFile = File(...),
+    user_id: int = Depends(current_user_id),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Use your own model for this security instead of ConvexityAI's (just for you)."""
+    sec = resolve(db, key)
+    if not sec:
+        raise HTTPException(status_code=404, detail="unknown security")
+    base = await _parse_upload(file)
+    save_user_base(db, user_id, sec["company"], base)
+    return {"company": sec["company"], "periods": len(base["periods"]), "segments": len(base["segments"])}
+
+
+@router.delete("/model/{key}/upload")
+def revert_own_model(
+    key: str, user_id: int = Depends(current_user_id), db: sqlite3.Connection = Depends(get_db)
+) -> dict:
+    """Go back to ConvexityAI's model for this security."""
+    sec = resolve(db, key)
+    if not sec:
+        raise HTTPException(status_code=404, detail="unknown security")
+    delete_user_base(db, user_id, sec["company"])
+    return {"company": sec["company"], "reverted": True}
+
+
+@router.get("/model/{key}/download")
+def download_model(
+    key: str, user_id: int = Depends(current_user_id), db: sqlite3.Connection = Depends(get_db)
+) -> Response:
+    """The model you're looking at (with your overrides) as a ConvexityAI-template .xlsx."""
+    sec = resolve(db, key)
+    if not sec:
+        raise HTTPException(status_code=404, detail="unknown security")
+    base, _ = effective_base(db, user_id, sec["company"])
+    if base is None:
+        raise HTTPException(status_code=404, detail="no model for this security")
+    data = export_workbook(base, load_user_model(db, user_id, sec["company"])["overrides"], sec["company"])
+    name = f"{(sec['ticker'] or sec['key']).upper()} ConvexityAI model.xlsx"
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
 
 
 @router.get("/board")
