@@ -16,6 +16,8 @@ venv/
 # Data (audio + transcripts + db are local artifacts)
 data/audio/
 data/transcripts/
+# Security models (Bloomberg/Canalyst-derived; licensed — never commit)
+data/models/
 data/*.db
 data/*.db-journal
 data/*.db-wal
