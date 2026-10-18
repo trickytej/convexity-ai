@@ -16,13 +16,14 @@ const USER_NAV: NavItem[] = [
   { href: "/brief", label: "Brief", match: (p) => p.startsWith("/brief") },
 ];
 
+const PRO: NavItem = { href: "/pro", label: "Pro", match: (p) => p.startsWith("/pro") };
 const ABOUT: NavItem = { href: "/about", label: "About", match: (p) => p.startsWith("/about") };
 
 export type HeaderUser = { name?: string | null; email?: string | null; image?: string | null; isAdmin: boolean };
 
 export default function SiteHeader({ user }: { user: HeaderUser | null }) {
   const pathname = usePathname() ?? "/";
-  const nav = user ? [...USER_NAV, ABOUT] : [ABOUT];
+  const nav = user ? [...USER_NAV, PRO, ABOUT] : [PRO, ABOUT];
   const initial = (user?.name || user?.email || "?").trim().charAt(0).toUpperCase();
 
   return (

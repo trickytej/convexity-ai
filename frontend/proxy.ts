@@ -12,7 +12,7 @@ export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|robots.txt).*)"],
 };
 
-const PUBLIC_PATHS = ["/", "/about", "/signin", "/privacy", "/terms"];
+const PUBLIC_PATHS = ["/", "/about", "/pro", "/signin", "/privacy", "/terms"];
 
 // Curator-only pages. Podcasts, newsletters, Scout and episode pages are
 // browsable by everyone, with their editing controls admin-gated in-page.
