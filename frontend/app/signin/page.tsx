@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth, DEV_LOGIN, signIn } from "@/auth";
 
-const safeCallback = (url?: string) => (url && url.startsWith("/") && !url.startsWith("//") ? url : "/brief");
+const safeCallback = (url?: string) => (url && url.startsWith("/") && !url.startsWith("//") ? url : "/");
 
 export default async function SignInPage({
   searchParams,
