@@ -736,21 +736,65 @@ if __name__ == "__main__":
 
 @app.command(name="model-import")
 def model_import(
-    paths: list[Path] = typer.Argument(..., exists=True, help="Canalyst-format .xlsx files or folders of them"),
+    paths: list[Path] = typer.Argument(..., exists=True, help="Model .xlsx files or folders of them"),
+    ai: bool = typer.Option(
+        False, "--ai",
+        help="Canalyst files: let Claude map segments / P&L / KPIs (cached in <folder>/_mappings), "
+             "then verify against the vendor numbers. Recommended for bulk imports.",
+    ),
+    remap: bool = typer.Option(False, "--remap", help="With --ai: ignore cached mappings."),
 ) -> None:
-    """Load vendor models as securities' shared base models (matched by ticker)."""
+    """Load models as securities' shared (house) base models, matched by ticker."""
+    import json as _json
+
     settings = get_settings()
     from .house import import_models
 
     files = []
     for p in paths:
         files += sorted(p.glob("*.xls[xm]")) if p.is_dir() else [p]
+    files = [f for f in files if not f.name.startswith("~$")]
     with get_conn(settings.resolved_db_path) as conn:
         init_db(conn)
-        results = import_models(conn, [(f.name, f) for f in files if not f.name.startswith("~$")])
+        if not ai:
+            results = import_models(conn, [(f.name, f) for f in files])
+        else:
+            from .canalyst_map import ask_mapping, build_mapped, validate
+            from .finmodel import _canalyst_frame, is_convexity_template
+            from .model import save_base
+            from .securities import resolve
+            import openpyxl
+
+            results = []
+            for f in files:
+                if is_convexity_template(openpyxl.load_workbook(f, read_only=True)):
+                    results += import_models(conn, [(f.name, f)])
+                    continue
+                try:
+                    frame = _canalyst_frame(f)
+                    cache = f.parent / "_mappings" / f"{frame['ticker']}.json"
+                    if cache.exists() and not remap:
+                        mapping = _json.loads(cache.read_text())
+                    else:
+                        mapping = ask_mapping(frame)
+                        cache.parent.mkdir(exist_ok=True)
+                        cache.write_text(_json.dumps(mapping, indent=1))
+                    base = build_mapped(f, mapping, frame)
+                    check = validate(base)
+                    sec = resolve(conn, base["ticker"] or "")
+                    if not sec:
+                        results.append({"file": f.name, "ok": False, "error": f"{base['ticker']!r} not in watchlist"})
+                        continue
+                    save_base(conn, sec["company"], sec["ticker"], base)
+                    results.append({"file": f.name, "ok": True, "company": sec["company"],
+                                    "periods": len(base["periods"]), "segments": len(base["segments"]),
+                                    "issues": check["issues"]})
+                except Exception as exc:
+                    results.append({"file": f.name, "ok": False, "error": f"{type(exc).__name__}: {exc}"})
     for r in results:
         if r["ok"]:
-            console.print(f"[green]✓[/green] {r['file']} → {r['company']} ({r['periods']} periods, {r['segments']} segments)")
+            note = f" [yellow]{'; '.join(r['issues'])}[/yellow]" if r.get("issues") else ""
+            console.print(f"[green]✓[/green] {r['file']} → {r['company']} ({r['periods']} periods, {r['segments']} segments){note}")
         else:
             console.print(f"[red]✗[/red] {r['file']}: {r['error']}")
 

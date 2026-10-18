@@ -55,8 +55,10 @@ def _num(v) -> float | None:
     return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
 
 
-def parse_canalyst(path: str | Path) -> dict:
-    """Read a Canalyst-format workbook into a base model document."""
+def _canalyst_frame(path: str | Path) -> dict:
+    """The shared skeleton of a Canalyst workbook: rows, labelled rows, the kept
+    periods (recent history + every forecast), actual/forecast split, and a
+    series() reader over the kept periods."""
     import openpyxl
 
     wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
@@ -116,6 +118,25 @@ def parse_canalyst(path: str | Path) -> dict:
                 out[c["id"]] = v
         return out
 
+    company = rows[0][0] if isinstance(rows[0][0], str) else None
+    ticker = rows[1][0].split()[0] if isinstance(rows[1][0], str) and rows[1][0].strip() else None
+    periods = [
+        {k: (v.isoformat() if isinstance(v, date) else v) for k, v in c.items() if k != "ci"}
+        | {"actual": is_actual(c)}
+        for c in kept
+    ]
+    return {"wb": wb, "rows": rows, "labelled": labelled, "kept": kept, "is_actual": is_actual,
+            "series": series, "last_actual": last_actual, "company": company, "ticker": ticker,
+            "periods": periods}
+
+
+def parse_canalyst(path: str | Path) -> dict:
+    """Read a Canalyst-format workbook into a base model document (label heuristics;
+    see canalyst_map for the AI-mapped variant used for bulk imports)."""
+    f = _canalyst_frame(path)
+    wb, rows, labelled, kept, is_actual, series, last_actual = (
+        f["wb"], f["rows"], f["labelled"], f["kept"], f["is_actual"], f["series"], f["last_actual"])
+
     lines: dict[str, dict[str, float]] = {}
     for key, candidates in _LINES.items():
         for cand in candidates:
@@ -147,18 +168,12 @@ def parse_canalyst(path: str | Path) -> dict:
     _add_residual_segment(segs, lines.get("revenue", {}))
 
     balance = _balance(wb, last_actual["id"])
-    company = rows[0][0] if isinstance(rows[0][0], str) else None
-    ticker = rows[1][0].split()[0] if isinstance(rows[1][0], str) else None
     return {
         "source": "Canalyst",
         "file": Path(path).name,
-        "company_name": company,
-        "ticker": ticker,
-        "periods": [
-            {k: (v.isoformat() if isinstance(v, date) else v) for k, v in c.items() if k != "ci"}
-            | {"actual": is_actual(c)}
-            for c in kept
-        ],
+        "company_name": f["company"],
+        "ticker": f["ticker"],
+        "periods": f["periods"],
         "segments": segs,
         "lines": lines,
         "balance": balance,
@@ -473,13 +488,15 @@ def run_engine(base: dict, overrides: dict[str, float] | None = None):
         derived_fy = p["kind"] == "FY" and p["fy"] in full_q_fy
         if p["actual"] or derived_fy:
             if derived_fy and not p["actual"]:
-                _sum_fy(V, pid, quarters_by_fy[p["fy"]], leaves)
+                _sum_fy(V, pid, quarters_by_fy[p["fy"]], leaves, L)
                 continue
             for s in leaves:
                 put(f"seg:{s['id']}", pid, s["revenue"].get(pid))
             for key in ("revenue", "gross_profit", "rd", "sga", "operating_income", "ebt", "tax",
                         "net_income", "shares", "eps", "da", "ocf", "capex"):
                 put(key, pid, bval(key, pid))
+            put("other_opex", pid, _other_opex(bval, pid))
+            put("below_tax", pid, _below_tax(bval, pid))
             continue
 
         # ── forecast period: rebuild from drivers ──
@@ -506,17 +523,24 @@ def run_engine(base: dict, overrides: dict[str, float] | None = None):
         gp = rev * gm if gm is not None else None
         rd = rev * rd_pct if rd_pct is not None else 0.0
         sga = rev * sga_pct if sga_pct is not None else 0.0
-        b_other_opex = (bval("gross_profit", pid) or 0) - (bval("rd", pid) or 0) - (bval("sga", pid) or 0) \
-            - (bval("operating_income", pid) or 0)
-        oi = (gp or 0) - rd - sga - b_other_opex
+        # Remaining operating costs scale with revenue (a % driver), so a revenue
+        # change doesn't drop straight to operating income. No gross-profit line
+        # (services businesses): costs are measured from revenue.
+        oth_pct = driver("other_opex_pct", pid, _div(_other_opex(bval, pid), bval("revenue", pid)))
+        other_opex = rev * oth_pct if oth_pct is not None else 0.0
+        oi = (gp if gp is not None else rev) - rd - sga - other_opex
         other = driver("other_income", pid, (bval("ebt", pid) or 0) - (bval("operating_income", pid) or 0))
         ebt = oi + (other or 0)
         tax_rate = driver("tax_rate", pid, _div(bval("tax", pid), bval("ebt", pid)))
         tax = ebt * tax_rate if tax_rate is not None else 0.0
-        ni = ebt - tax
+        # Minority interest, preferred dividends etc. between pre-tax and net income.
+        below = driver("below_tax", pid, _below_tax(bval, pid))
+        ni = ebt - tax + (below or 0.0)
         shares = driver("shares", pid, bval("shares", pid))
         conv = driver("ocf_conv", pid, _div(bval("ocf", pid), bval("net_income", pid)))
         capex = driver("capex", pid, bval("capex", pid))
+        put("other_opex", pid, other_opex)
+        put("below_tax", pid, below)
         for key, val in (("gross_profit", gp), ("rd", rd), ("sga", sga), ("operating_income", oi),
                          ("ebt", ebt), ("tax", tax), ("net_income", ni), ("shares", shares),
                          ("eps", _div(ni, shares)), ("da", bval("da", pid)),
@@ -532,17 +556,47 @@ def run_engine(base: dict, overrides: dict[str, float] | None = None):
     return V, drivers, base_drivers
 
 
-def _sum_fy(V: dict, fy_id: str, qids: list[str], leaves: list[dict]) -> None:
+def _other_opex(bval, pid) -> float | None:
+    """Operating costs not in COGS / R&D / SG&A: (GP or revenue) - R&D - SG&A - OI."""
+    top = bval("gross_profit", pid)
+    top = bval("revenue", pid) if top is None else top
+    oi = bval("operating_income", pid)
+    if top is None or oi is None:
+        return None
+    return top - (bval("rd", pid) or 0) - (bval("sga", pid) or 0) - oi
+
+
+def _below_tax(bval, pid) -> float | None:
+    """Items between (pre-tax - tax) and net income to common."""
+    ni, ebt, tax = bval("net_income", pid), bval("ebt", pid), bval("tax", pid)
+    if ni is None or ebt is None:
+        return None
+    return ni - (ebt - (tax or 0))
+
+
+def _sum_fy(V: dict, fy_id: str, qids: list[str], leaves: list[dict], base_lines: dict | None = None) -> None:
     def tot(key: str) -> float | None:
         vals = [V.get(key, {}).get(q) for q in qids]
         return sum(vals) if all(x is not None for x in vals) else None
 
-    for key in ["revenue", "gross_profit", "rd", "sga", "operating_income", "ebt", "tax", "net_income",
-                "da", "ocf", "capex"] + [f"seg:{s['id']}" for s in leaves]:
+    for key in ["revenue", "gross_profit", "rd", "sga", "other_opex", "operating_income", "ebt", "tax",
+                "below_tax", "net_income", "da", "ocf", "capex"] + [f"seg:{s['id']}" for s in leaves]:
         V.setdefault(key, {})[fy_id] = tot(key)
     sh = [V.get("shares", {}).get(q) for q in qids]
     V.setdefault("shares", {})[fy_id] = sum(sh) / 4 if all(sh) else None
-    V.setdefault("eps", {})[fy_id] = _div(V["net_income"][fy_id], V["shares"][fy_id])
+    # Full-year EPS: vendors differ (sum of quarters, own FY share count…), so
+    # anchor to the vendor's FY EPS and scale it by how NI per average share
+    # moved. Unchanged drivers reproduce the vendor exactly.
+    computed = _div(V["net_income"][fy_id], V["shares"][fy_id])
+    eps = computed
+    if base_lines is not None:
+        b_eps = base_lines.get("eps", {}).get(fy_id)
+        b_ni = sum(base_lines.get("net_income", {}).get(q) or 0 for q in qids)
+        b_sh = [base_lines.get("shares", {}).get(q) for q in qids]
+        b_calc = _div(b_ni, sum(b_sh) / 4) if all(b_sh) else None
+        if b_eps is not None and computed is not None and b_calc:
+            eps = b_eps * computed / b_calc
+    V.setdefault("eps", {})[fy_id] = eps
 
 
 def _render(base, V, drivers, base_drivers, overrides, price, target_pe) -> dict:
@@ -629,12 +683,16 @@ def _render(base, V, drivers, base_drivers, overrides, price, target_pe) -> dict
         row("p_rd_pct", "% of revenue", driven("rd_pct", ratio("rd", "revenue")), "pct", "sub", driver="rd_pct"),
         row("p_sga", "SG&A", vals("sga")),
         row("p_sga_pct", "% of revenue", driven("sga_pct", ratio("sga", "revenue")), "pct", "sub", driver="sga_pct"),
+        row("p_oth", "Other operating costs", vals("other_opex")),
+        row("p_oth_pct", "% of revenue", driven("other_opex_pct", ratio("other_opex", "revenue")), "pct", "sub",
+            driver="other_opex_pct"),
         row("p_oi", "Operating income", vals("operating_income"), style="bold"),
         row("p_opm", "Operating margin %", ratio("operating_income", "revenue"), "pct", "margin"),
         row("p_other", "Net interest & other", {pid: _sub(V, "ebt", "operating_income", pid) for pid in col_ids},
             driver="other_income"),
         row("p_ebt", "Pre-tax income", vals("ebt")),
         row("p_tax_rate", "Tax rate %", driven("tax_rate", ratio("tax", "ebt")), "pct", "sub", driver="tax_rate"),
+        row("p_below", "Minority interest & other", driven("below_tax", vals("below_tax")), driver="below_tax"),
         row("p_ni", "Net income", vals("net_income"), style="bold"),
         row("p_shares", "Diluted shares (mm)", driven("shares", vals("shares")), driver="shares"),
         row("p_eps", "EPS ($)", vals("eps"), "eps", "bold"),
@@ -703,6 +761,16 @@ def _render(base, V, drivers, base_drivers, overrides, price, target_pe) -> dict
             row("c_eps", "EPS — consensus", cval("eps"), "eps", "bold"),
             row("c_eps_vs", "Your EPS vs consensus", vs("eps"), "pct", "variance"),
         ]})
+    kpi_rows = []
+    for i, k in enumerate(base.get("kpis") or []):
+        unit = k.get("unit") or ""
+        fmt = "pct" if unit == "%" else ("eps" if unit == "$" else "num")
+        vals = {pid: k["values"].get(pid) for pid in col_ids}
+        if fmt == "pct":  # vendor percentages may be 0.12 or 12
+            vals = {pid: (v / 100 if v is not None and abs(v) > 1.5 else v) for pid, v in vals.items()}
+        kpi_rows.append(row(f"kpi{i}", k["name"] + (f" ({unit})" if unit in ("mm", "count") else ""), vals, fmt))
+    if kpi_rows:
+        sections.append({"id": "kpis", "title": "Key metrics (base model)", "rows": kpi_rows})
     sections += [
         {"id": "build", "title": "Revenue build", "rows": build},
         {"id": "pnl", "title": "P&L", "rows": pnl},
