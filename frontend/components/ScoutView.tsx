@@ -567,10 +567,10 @@ export default function ScoutView() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  // Date range — default last 7 days, matching the Insights tab default
+  // Date range — default last 90 days: scans are run by hand, so a short window is often empty
   const [dateFrom, setDateFrom] = useState(() => {
     const d = new Date();
-    d.setDate(d.getDate() - 7);
+    d.setDate(d.getDate() - 90);
     return d.toISOString().slice(0, 10);
   });
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
@@ -1120,7 +1120,7 @@ export default function ScoutView() {
                           <span className="truncate text-[13px] text-zinc-200">{p.name}</span>
                           {p.role && <span className="shrink-0 text-[11px] text-zinc-600">{p.role}</span>}
                         </div>
-                        <button
+                        <button data-edit
                           onClick={() => removeIndividual(p.name)}
                           className="hidden rounded px-1 text-[11px] text-zinc-600 transition hover:text-red-400 group-hover/ind:block"
                           title={`Stop tracking ${p.name}`}
@@ -1164,6 +1164,22 @@ export default function ScoutView() {
                   </button>
                 ))}
               </div>
+            )}
+
+            {!loading && filtered.length === 0 && (
+              <p className="rounded-xl border border-white/[0.06] bg-[#0b0c10]/80 px-5 py-6 text-[13px] text-zinc-500">
+                No podcast appearances in this date range.{" "}
+                <button
+                  onClick={() => {
+                    const d = new Date();
+                    d.setFullYear(d.getFullYear() - 1);
+                    setDateFrom(d.toISOString().slice(0, 10));
+                  }}
+                  className="text-[#00d4ff]/80 underline transition hover:text-[#00d4ff]"
+                >
+                  Show the last 12 months
+                </button>
+              </p>
             )}
 
             {!loading && (

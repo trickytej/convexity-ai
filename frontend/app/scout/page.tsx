@@ -9,7 +9,7 @@ export default async function ScoutPage() {
   if (isAdmin) return <ScoutView />;
   return (
     <div className="[&_[data-edit]]:hidden">
-      <p className="mb-6 rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-2.5 text-[12px] text-zinc-500">
+      <p className="relative z-[5] mb-6 rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-2.5 text-[12px] text-zinc-500">
         Scout is part of the shared research corpus — browse appearances and posts here; the watchlist is managed by
         ConvexityAI.
       </p>

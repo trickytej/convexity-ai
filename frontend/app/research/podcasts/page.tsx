@@ -52,18 +52,13 @@ export default async function PodcastsPage({
   const isAdmin = !!session?.user?.isAdmin;
 
   const active = shows.filter((s) => s.active);
-  const withTranscripts = shows.filter((s) => s.transcribed > 0);
 
   return (
     <div className="space-y-12">
       {/* ── Podcasts ── */}
-      <ShowGrid initialShows={active} canEdit={isAdmin} />
-      {isAdmin && (
-        <>
-          <ImportPodcast />
-          <ImportEpisode />
-        </>
-      )}
+      <ShowGrid initialShows={active} selected={show} canEdit={isAdmin} />
+      <ImportPodcast isAdmin={isAdmin} />
+      {isAdmin && <ImportEpisode />}
 
       {/* ── Date range (+ feed refresh for admins) ── */}
       {isAdmin ? (
@@ -88,36 +83,6 @@ export default async function PodcastsPage({
             </p>
           </div>
           {show && isAdmin && <PollButton slug={show} />}
-        </div>
-
-        {/* show filter pills */}
-        <div className="mt-8 flex flex-wrap gap-2">
-          <Link
-            href="/research/podcasts"
-            className={`rounded-full px-3.5 py-1.5 text-sm transition ${
-              !show
-                ? "bg-[#00d4ff] font-medium text-[#001a26]"
-                : "border border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-100"
-            }`}
-          >
-            All
-          </Link>
-          {withTranscripts.map((s) => (
-            <Link
-              key={s.slug}
-              href={`/research/podcasts?show=${s.slug}`}
-              className={`rounded-full px-3.5 py-1.5 text-sm transition ${
-                show === s.slug
-                  ? "bg-[#00d4ff] font-medium text-[#001a26]"
-                  : "border border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-100"
-              }`}
-            >
-              {s.name}
-              <span className={`ml-1.5 ${show === s.slug ? "opacity-60" : "opacity-50"}`}>
-                {s.transcribed}
-              </span>
-            </Link>
-          ))}
         </div>
 
         {/* episode list */}

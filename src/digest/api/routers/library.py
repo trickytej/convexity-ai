@@ -18,7 +18,7 @@ from ...pipeline import discover_show, process_episode_pipeline
 from ...registry import Show
 from ...store import repo
 from ...store.models import Episode, EpisodeStatus
-from ..deps import get_db, require_admin, visible_episode
+from ..deps import current_user_id, get_db, require_admin, visible_episode
 from ..schemas import EpisodeListOut, EpisodeOut, SegmentOut, ShowOut, TranscriptOut
 
 router = APIRouter(tags=["library"])
@@ -364,7 +364,10 @@ class ImportPodcastOut(BaseModel):
     created: bool
 
 
-@router.post("/shows/import", response_model=ImportPodcastOut, dependencies=[Depends(require_admin)])
+# Any signed-in user may add a feed: it only registers the show and its episode
+# list. Transcription (the paid part) stays admin-triggered, and the nightly
+# ingest only covers config/shows.yaml.
+@router.post("/shows/import", response_model=ImportPodcastOut, dependencies=[Depends(current_user_id)])
 def import_podcast(body: ImportPodcastIn, db: sqlite3.Connection = Depends(get_db)) -> ImportPodcastOut:
     """Accept an RSS feed URL, register the show, and import its episode list."""
     url = body.url.strip()

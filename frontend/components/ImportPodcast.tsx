@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { importPodcast } from "@/lib/api";
 
-export default function ImportPodcast() {
+export default function ImportPodcast({ isAdmin = false }: { isAdmin?: boolean }) {
+  const router = useRouter();
   const [url, setUrl] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -18,10 +20,13 @@ export default function ImportPodcast() {
       setStatus("success");
       setMessage(
         result.created
-          ? `Added "${result.name}" — ${result.episode_count} episodes found. Refresh to see it.`
-          : `"${result.name}" already linked — refreshed ${result.episode_count} episodes.`
+          ? `Added "${result.name}" — ${result.episode_count} episodes found.${
+              isAdmin ? "" : " ConvexityAI will transcribe the ones worth keeping."
+            }`
+          : `"${result.name}" is already on the list — refreshed ${result.episode_count} episodes.`
       );
       setUrl("");
+      router.refresh();
     } catch (e) {
       setStatus("error");
       setMessage(e instanceof Error ? e.message : "Import failed");
@@ -31,7 +36,7 @@ export default function ImportPodcast() {
   return (
     <div className="rounded-xl border border-white/[0.08] bg-[#0b0c10]/70 p-5">
       <p className="mb-3 text-sm font-medium text-zinc-300">
-        Add a podcast via RSS feed URL
+        Suggest a podcast — paste its RSS feed link
       </p>
       <form onSubmit={handleSubmit} className="flex gap-2">
         <input

@@ -56,8 +56,16 @@ function DeleteButton({ slug, onDeleted }: { slug: string; onDeleted: () => void
   );
 }
 
-/** Show list. Admins can delete shows and jump to curation; everyone else browses. */
-export default function ShowGrid({ initialShows, canEdit = false }: { initialShows: Show[]; canEdit?: boolean }) {
+/** Podcast tiles. Clicking one filters the episode list below; admins can delete. */
+export default function ShowGrid({
+  initialShows,
+  selected,
+  canEdit = false,
+}: {
+  initialShows: Show[];
+  selected?: string;
+  canEdit?: boolean;
+}) {
   const [shows, setShows] = useState(initialShows);
 
   function removeShow(slug: string) {
@@ -65,6 +73,12 @@ export default function ShowGrid({ initialShows, canEdit = false }: { initialSho
   }
 
   const totalTranscribed = shows.reduce((n, s) => n + s.transcribed, 0);
+  const tile = (active: boolean) =>
+    `group relative flex min-h-[4.5rem] flex-col justify-between rounded-xl border px-3.5 py-3 transition ${
+      active
+        ? "border-[#00d4ff] bg-[#00d4ff]/15 shadow-[0_0_14px_rgba(0,212,255,0.25)]"
+        : "border-white/[0.08] bg-[#0b0c10]/70 hover:border-[#00d4ff]/50"
+    }`;
 
   return (
     <>
@@ -77,33 +91,29 @@ export default function ShowGrid({ initialShows, canEdit = false }: { initialSho
           Podcasts
         </h1>
         <p className="mt-3 text-[15px] text-zinc-400">
-          {shows.length} shows · {totalTranscribed} episodes transcribed
+          The {shows.length} shows we listen to · {totalTranscribed} episodes transcribed
         </p>
       </header>
 
-      <div>
-        <div className="grid grid-cols-[1fr_8rem_auto] gap-x-6 border-b border-white/[0.08] pb-2 text-[10px] font-medium uppercase tracking-[0.2em] text-zinc-600">
-          <span>Show</span>
-          <span className="text-right">Transcribed</span>
-          <span />
-        </div>
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+        <Link href="/research/podcasts" className={tile(!selected)}>
+          <p className="text-[13px] font-medium text-zinc-100">All podcasts</p>
+          <p className="font-[family-name:var(--font-mono)] text-[11px] text-zinc-500">{totalTranscribed} episodes</p>
+        </Link>
         {shows.map((s) => (
-          <div
-            key={s.slug}
-            className="group grid grid-cols-[1fr_8rem_auto] items-center gap-x-6 border-b border-white/[0.05] py-4"
-          >
-            <Link href={`/research/podcasts?show=${s.slug}`}>
-              <p className="text-sm font-medium text-zinc-100 transition-colors group-hover:text-[#00d4ff]">
-                {s.name}
-              </p>
-            </Link>
-            <span className="text-right font-[family-name:var(--font-mono)] text-sm text-zinc-400">
-              {s.transcribed}
-            </span>
-            <div className="flex w-8 items-center justify-end">
-              {canEdit && <DeleteButton slug={s.slug} onDeleted={() => removeShow(s.slug)} />}
-            </div>
-          </div>
+          <Link key={s.slug} href={`/research/podcasts?show=${s.slug}`} className={tile(selected === s.slug)}>
+            <p className="line-clamp-2 pr-4 text-[13px] font-medium leading-snug text-zinc-100 transition-colors group-hover:text-white">
+              {s.name}
+            </p>
+            <p className="mt-1.5 font-[family-name:var(--font-mono)] text-[11px] text-zinc-500">
+              {s.transcribed} episode{s.transcribed !== 1 ? "s" : ""}
+            </p>
+            {canEdit && (
+              <span className="absolute right-2.5 top-2.5">
+                <DeleteButton slug={s.slug} onDeleted={() => removeShow(s.slug)} />
+              </span>
+            )}
+          </Link>
         ))}
       </div>
     </>
