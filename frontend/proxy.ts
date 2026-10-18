@@ -14,11 +14,9 @@ export const config = {
 
 const PUBLIC_PATHS = ["/", "/about", "/signin", "/privacy", "/terms"];
 
-// Curator tools: nugget curation and the newsletter workflow. Podcasts, Scout
-// and episode pages are browsable by everyone (read-only for non-admins).
-const ADMIN_PREFIXES = [
-  "/episodes", "/newsletters", "/newsletter", "/library", "/report", "/preview",
-];
+// Curator-only pages. Podcasts, newsletters, Scout and episode pages are
+// browsable by everyone, with their editing controls admin-gated in-page.
+const ADMIN_PREFIXES = ["/newsletter", "/library", "/report", "/preview"];
 
 const startsWithSegment = (path: string, prefix: string) =>
   path === prefix || path.startsWith(`${prefix}/`);

@@ -23,7 +23,7 @@ export default function DateRangeRefresh({ initialFrom, initialTo }: Props) {
     const params = new URLSearchParams();
     if (from) params.set("from", from);
     if (to) params.set("to", to);
-    router.push(`/podcasts?${params.toString()}`);
+    router.push(`/research/podcasts?${params.toString()}`);
   }
 
   async function handleRefresh() {
@@ -55,7 +55,7 @@ export default function DateRangeRefresh({ initialFrom, initialTo }: Props) {
       const params = new URLSearchParams();
       if (from) params.set("from", from);
       if (to) params.set("to", to);
-      router.push(`/podcasts?${params.toString()}`);
+      router.push(`/research/podcasts?${params.toString()}`);
       router.refresh();
     });
   }

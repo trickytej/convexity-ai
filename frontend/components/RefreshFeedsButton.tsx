@@ -50,7 +50,7 @@ export default function RefreshFeedsButton() {
     }
 
     setStatus("done");
-    router.push(`/insights?from=${from}&to=${to}`);
+    router.push(`/research/podcasts?from=${from}&to=${to}`);
   }
 
   return (

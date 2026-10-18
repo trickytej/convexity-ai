@@ -621,7 +621,7 @@ export default function NewsletterPage() {
                 {newsletter.kept_count === 0 && (
                   <div className="p-10 text-center text-sm text-zinc-500">
                     No kept nuggets for this podcast.{" "}
-                    <Link href="/episodes" className="text-teal-700 hover:underline print:hidden">
+                    <Link href="/research/podcasts" className="text-teal-700 hover:underline print:hidden">
                       Review episodes →
                     </Link>
                   </div>

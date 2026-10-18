@@ -16,7 +16,7 @@ function Tally({ supports, contradicts }: { supports: number; contradicts: numbe
   );
 }
 
-/** The CIO Brain: every followed security's questions with a green / yellow /
+/** The CIO board: every followed security's questions with a green / yellow /
  * red status from the last 30 days of signals, split by where the evidence came
  * from — consensus in print, consensus in chatter, and the inside view. */
 export default function Board({ securities }: { securities: BoardSecurity[] }) {

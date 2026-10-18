@@ -1,9 +1,7 @@
-import { getBrain } from "@/lib/api";
-import CioBrain from "@/components/CioBrain";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-export const metadata = { title: "CIO Brain — ConvexityAI" };
-
-export default async function BrainPage() {
-  return <CioBrain initial={await getBrain()} />;
+// Moved: /cio. Query strings (show, from, to) carry over.
+export default async function Moved({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
+  const q = new URLSearchParams(await searchParams).toString();
+  redirect(q ? `/cio?${q}` : "/cio");
 }

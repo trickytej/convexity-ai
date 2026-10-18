@@ -21,7 +21,7 @@ async function safeStats(isAdmin: boolean): Promise<{
   const [episodes, shows, scout, brief, board, research] = await Promise.all([
     isAdmin ? getEpisodes({ since, limit: 1, all: true }).catch(() => null) : null,
     isAdmin ? getShows().catch(() => null) : null,
-    isAdmin ? getScoutAppearances({ days: 7 }).catch(() => null) : null,
+    getScoutAppearances({ days: 7 }).catch(() => null),
     getBrief({ days: 1, status: "pending" }).catch(() => null),
     getBoard().catch(() => null),
     listResearch().catch(() => null),
@@ -173,51 +173,47 @@ export default async function HomePage() {
 
             <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <NavCard
+                href="/cio"
+                title="CIO"
+                description="Where the evidence is moving across your book, colour-coded."
+                stat={stats.model}
+                delay={0}
+              />
+              <NavCard
                 href="/brief"
                 title="Brief"
                 description="Summary of new research that impacts your theses."
                 stat={stats.brief}
-                delay={0}
+                delay={70}
               />
               <NavCard
                 href="/model"
                 title="Model"
                 description="Per-security view on how news influences your forecast."
                 stat={stats.model}
-                delay={70}
+                delay={140}
               />
               <NavCard
                 href="/research"
                 title="Research"
-                description="Your own notes, calls and reports — the inside view."
+                description="Your own research, plus the podcasts and newsletters we track."
                 stat={stats.research}
-                delay={140}
+                delay={210}
               />
-              {isAdmin && (
-                <>
-                  <NavCard
-                    href="/episodes"
-                    title="Episodes"
-                    description="Curate and review nuggets from the episodes you track."
-                    stat={stats.episodes}
-                    delay={210}
-                  />
-                  <NavCard
-                    href="/scout"
-                    title="Scout"
-                    description="A watchlist of companies and executives, distilled into insights."
-                    stat={stats.scout}
-                    delay={280}
-                  />
-                  <NavCard
-                    href="/podcasts"
-                    title="Podcasts"
-                    description="Manage tracked feeds, import new podcasts, browse by show."
-                    stat={stats.podcasts}
-                    delay={350}
-                  />
-                </>
-              )}
+              <NavCard
+                href="/scout"
+                title="Scout"
+                description="A watchlist of companies and executives, distilled into insights."
+                stat={stats.scout}
+                delay={280}
+              />
+              <NavCard
+                href="/developers"
+                title="API"
+                description="Connect Claude and other agents to your board, brief and research."
+                stat={null}
+                delay={350}
+              />
             </div>
           </section>
 
@@ -229,12 +225,10 @@ export default async function HomePage() {
             {[
               ...(isAdmin
                 ? [
-                    { href: "/newsletters", label: `Newsletters${stats.newsletters ? ` · ${stats.newsletters.value}` : ""}` },
                     { href: "/newsletter", label: "Weekly Report" },
                     { href: "/library", label: "Episode Library" },
                   ]
                 : []),
-              { href: "/settings", label: "Settings · API & MCP" },
               { href: "/about", label: "About" },
             ].map((l) => (
               <Link

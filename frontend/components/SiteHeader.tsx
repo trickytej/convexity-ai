@@ -8,18 +8,12 @@ type NavItem = { href: string; label: string; match: (p: string) => boolean };
 
 const USER_NAV: NavItem[] = [
   { href: "/", label: "Home", match: (p) => p === "/" },
-  { href: "/brain", label: "CIO Brain", match: (p) => p.startsWith("/brain") },
+  { href: "/cio", label: "CIO", match: (p) => p.startsWith("/cio") },
   { href: "/brief", label: "Brief", match: (p) => p.startsWith("/brief") },
   { href: "/model", label: "Model", match: (p) => p.startsWith("/model") },
-  { href: "/research", label: "Research", match: (p) => p.startsWith("/research") },
-  { href: "/scout",    label: "Scout",    match: (p) => p.startsWith("/scout") },
-  { href: "/podcasts", label: "Podcasts", match: (p) => p === "/podcasts" || p.startsWith("/podcasts?") },
-];
-
-// Curator tools, visible to admins only (proxy.ts enforces the same list).
-const ADMIN_NAV: NavItem[] = [
-  { href: "/episodes",    label: "Episodes",    match: (p) => p.startsWith("/episodes") },
-  { href: "/newsletters", label: "Newsletters", match: (p) => p.startsWith("/newsletters") },
+  { href: "/research", label: "Research", match: (p) => p.startsWith("/research") || p.startsWith("/episode/") },
+  { href: "/scout", label: "Scout", match: (p) => p.startsWith("/scout") },
+  { href: "/developers", label: "API", match: (p) => p.startsWith("/developers") },
 ];
 
 const ABOUT: NavItem = { href: "/about", label: "About", match: (p) => p.startsWith("/about") };
@@ -28,7 +22,7 @@ export type HeaderUser = { name?: string | null; email?: string | null; image?: 
 
 export default function SiteHeader({ user }: { user: HeaderUser | null }) {
   const pathname = usePathname() ?? "/";
-  const nav = user ? [...USER_NAV, ...(user.isAdmin ? ADMIN_NAV : []), ABOUT] : [ABOUT];
+  const nav = user ? [...USER_NAV, ABOUT] : [ABOUT];
   const initial = (user?.name || user?.email || "?").trim().charAt(0).toUpperCase();
 
   return (
@@ -72,13 +66,7 @@ export default function SiteHeader({ user }: { user: HeaderUser | null }) {
                 {user.isAdmin && (
                   <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[#00d4ff]/70">Admin</p>
                 )}
-                <Link
-                  href="/settings"
-                  className="mt-3 block border-t border-white/[0.06] pt-2 text-[12px] text-zinc-400 transition hover:text-[#00d4ff]"
-                >
-                  Settings · API &amp; MCP
-                </Link>
-                <form action={signOutAction} className="mt-2">
+                <form action={signOutAction} className="mt-3 border-t border-white/[0.06] pt-2">
                   <button type="submit" className="text-[12px] text-zinc-400 transition hover:text-rose-300">
                     Sign out
                   </button>

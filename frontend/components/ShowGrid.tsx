@@ -92,7 +92,7 @@ export default function ShowGrid({ initialShows, canEdit = false }: { initialSho
             key={s.slug}
             className="group grid grid-cols-[1fr_8rem_auto] items-center gap-x-6 border-b border-white/[0.05] py-4"
           >
-            <Link href={canEdit ? `/episodes?show=${s.slug}` : `/podcasts?show=${s.slug}`}>
+            <Link href={`/research/podcasts?show=${s.slug}`}>
               <p className="text-sm font-medium text-zinc-100 transition-colors group-hover:text-[#00d4ff]">
                 {s.name}
               </p>

@@ -261,7 +261,7 @@ export default function CioBrain({ initial }: { initial: Brain }) {
           <div>
             <p className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.24em]">
               <span className="inline-block h-px w-8 bg-[#00d4ff]" />
-              <span className="text-[#00d4ff]">CIO Brain</span>
+              <span className="text-[#00d4ff]">CIO</span>
             </p>
             <h1 className="mt-3 text-5xl font-light leading-[1.04] tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-6xl">
               Where the evidence <span className="text-[#00d4ff]">is moving</span>.

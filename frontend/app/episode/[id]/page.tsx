@@ -39,8 +39,8 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="space-y-6">
-      <Link href={isAdmin ? "/episodes" : "/podcasts"} className="text-sm text-[#00d4ff] transition hover:text-[#33ddff]">
-        ← {isAdmin ? "All episodes" : "Podcasts"}
+      <Link href="/research/podcasts" className="text-sm text-[#00d4ff] transition hover:text-[#33ddff]">
+        ← Podcasts
       </Link>
 
       <header className="space-y-3">
