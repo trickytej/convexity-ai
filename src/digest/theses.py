@@ -25,6 +25,7 @@ from .transcribe import llm
 log = logging.getLogger(__name__)
 
 _CHUNK_SIZE = 50            # nuggets per matcher call
+_QUESTION_GROUP = 60        # max questions per matcher call (big books are split by company)
 _STORE_THRESHOLD = 0.4      # matcher hits below this are dropped
 # A hit is a *signal* (shown as supports/contradicts and counted toward the
 # question's status) only when it clears both bars; everything else that
@@ -222,67 +223,14 @@ def _match_for_user(
     if not nuggets:
         return 0
     client = client or llm.get_client(settings)
-    valid_ids = {t["id"] for t in theses}
-    questions = _questions_block(theses)
+    groups = _question_groups(theses)
 
     total_hits = 0
     for start in range(0, len(nuggets), _CHUNK_SIZE):
         chunk = nuggets[start : start + _CHUNK_SIZE]
-        user = (
-            "## Thesis questions\n\n" + questions
-            + "\n\n## New nuggets\n\n"
-            + "\n".join(_nugget_line(i + 1, n) for i, n in enumerate(chunk))
-        )
-        raw = llm.complete(
-            client,
-            system=_MATCH_SYSTEM,
-            user=user,
-            model=settings.anthropic_model,
-            max_tokens=8000,
-        )
-        data = llm.extract_json(raw)
-        matches = data.get("matches") if isinstance(data, dict) else None
         hits: list[dict] = []
-        for m in matches or []:
-            if not isinstance(m, dict):
-                continue
-            try:
-                idx = int(m["nugget"])
-                qid = int(m["question_id"])
-                relevance = float(m["relevance"])
-            except (KeyError, TypeError, ValueError):
-                continue
-            if qid not in valid_ids or not (1 <= idx <= len(chunk)):
-                continue
-            if relevance < _STORE_THRESHOLD:
-                continue
-            direction = m.get("direction")
-            if direction not in ("supports", "contradicts", "unclear"):
-                direction = "unclear"
-            try:
-                evidence = min(1.0, max(0.0, float(m.get("evidence"))))
-            except (TypeError, ValueError):
-                evidence = None
-            relevance = min(1.0, max(0.0, relevance))
-            impact = _clean_impact(m.get("impact")) or {}
-            n = chunk[idx - 1]
-            hits.append(
-                {
-                    "question_id": qid,
-                    "nugget_id": n["id"],
-                    "episode_id": n["episode_id"],
-                    "claim_hash": claim_hash(n["episode_id"], n["claim"]),
-                    "relevance": relevance,
-                    "direction": direction,
-                    "why": (m.get("why") or "").strip() or None,
-                    "model": settings.anthropic_model,
-                    "evidence": evidence,
-                    "tier": classify_tier(relevance, evidence, direction),
-                    "impact_line": impact.get("line"),
-                    "impact_year": impact.get("year"),
-                    "impact_dir": impact.get("direction"),
-                }
-            )
+        for group in groups:
+            hits += _match_chunk(client, settings, chunk, group)
         if hits:
             repo.record_thesis_hits(conn, hits)
             total_hits += len(hits)
@@ -292,6 +240,81 @@ def _match_for_user(
             "thesis matcher: %d hits for episode %s (user %s)", total_hits, episode_id, user_id
         )
     return total_hits
+
+
+def _question_groups(theses: list) -> list[list]:
+    """Split a large question book into ≤ _QUESTION_GROUP batches, keeping each
+    company's questions together."""
+    by_company: dict[str, list] = defaultdict(list)
+    for t in theses:
+        by_company[t["company"]].append(t)
+    groups: list[list] = [[]]
+    for qs in by_company.values():
+        if groups[-1] and len(groups[-1]) + len(qs) > _QUESTION_GROUP:
+            groups.append([])
+        groups[-1].extend(qs)
+    return [g for g in groups if g]
+
+
+def _match_chunk(client, settings: Settings, chunk: list, theses: list) -> list[dict]:
+    """One matcher call: a chunk of nuggets against a group of questions."""
+    valid_ids = {t["id"] for t in theses}
+    user = (
+        "## Thesis questions\n\n" + _questions_block(theses)
+        + "\n\n## New nuggets\n\n"
+        + "\n".join(_nugget_line(i + 1, n) for i, n in enumerate(chunk))
+    )
+    raw = llm.complete(
+        client,
+        system=_MATCH_SYSTEM,
+        user=user,
+        model=settings.anthropic_model,
+        max_tokens=8000,
+    )
+    data = llm.extract_json(raw)
+    matches = data.get("matches") if isinstance(data, dict) else None
+    hits: list[dict] = []
+    for m in matches or []:
+        if not isinstance(m, dict):
+            continue
+        try:
+            idx = int(m["nugget"])
+            qid = int(m["question_id"])
+            relevance = float(m["relevance"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if qid not in valid_ids or not (1 <= idx <= len(chunk)):
+            continue
+        if relevance < _STORE_THRESHOLD:
+            continue
+        direction = m.get("direction")
+        if direction not in ("supports", "contradicts", "unclear"):
+            direction = "unclear"
+        try:
+            evidence = min(1.0, max(0.0, float(m.get("evidence"))))
+        except (TypeError, ValueError):
+            evidence = None
+        relevance = min(1.0, max(0.0, relevance))
+        impact = _clean_impact(m.get("impact")) or {}
+        n = chunk[idx - 1]
+        hits.append(
+            {
+                "question_id": qid,
+                "nugget_id": n["id"],
+                "episode_id": n["episode_id"],
+                "claim_hash": claim_hash(n["episode_id"], n["claim"]),
+                "relevance": relevance,
+                "direction": direction,
+                "why": (m.get("why") or "").strip() or None,
+                "model": settings.anthropic_model,
+                "evidence": evidence,
+                "tier": classify_tier(relevance, evidence, direction),
+                "impact_line": impact.get("line"),
+                "impact_year": impact.get("year"),
+                "impact_dir": impact.get("direction"),
+            }
+        )
+    return hits
 
 
 def run_brief_match(
