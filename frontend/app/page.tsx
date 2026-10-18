@@ -150,7 +150,7 @@ export default async function HomePage() {
           <div>
             <p className="max-w-3xl text-3xl font-light leading-[1.15] tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-4xl">
               A few questions decide most securities.
-              <span className="text-zinc-600"> ConvexityAI helps you avoid the noise.</span>
+              <span className="text-zinc-600"> ConvexityAI tunes out the rest.</span>
             </p>
             <p className="mt-6 max-w-2xl text-[15px] font-light leading-relaxed text-zinc-400">
               Convexity parses the deluge of news flow and flags what moves{" "}
