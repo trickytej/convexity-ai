@@ -66,9 +66,9 @@ export default function ProPage() {
       </h1>
 
       <p className="mt-8 max-w-2xl text-[15px] leading-relaxed text-zinc-400">
-        ConvexityAI will be open source: run it yourself with your own keys, free. Pro is the
-        hosted version, with the research already listened to, the models already built, and an
-        Analyst that makes calls on what matters and gets better every time you rule on them.
+        ConvexityAI is open source: run it yourself with your own keys, free. Pro is the hosted
+        version, with the research already listened to, the models already built, and an Analyst
+        that recursively learns with you, makes calls on what matters, and gets better over time.
       </p>
 
       {/* ── plans ── */}
