@@ -60,10 +60,13 @@ function DeleteButton({ slug, onDeleted }: { slug: string; onDeleted: () => void
 export default function ShowGrid({
   initialShows,
   selected,
+  range = "",
   canEdit = false,
 }: {
   initialShows: Show[];
   selected?: string;
+  /** "from=…&to=…" carried onto the tile links so picking a show keeps the dates. */
+  range?: string;
   canEdit?: boolean;
 }) {
   const [shows, setShows] = useState(initialShows);
@@ -96,12 +99,12 @@ export default function ShowGrid({
       </header>
 
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
-        <Link href="/research/podcasts" className={tile(!selected)}>
+        <Link href={`/research/podcasts${range ? `?${range}` : ""}`} className={tile(!selected)}>
           <p className="text-[13px] font-medium text-zinc-100">All podcasts</p>
           <p className="font-[family-name:var(--font-mono)] text-[11px] text-zinc-500">{totalTranscribed} episodes</p>
         </Link>
         {shows.map((s) => (
-          <Link key={s.slug} href={`/research/podcasts?show=${s.slug}`} className={tile(selected === s.slug)}>
+          <Link key={s.slug} href={`/research/podcasts?show=${s.slug}${range ? `&${range}` : ""}`} className={tile(selected === s.slug)}>
             <p className="line-clamp-2 pr-4 text-[13px] font-medium leading-snug text-zinc-100 transition-colors group-hover:text-white">
               {s.name}
             </p>

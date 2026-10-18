@@ -56,7 +56,12 @@ export default async function PodcastsPage({
   return (
     <div className="space-y-12">
       {/* ── Podcasts ── */}
-      <ShowGrid initialShows={active} selected={show} canEdit={isAdmin} />
+      <ShowGrid
+        initialShows={active}
+        selected={show}
+        range={from || to ? new URLSearchParams({ from: since, to: until }).toString() : ""}
+        canEdit={isAdmin}
+      />
       <ImportPodcast isAdmin={isAdmin} />
       {isAdmin && <ImportEpisode />}
 
@@ -64,7 +69,7 @@ export default async function PodcastsPage({
       {isAdmin ? (
         <DateRangeRefresh initialFrom={since} initialTo={until} />
       ) : (
-        <DateRangeFilter basePath="/research/podcasts" initialFrom={since} initialTo={until} />
+        <DateRangeFilter basePath="/research/podcasts" initialFrom={since} initialTo={until} auto />
       )}
 
       {/* ── Episodes ── */}
@@ -95,7 +100,7 @@ export default async function PodcastsPage({
                 <p className="px-4 py-10 text-center text-zinc-500">
                   {show
                     ? "No episodes in this range yet."
-                    : "No transcribed episodes yet."}
+                    : "No transcribed episodes in this date range."}
                 </p>
               )}
               {list.episodes.map((e) => {

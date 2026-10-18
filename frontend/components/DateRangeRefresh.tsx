@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { dispatchIngest, pollAllShows, type IngestDispatch } from "@/lib/api";
 
 interface Props {
@@ -11,6 +11,7 @@ interface Props {
 
 export default function DateRangeRefresh({ initialFrom, initialTo }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [from, setFrom] = useState(initialFrom);
   const [to, setTo] = useState(initialTo);
   const [status, setStatus] = useState<"idle" | "polling" | "done" | "error">("idle");
@@ -19,11 +20,11 @@ export default function DateRangeRefresh({ initialFrom, initialTo }: Props) {
   const [ingestNote, setIngestNote] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  function applyRange() {
-    const params = new URLSearchParams();
-    if (from) params.set("from", from);
-    if (to) params.set("to", to);
-    router.push(`/research/podcasts?${params.toString()}`);
+  function applyRange(f: string, t: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (f) params.set("from", f);
+    if (t) params.set("to", t);
+    startTransition(() => router.push(`/research/podcasts?${params.toString()}`));
   }
 
   async function handleRefresh() {
@@ -52,7 +53,7 @@ export default function DateRangeRefresh({ initialFrom, initialTo }: Props) {
 
     setStatus("done");
     startTransition(() => {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams(searchParams.toString());
       if (from) params.set("from", from);
       if (to) params.set("to", to);
       router.push(`/research/podcasts?${params.toString()}`);
@@ -78,7 +79,10 @@ export default function DateRangeRefresh({ initialFrom, initialTo }: Props) {
             type="date"
             value={from}
             max={to}
-            onChange={(e) => setFrom(e.target.value)}
+            onChange={(e) => {
+              setFrom(e.target.value);
+              if (e.target.value) applyRange(e.target.value, to);
+            }}
             className="rounded-lg border border-white/[0.1] bg-white/[0.04] px-3 py-2 text-sm text-zinc-100 outline-none focus:border-[#00d4ff]/40 focus:ring-1 focus:ring-[#00d4ff]/20 [color-scheme:dark]"
           />
         </div>
@@ -88,17 +92,13 @@ export default function DateRangeRefresh({ initialFrom, initialTo }: Props) {
             type="date"
             value={to}
             min={from}
-            onChange={(e) => setTo(e.target.value)}
+            onChange={(e) => {
+              setTo(e.target.value);
+              if (e.target.value) applyRange(from, e.target.value);
+            }}
             className="rounded-lg border border-white/[0.1] bg-white/[0.04] px-3 py-2 text-sm text-zinc-100 outline-none focus:border-[#00d4ff]/40 focus:ring-1 focus:ring-[#00d4ff]/20 [color-scheme:dark]"
           />
         </div>
-
-        <button
-          onClick={applyRange}
-          className="rounded-lg border border-white/[0.1] bg-white/[0.04] px-4 py-2 text-sm text-zinc-300 transition hover:border-white/20 hover:text-zinc-100"
-        >
-          Apply
-        </button>
 
         <button
           onClick={handleRefresh}
