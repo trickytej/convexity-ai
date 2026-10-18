@@ -105,3 +105,116 @@ def import_house_questions(conn: sqlite3.Connection, csv_text: str) -> list[dict
     for key in sorted(set(unknown)):
         results.append({"company": key, "error": "not in watchlist"})
     return results
+
+
+# --- AI-drafted default questions ------------------------------------------------
+
+DRAFT_MODEL = "claude-opus-5-5"
+
+_DRAFT_SYSTEM = """\
+You write the default "What Matters" questions for a stock on an investment research platform: \
+the 4 questions that will decide the investment outcome over the next 1-3 years. A portfolio \
+manager reads them every morning; new podcast, news, filing and research evidence is matched \
+against them and marked as supporting or contradicting.
+
+Good questions are:
+- decisive: the answer moves the stock, not trivia;
+- falsifiable and trackable from public evidence (earnings, filings, management commentary, \
+channel checks, expert interviews), phrased so evidence can clearly support or contradict;
+- specific to this company: name the products, segments, customers, competitors and metrics;
+- together, the real bull/bear debate — including at least one about durability or competitive \
+position (what drives the valuation multiple, not just next year's numbers);
+- 8-18 words each, punchy like the Nvidia examples — one question each, no compound lists.
+
+Tie each to the model lines it moves: line is revenue, gross_margin, op_margin, eps or multiple; \
+year is 1, 2 or 3 (Y1 = current fiscal year in progress; null for multiple).
+
+Output STRICT JSON only:
+{"questions": [{"question": "...", "note": "<one sentence on why it matters>", \
+"drivers": [{"line": "...", "year": 1|2|3|null}]}]}
+Exactly 4 questions. No prose outside the JSON."""
+
+_STYLE = """Style reference — the house questions for Nvidia:
+1. Is hyperscaler + sovereign AI datacenter capex still accelerating, or starting to plateau? (Demand durability is the whole bull case)
+2. Is inference (vs training) becoming the dominant workload, and does Nvidia keep share there? (Inference is more competitive: custom silicon, AMD, Groq)
+3. Are custom ASICs (TPU, Trainium, MTIA) materially eroding Nvidia allocation at the big buyers?
+4. Does supply (CoWoS, HBM) stay the binding constraint or is it easing into oversupply?"""
+
+
+def _model_brief(base: dict | None) -> str:
+    """A few lines describing the company's model: segments, KPIs, key ratios."""
+    if not base:
+        return "No financial model loaded (private company or not yet modelled)."
+    fys = sorted([p for p in base["periods"] if p["kind"] == "FY"], key=lambda p: p["fy"])
+    act = [p["id"] for p in fys if p["actual"]][-1:]
+    fc = [p["id"] for p in fys if not p["actual"]][:2]
+    L = base["lines"]
+
+    def g(line, pid):
+        return L.get(line, {}).get(pid)
+
+    out = []
+    for pid in act + fc:
+        rev, gp, oi, eps = g("revenue", pid), g("gross_profit", pid), g("operating_income", pid), g("eps", pid)
+        parts = [f"{pid}: revenue ${rev:,.0f}mm" if rev else pid]
+        if rev and gp:
+            parts.append(f"GM {gp / rev:.0%}")
+        if rev and oi:
+            parts.append(f"op margin {oi / rev:.0%}")
+        if eps is not None:
+            parts.append(f"EPS ${eps:.2f}")
+        out.append(", ".join(parts))
+    leaves = [s for s in base["segments"] if "children" not in s]
+    if act and leaves:
+        a = act[0]
+        segs = sorted(leaves, key=lambda s: -(s["revenue"].get(a) or 0))
+        out.append("Segments (" + a + "): " + "; ".join(
+            f"{s['name']} ${s['revenue'].get(a, 0):,.0f}mm" for s in segs[:8]))
+    if base.get("kpis"):
+        out.append("Tracked KPIs: " + ", ".join(k["name"] for k in base["kpis"]))
+    return "\n".join(out)
+
+
+def _recent_research(conn: sqlite3.Connection, company: str, ticker: str | None, limit: int = 40) -> str:
+    pats = [f"%{company}%"] + ([f"%{ticker}%"] if ticker else [])
+    likes = " OR ".join("(n.entities LIKE ? OR n.claim LIKE ?)" for _ in pats)
+    params = [x for p in pats for x in (p, p)]
+    rows = conn.execute(
+        f"""SELECT n.claim, e.show_slug FROM nuggets n JOIN episodes e ON e.id = n.episode_id
+            WHERE e.owner_user_id IS NULL AND ({likes})
+            ORDER BY n.created_at DESC, n.signal_score DESC LIMIT ?""",
+        [*params, limit],
+    ).fetchall()
+    return "\n".join(f"- {r['claim']} ({r['show_slug']})" for r in rows) or "(no recent research on file)"
+
+
+def draft_house_set(company: str, ticker: str | None, category: str | None, model_brief: str,
+                    research: str, client=None) -> list[dict]:
+    """Ask Claude for 4 default questions (returns cleaned question dicts)."""
+    import anthropic
+
+    from .theses import clean_drivers
+    from .transcribe.llm import extract_json
+
+    client = client or anthropic.Anthropic()
+    user = (f"Company: {company}" + (f" ({ticker})" if ticker else "") + f"\nSector: {category or 'n/a'}\n\n"
+            f"Model:\n{model_brief}\n\nRecent research mentions:\n{research}\n\n{_STYLE}")
+    with client.beta.messages.stream(
+        model=DRAFT_MODEL,
+        max_tokens=16000,
+        system=_DRAFT_SYSTEM,
+        output_config={"effort": "high"},
+        betas=["server-side-fallback-2026-07-01"],
+        extra_body={"fallbacks": "default"},
+        messages=[{"role": "user", "content": user}],
+    ) as stream:
+        msg = stream.get_final_message()
+    if msg.stop_reason == "refusal":
+        raise RuntimeError("draft request was declined")
+    data = extract_json("".join(b.text for b in msg.content if b.type == "text"))
+    out = []
+    for q in (data.get("questions") if isinstance(data, dict) else None) or []:
+        if isinstance(q, dict) and (q.get("question") or "").strip():
+            out.append({"question": q["question"].strip(), "note": (q.get("note") or "").strip() or None,
+                        "drivers": clean_drivers(q.get("drivers"))})
+    return out[:4]

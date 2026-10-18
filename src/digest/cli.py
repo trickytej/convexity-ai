@@ -838,6 +838,50 @@ def x_sync(
     console.print(f"[green]X sync[/green]: {result}")
 
 
+@app.command(name="house-draft")
+def house_draft(
+    tickers: list[str] = typer.Argument(None, help="Tickers/names to draft (default: every watchlist security)"),
+    force: bool = typer.Option(False, "--force", help="Redraft securities that already have default questions."),
+    workers: int = typer.Option(6, "--workers", help="Parallel drafting requests."),
+) -> None:
+    """Draft ConvexityAI's 4 default What Matters questions per security with Claude,
+    using each company's model and recent research. Requires ANTHROPIC_API_KEY."""
+    import json as _json
+    from concurrent.futures import ThreadPoolExecutor
+
+    settings = get_settings()
+    from .house import _model_brief, _recent_research, draft_house_set
+    from .model import load_base
+    from .securities import resolve, universe
+
+    with get_conn(settings.resolved_db_path) as conn:
+        init_db(conn)
+        house = repo.house_user_id(conn)
+        secs = [s for cat in universe(conn) for s in cat["companies"]]
+        if tickers:
+            secs = [s for t in tickers if (s := resolve(conn, t))]
+        todo = [s for s in secs if force or not repo.list_theses(conn, house, company=s["company"])]
+        jobs = [(s, _model_brief(load_base(conn, s["company"])),
+                 _recent_research(conn, s["company"], s["ticker"])) for s in todo]
+        console.print(f"Drafting {len(jobs)} securities ({len(secs) - len(todo)} already have defaults)…")
+
+        def run(job):
+            s, brief, research = job
+            try:
+                return s, draft_house_set(s["company"], s["ticker"], s["category"], brief, research), None
+            except Exception as exc:  # keep going; report at the end
+                return s, None, f"{type(exc).__name__}: {exc}"
+
+        with ThreadPoolExecutor(max(1, workers)) as ex:
+            for s, qs, err in ex.map(run, jobs):
+                if err or not qs:
+                    console.print(f"[red]✗[/red] {s['company']}: {err or 'no questions'}")
+                    continue
+                repo.save_company_theses(conn, house, s["company"], s["ticker"], qs)
+                console.print(f"[green]✓[/green] {s['company']}: " + " | ".join(q["question"] for q in qs))
+    console.print("Run `digest brief-match --days 30` to score recent evidence against the new defaults.")
+
+
 @app.command(name="sec-sync")
 def sec_sync(
     days: int = typer.Option(7, "--days", "-d", help="Filings from the last N days."),
