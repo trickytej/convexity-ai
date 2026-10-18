@@ -149,8 +149,8 @@ export default async function HomePage() {
         <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
           <div>
             <p className="max-w-3xl text-3xl font-light leading-[1.15] tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-4xl">
-              Four or five questions decide most securities.
-              <span className="text-zinc-600"> Everything else is noise.</span>
+              A few questions decide most securities.
+              <span className="text-zinc-600"> ConvexityAI helps you avoid the noise.</span>
             </p>
             <p className="mt-6 max-w-2xl text-[15px] font-light leading-relaxed text-zinc-400">
               Convexity parses the deluge of news flow and flags what moves{" "}
