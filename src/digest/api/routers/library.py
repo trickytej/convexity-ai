@@ -437,7 +437,9 @@ class ImportNewsletterOut(BaseModel):
     created: bool
 
 
-@router.post("/newsletters/import", response_model=ImportNewsletterOut, dependencies=[Depends(require_admin)])
+# Any signed-in user may add a feed (registers the newsletter + article list only;
+# fetching and extracting articles stays admin-triggered).
+@router.post("/newsletters/import", response_model=ImportNewsletterOut, dependencies=[Depends(current_user_id)])
 def import_newsletter(body: ImportPodcastIn, db: sqlite3.Connection = Depends(get_db)) -> ImportNewsletterOut:
     """Register a newsletter RSS feed and import its articles as episodes."""
     url = body.url.strip()

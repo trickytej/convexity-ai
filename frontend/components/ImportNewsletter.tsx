@@ -1,9 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { importNewsletter } from "@/lib/api";
 
-export default function ImportNewsletter({ onImported }: { onImported?: () => void }) {
+export default function ImportNewsletter({
+  onImported,
+  isAdmin = false,
+}: {
+  onImported?: () => void;
+  isAdmin?: boolean;
+}) {
+  const router = useRouter();
   const [url, setUrl] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "ok" | "err">("idle");
   const [message, setMessage] = useState("");
@@ -19,11 +27,14 @@ export default function ImportNewsletter({ onImported }: { onImported?: () => vo
       setStatus("ok");
       setMessage(
         res.created
-          ? `Added "${res.name}" — ${res.episode_count} articles discovered.`
+          ? `Added "${res.name}" — ${res.episode_count} articles discovered.${
+              isAdmin ? "" : " ConvexityAI will process the ones worth keeping."
+            }`
           : `"${res.name}" already in library — ${res.episode_count} articles.`,
       );
       setUrl("");
       onImported?.();
+      router.refresh();
     } catch (err: unknown) {
       setStatus("err");
       setMessage(err instanceof Error ? err.message : "Import failed");
@@ -36,7 +47,7 @@ export default function ImportNewsletter({ onImported }: { onImported?: () => vo
         Add newsletter
       </p>
       <p className="mt-1.5 text-sm text-zinc-400">
-        Paste a newsletter RSS feed URL to start extracting insights from its articles.
+        Link a newsletter you read: paste its RSS feed (Substack, Beehiiv or any standard feed).
       </p>
       <form onSubmit={handleSubmit} className="mt-4 flex gap-3">
         <input

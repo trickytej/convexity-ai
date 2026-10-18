@@ -153,9 +153,10 @@ export default async function HomePage() {
               <span className="text-zinc-600"> Everything else is noise.</span>
             </p>
             <p className="mt-6 max-w-2xl text-[15px] font-light leading-relaxed text-zinc-400">
-              Convexity parses through the deluge of news flow and flags the information that
-              influences <span className="text-[#00d4ff]/80">the theses you&apos;re watching</span> —
-              so your time goes to differentiated insight and judgement, not listening.
+              Convexity parses the deluge of news flow and flags what moves{" "}
+              <span className="text-[#00d4ff]/80">the theses you&apos;re watching</span>. Every call
+              you keep, reframe or drop teaches it, so it learns your judgement and gets sharper
+              with every print, leaving your time for differentiated insight.
             </p>
           </div>
           <SignalFlow />

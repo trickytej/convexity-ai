@@ -14,7 +14,7 @@ export default async function NewslettersPage({
 }) {
   const { show } = await searchParams;
 
-  // Browsable by everyone; importing and transcribing are admin-only (API-enforced too).
+  // Browsable by everyone, and anyone can add a feed; fetching articles is admin-only (API-enforced too).
   const [newsletters, list, session] = await Promise.all([
     getShows({ format: "newsletter" }),
     show
@@ -36,13 +36,12 @@ export default async function NewslettersPage({
           Newsletters
         </h1>
         <p className="mt-3 text-[15px] text-zinc-400">
-          External newsletters and articles in the shared research corpus — the same nugget
-          pipeline runs on them as on podcasts.
+          External newsletters and articles in the shared research corpus.
         </p>
       </div>
 
       {/* ── import box ── */}
-      {isAdmin && <ImportNewsletter />}
+      <ImportNewsletter isAdmin={isAdmin} />
 
       {/* ── newsletter library grid ── */}
       {newsletters.length > 0 && (
