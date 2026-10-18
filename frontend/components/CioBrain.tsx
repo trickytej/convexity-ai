@@ -266,9 +266,6 @@ export default function CioBrain({ initial }: { initial: Brain }) {
             <h1 className="mt-3 text-5xl font-light leading-[1.04] tracking-tight text-zinc-50 [font-family:var(--font-display)] sm:text-6xl">
               Where the evidence <span className="text-[#00d4ff]">is moving</span>.
             </h1>
-            <p className="mt-3 text-[14px] text-zinc-400">
-              Consensus in print · consensus in chatter · your inside view — weighed against what decides each position.
-            </p>
           </div>
           <div className="text-right">
             <p className="flex items-center justify-end gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">

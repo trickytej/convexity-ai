@@ -9,11 +9,11 @@ type NavItem = { href: string; label: string; match: (p: string) => boolean };
 const USER_NAV: NavItem[] = [
   { href: "/", label: "Home", match: (p) => p === "/" },
   { href: "/cio", label: "CIO", match: (p) => p.startsWith("/cio") },
-  { href: "/brief", label: "Brief", match: (p) => p.startsWith("/brief") },
   { href: "/model", label: "Model", match: (p) => p.startsWith("/model") },
   { href: "/research", label: "Research", match: (p) => p.startsWith("/research") || p.startsWith("/episode/") },
   { href: "/scout", label: "Scout", match: (p) => p.startsWith("/scout") },
   { href: "/developers", label: "API", match: (p) => p.startsWith("/developers") },
+  { href: "/brief", label: "Brief", match: (p) => p.startsWith("/brief") },
 ];
 
 const ABOUT: NavItem = { href: "/about", label: "About", match: (p) => p.startsWith("/about") };
