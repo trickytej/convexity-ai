@@ -185,12 +185,14 @@ export default function FinModelSheet({
   initial,
   isAdmin,
   highlight = null,
+  locked = false,
 }: {
   securityKey: string;
   company: string;
   initial: FinModel | null;
   isAdmin: boolean;
   highlight?: SheetHighlight;
+  locked?: boolean;
 }) {
   const [m, setM] = useState(initial);
   const [saving, setSaving] = useState(false);
@@ -205,6 +207,26 @@ export default function FinModelSheet({
     const el = tableRef.current?.querySelector(`[data-cell="${highlight.row}@${highlight.cols[0]}"]`);
     el?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
   }, [highlight]);
+
+  if (locked) {
+    return (
+      <div className="rounded-2xl border border-[#00d4ff]/30 bg-[#00d4ff]/[0.04] p-8 text-center">
+        <p className="text-[15px] font-light text-zinc-200 [font-family:var(--font-display)]">
+          The full model for {company} is one click away
+        </p>
+        <p className="mx-auto mt-2 max-w-lg text-[13px] text-zinc-500">
+          Segment build, P&amp;L, consensus, cash flow and valuation, with every development tied to the line it
+          moves. Sign in free to open it.
+        </p>
+        <a
+          href={`/signin?callbackUrl=${encodeURIComponent(`/model/${securityKey}`)}`}
+          className="mt-5 inline-block rounded-full bg-[#00d4ff] px-5 py-2 text-[13px] font-medium text-[#001a26] transition hover:bg-[#33ddff]"
+        >
+          Sign in free
+        </a>
+      </div>
+    );
+  }
 
   if (!m) {
     return (

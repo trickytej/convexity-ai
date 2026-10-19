@@ -75,6 +75,7 @@ export default async function SecurityPage({ params }: { params: Promise<{ key: 
         company={model.company}
         isAdmin={!!session?.user?.isAdmin}
         numbers={model.numbers}
+        locked={!!model.model_locked}
         feed={model.feed}
         questions={model.questions.map((q) => ({ id: q.id, question: q.question }))}
         whatMatters={

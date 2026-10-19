@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 
-// Session gate (Next 16 "proxy" convention, formerly middleware). Public pages
-// render for everyone; everything else requires a signed-in user. For signed-in
+// Session gate (Next 16 "proxy" convention, formerly middleware). For signed-in
 // requests the user's id is injected as X-User-Id, which lib/api.ts and the
-// /api catch-all forward to the backend. Any client-supplied X-User-Id is
+// /api catch-all forward to the backend. Signed-out visitors browse a read-only
+// demo: they get X-Guest: 1 instead (the backend shows them the house account
+// and refuses anything but reads). Client-supplied X-User-Id / X-Guest are
 // stripped first so the browser can never choose its identity.
 
 export const config = {
@@ -25,6 +26,7 @@ export const proxy = auth((req) => {
   const { pathname, search } = req.nextUrl;
   const headers = new Headers(req.headers);
   headers.delete("x-user-id");
+  headers.delete("x-guest");
 
   if (pathname.startsWith("/api/auth/")) return NextResponse.next({ request: { headers } });
 
@@ -32,11 +34,16 @@ export const proxy = auth((req) => {
   if (!user?.id) {
     if (PUBLIC_PATHS.includes(pathname)) return NextResponse.next({ request: { headers } });
     if (pathname.startsWith("/api/")) {
-      return NextResponse.json({ detail: "sign in required" }, { status: 401 });
+      if (req.method !== "GET" && req.method !== "HEAD") {
+        return NextResponse.json({ detail: "sign in required", guest: true }, { status: 401 });
+      }
+    } else if (ADMIN_PREFIXES.some((p) => startsWithSegment(pathname, p))) {
+      const url = new URL("/signin", req.nextUrl.origin);
+      url.searchParams.set("callbackUrl", `${pathname}${search}`);
+      return NextResponse.redirect(url);
     }
-    const url = new URL("/signin", req.nextUrl.origin);
-    url.searchParams.set("callbackUrl", `${pathname}${search}`);
-    return NextResponse.redirect(url);
+    headers.set("x-guest", "1");
+    return NextResponse.next({ request: { headers } });
   }
 
   if (!user.isAdmin && ADMIN_PREFIXES.some((p) => startsWithSegment(pathname, p))) {

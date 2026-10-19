@@ -23,7 +23,7 @@ export type HeaderUser = { name?: string | null; email?: string | null; image?: 
 
 export default function SiteHeader({ user }: { user: HeaderUser | null }) {
   const pathname = usePathname() ?? "/";
-  const nav = user ? [...USER_NAV, PRO, ABOUT] : [PRO, ABOUT];
+  const nav = [...USER_NAV, PRO, ABOUT];
   const initial = (user?.name || user?.email || "?").trim().charAt(0).toUpperCase();
 
   return (

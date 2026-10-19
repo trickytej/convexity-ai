@@ -35,13 +35,26 @@ def get_scout_db() -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
-def current_user_id(x_user_id: str | None = Header(None)) -> int:
+def is_guest(x_guest: str | None = Header(None)) -> bool:
+    """A signed-out visitor browsing the read-only demo (set by the frontend proxy)."""
+    return x_guest == "1"
+
+
+def current_user_id(
+    x_user_id: str | None = Header(None),
+    guest: bool = Depends(is_guest),
+    db: sqlite3.Connection = Depends(get_db),
+) -> int:
     """The signed-in user, as asserted by the frontend.
 
     Trusted only because the API-key middleware has already authenticated the
     caller as our frontend, which sets X-User-Id from its own session (and
-    strips any browser-supplied value).
+    strips any browser-supplied value). Signed-out demo visitors (X-Guest: 1)
+    see the house account; the middleware has already limited them to reads.
     """
+    if not x_user_id and guest:
+        house = repo.house_user_id(db)
+        return house if house is not None else _unauthenticated()
     try:
         return int(x_user_id) if x_user_id else _unauthenticated()
     except ValueError:

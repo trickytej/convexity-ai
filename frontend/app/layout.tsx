@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { fontVars } from "@/lib/fonts";
 import SiteHeader from "@/components/SiteHeader";
 import WaveBackground from "@/components/WaveBackground";
+import GuestPrompt from "@/components/GuestPrompt";
 
 export const metadata: Metadata = {
   title: "ConvexityAI",
@@ -27,6 +28,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       >
         <WaveBackground />
         <SiteHeader user={user} />
+        {!user && <GuestPrompt />}
         <main className="relative z-10 mx-auto max-w-6xl px-6 pb-24 pt-10">{children}</main>
       </body>
     </html>

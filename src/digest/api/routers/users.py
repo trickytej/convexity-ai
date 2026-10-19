@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
@@ -18,7 +19,7 @@ from ...model_export import export_workbook
 from ...securities import resolve, security_key, universe
 from ...store import repo
 from ...theses import build_brief, question_statuses
-from ..deps import current_user_id, get_db, require_admin
+from ..deps import current_user_id, get_db, is_guest, require_admin
 
 router = APIRouter(tags=["users"])
 
@@ -120,9 +121,22 @@ def unfollow(
     return {"followed": False, "company": company}
 
 
+# Models open to signed-out demo visitors; the rest need a (free) sign-in.
+DEMO_MODEL_TICKERS = {
+    t.strip().upper()
+    for t in os.environ.get("DEMO_MODEL_TICKERS", "NVDA,TSM,AVGO,MSFT,META").split(",")
+    if t.strip()
+}
+
+
+def _model_locked(guest: bool, sec: dict) -> bool:
+    return guest and (sec.get("ticker") or "").upper() not in DEMO_MODEL_TICKERS
+
+
 @router.get("/model/{key}")
 def get_model(
     key: str,
+    guest: bool = Depends(is_guest),
     user_id: int = Depends(current_user_id),
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
@@ -181,7 +195,8 @@ def get_model(
              "drivers": json.loads(t["drivers"]) if t["drivers"] else [], "position": t["position"]}
             for t in house_rows
         ],
-        "numbers": build_model(db, user_id, company, sec["ticker"]),
+        "numbers": None if _model_locked(guest, sec) else build_model(db, user_id, company, sec["ticker"]),
+        "model_locked": _model_locked(guest, sec),
     }
 
 
@@ -347,13 +362,15 @@ def set_position(
 @router.get("/brain")
 def get_brain(
     touch: bool = True,
+    guest: bool = Depends(is_guest),
     user_id: int = Depends(current_user_id),
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     """The CIO Brain screen (see digest.brain). touch=false for live refreshes."""
     from ...brain import build_brain
 
-    return build_brain(db, user_id, touch=touch)
+    # Demo visitors share the house account; never move its "since last visit" mark.
+    return build_brain(db, user_id, touch=touch and not guest)
 
 
 class TokenIn(BaseModel):

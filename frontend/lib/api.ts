@@ -16,18 +16,25 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
     url = `${BACKEND}${path}`;
     const key = process.env.DIGEST_API_KEY;
     if (key) headers.set("x-api-key", key);
-    const userId = await requestUserId();
+    const { userId, guest } = await requestIdentity();
     if (userId) headers.set("x-user-id", userId);
+    else if (guest) headers.set("x-guest", "1");
   }
-  return fetch(url, { cache: "no-store", ...init, headers });
+  const res = await fetch(url, { cache: "no-store", ...init, headers });
+  // A signed-out demo visitor tried to change something: ask them to sign in.
+  if (!SERVER && res.status === 401 && (init.method ?? "GET").toUpperCase() !== "GET") {
+    window.dispatchEvent(new CustomEvent("convexity:signin-required"));
+  }
+  return res;
 }
 
-async function requestUserId(): Promise<string | null> {
+async function requestIdentity(): Promise<{ userId: string | null; guest: boolean }> {
   try {
     const { headers } = await import("next/headers");
-    return (await headers()).get("x-user-id");
+    const h = await headers();
+    return { userId: h.get("x-user-id"), guest: h.get("x-guest") === "1" };
   } catch {
-    return null; // outside a request scope (e.g. build time)
+    return { userId: null, guest: false }; // outside a request scope (e.g. build time)
   }
 }
 
@@ -1019,6 +1026,8 @@ export interface SecurityModel extends Security {
   house_questions: { id: number; question: string; note: string | null; drivers: Driver[]; position: number }[];
   /** null until a base model (e.g. Canalyst) is imported for this security. */
   numbers: FinModel | null;
+  /** Signed-out demo: this security's model needs a (free) sign-in. */
+  model_locked?: boolean;
 }
 
 export type FeedHit = BriefHit & { question_id: number; question: string };

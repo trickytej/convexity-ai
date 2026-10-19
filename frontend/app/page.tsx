@@ -126,10 +126,10 @@ export default async function HomePage() {
 
         <div className="fade-rise mt-10 flex flex-wrap items-center gap-3" style={{ animationDelay: "680ms" }}>
           <Link
-            href={signedIn ? "/brief" : "/signin"}
+            href={signedIn ? "/brief" : "/cio"}
             className="rounded-full bg-[#00d4ff]/90 px-5 py-2.5 text-[13px] font-semibold text-black transition hover:bg-[#00d4ff]"
           >
-            {signedIn ? "Open the Brief →" : "Get started →"}
+            {signedIn ? "Open the Brief →" : "Explore the live demo →"}
           </Link>
           <Link
             href="/about"

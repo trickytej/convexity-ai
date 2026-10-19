@@ -1,9 +1,12 @@
 import TokenManager from "@/components/TokenManager";
+import SignInCard from "@/components/SignInCard";
+import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "API — ConvexityAI" };
 
-export default function DevelopersPage() {
+export default async function DevelopersPage() {
+  const signedIn = !!(await auth())?.user?.id;
   // The MCP server talks to the API directly with a personal token.
   const apiUrl = process.env.PUBLIC_API_URL ?? process.env.API_BASE_URL ?? "http://127.0.0.1:8000";
 
@@ -22,7 +25,15 @@ export default function DevelopersPage() {
         authenticates with a personal token.
       </p>
       <div className="mt-10 max-w-3xl">
-        <TokenManager apiUrl={apiUrl} />
+        {signedIn ? (
+          <TokenManager apiUrl={apiUrl} />
+        ) : (
+          <SignInCard
+            title="Create your personal API token"
+            text="Tokens are tied to your account. Sign in free to connect Claude or any MCP client to your own board, Brief and research."
+            callbackUrl="/developers"
+          />
+        )}
       </div>
     </div>
   );

@@ -55,6 +55,7 @@ export default function SecurityWorkspace({
   securityKey,
   company,
   isAdmin,
+  locked = false,
   numbers,
   feed,
   questions,
@@ -63,6 +64,7 @@ export default function SecurityWorkspace({
   securityKey: string;
   company: string;
   isAdmin: boolean;
+  locked?: boolean;
   numbers: FinModel | null;
   feed: FeedHit[];
   questions: { id: number; question: string }[];
@@ -141,7 +143,7 @@ export default function SecurityWorkspace({
             <span className="text-zinc-400">Model</span>
           </p>
         </div>
-        <FinModelSheet securityKey={securityKey} company={company} initial={numbers} isAdmin={isAdmin} highlight={highlight} />
+        <FinModelSheet securityKey={securityKey} company={company} initial={numbers} isAdmin={isAdmin} highlight={highlight} locked={locked} />
       </section>
 
       {whatMatters}

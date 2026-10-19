@@ -35,6 +35,7 @@ log = logging.getLogger(__name__)
 
 # Open paths that never require the API key (health check + CORS preflight).
 _OPEN_PATHS = {"/api/health"}
+_GUEST_BLOCKED = ("/api/me/tokens", "/api/auth/", "/api/research")
 
 
 @asynccontextmanager
@@ -82,6 +83,14 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def require_api_key(request: Request, call_next):  # type: ignore[no-untyped-def]
+        # Signed-out demo visitors (X-Guest, set only by our frontend proxy) may
+        # read, nothing else: no writes, no tokens, no model downloads.
+        if request.headers.get("x-guest") == "1":
+            path = request.url.path
+            if request.method not in ("GET", "HEAD", "OPTIONS") or any(
+                path.startswith(p) for p in _GUEST_BLOCKED
+            ) or path.endswith("/download"):
+                return JSONResponse({"detail": "sign in required", "guest": True}, status_code=401)
         # Personal tokens (MCP servers, scripts) authenticate as their user
         # directly: the token's user replaces any client-supplied X-User-Id.
         auth = request.headers.get("authorization", "")
@@ -90,7 +99,7 @@ def create_app() -> FastAPI:
             if uid is None:
                 return JSONResponse({"detail": "invalid token"}, status_code=401)
             request.scope["headers"] = [
-                (k, v) for k, v in request.scope["headers"] if k != b"x-user-id"
+                (k, v) for k, v in request.scope["headers"] if k not in (b"x-user-id", b"x-guest")
             ] + [(b"x-user-id", str(uid).encode())]
             return await call_next(request)
         if api_key and request.method != "OPTIONS":
