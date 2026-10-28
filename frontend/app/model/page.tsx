@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { getBoard, getUniverse } from "@/lib/api";
 import AdminImports from "@/components/AdminImports";
-import Board from "@/components/Board";
+import SecurityGrid from "@/components/SecurityGrid";
 import FollowPicker from "@/components/FollowPicker";
 
 export const dynamic = "force-dynamic";
@@ -19,8 +19,8 @@ export default async function ModelPage() {
         Your <span className="text-[#00d4ff]">securities</span>
       </h1>
       <p className="mt-4 max-w-2xl text-[14px] leading-relaxed text-zinc-500">
-        Each security carries the 4–5 questions that decide it. New research is weighed
-        against them daily; what you keep builds the security&apos;s tracker.
+        Pick a security to open its model, What Matters questions and the developments behind
+        them. Each dot is one question, coloured by the last 30 days of signals.
       </p>
 
       {securities.length === 0 ? (
@@ -29,10 +29,9 @@ export default async function ModelPage() {
         </p>
       ) : (
         <div className="mt-10">
-          <Board securities={securities} />
+          <SecurityGrid securities={securities} />
           <p className="mt-6 text-[11px] leading-relaxed text-zinc-600">
-            Status weighs the last 30 days of signals — strong, high-quality evidence only.
-            Green: evidence supports the thesis · Red: it contradicts · Amber: mixed · Grey: no signals.
+            Green: evidence supports the thesis · Red: it contradicts · Amber: mixed · Grey: no signals yet.
           </p>
         </div>
       )}
