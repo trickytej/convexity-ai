@@ -172,6 +172,9 @@ CREATE TABLE IF NOT EXISTS scout_tweets (
 );
 CREATE INDEX IF NOT EXISTS idx_scout_tweets_handle  ON scout_tweets(handle);
 CREATE INDEX IF NOT EXISTS idx_scout_tweets_created ON scout_tweets(created_at DESC);
+-- Evidence queries LEFT JOIN tweets by nugget; without this every hit rescanned the
+-- whole table (~500K rows read per Brief/CIO load, which exhausted Turso in Oct 2026).
+CREATE INDEX IF NOT EXISTS idx_scout_tweets_nugget  ON scout_tweets(nugget_id);
 
 -- "What Matters" theses: the 4-5 hand-authored key questions per followed company.
 -- Soft-deactivated (active=0) rather than deleted so thesis_hits keep a valid target.
