@@ -50,7 +50,11 @@ def last_close(ticker: str | None) -> float | None:
 # ── shared bases ─────────────────────────────────────────────────────────────
 
 
-def save_base(conn: sqlite3.Connection, company: str, ticker: str | None, base: dict) -> None:
+def save_base(
+    conn: sqlite3.Connection, company: str, ticker: str | None, base: dict, as_of: str | None = None
+) -> None:
+    """Store a house model; its consensus (if any) is also snapshotted at *as_of*
+    (default now) so later imports show estimate revisions."""
     now = _now()
     conn.execute(
         "INSERT INTO model_bases (company, ticker, data, imported_at) VALUES (?, ?, ?, ?) "
@@ -62,7 +66,7 @@ def save_base(conn: sqlite3.Connection, company: str, ticker: str | None, base: 
     if cons and cons.get("lines"):
         conn.execute(
             "INSERT INTO consensus_snapshots (company, as_of, data) VALUES (?, ?, ?)",
-            (company, now, json.dumps({"lines": cons["lines"]})),
+            (company, as_of or now, json.dumps({"lines": cons["lines"]})),
         )
     conn.commit()
 

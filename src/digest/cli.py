@@ -734,6 +734,31 @@ if __name__ == "__main__":
     app()
 
 
+@app.command(name="consensus-import")
+def consensus_import(
+    path: Path = typer.Argument(..., exists=True, help="Bloomberg consensus .xlsx (one sheet per ticker)"),
+    as_of: str = typer.Option(None, "--as-of", help="Date the estimates were pulled (default: file date)"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Report the mapping without writing"),
+) -> None:
+    """Load sell-side consensus into the house models (and snapshot it for revisions)."""
+    from datetime import datetime as _dt
+
+    from .consensus_import import import_consensus
+
+    as_of = as_of or _dt.fromtimestamp(path.stat().st_mtime).date().isoformat()
+    settings = get_settings()
+    with get_conn(settings.resolved_db_path) as conn:
+        init_db(conn)
+        report = import_consensus(conn, path, as_of, dry_run=dry_run)
+    table = Table(title=f"Consensus as of {as_of}" + (" (dry run)" if dry_run else ""))
+    for col in ("ticker", "status", "quarters", "verified on", "fit (rev / GP / OI / EPS, %)"):
+        table.add_column(col)
+    for r in report:
+        fit = " / ".join("—" if v[0] is None else f"{v[0]}" for v in r.get("fit", {}).values())
+        table.add_row(r["ticker"], r["status"], str(r.get("quarters", "")), str(r.get("verified_on", "")), fit)
+    console.print(table)
+
+
 @app.command(name="model-import")
 def model_import(
     paths: list[Path] = typer.Argument(..., exists=True, help="Model .xlsx files or folders of them"),
