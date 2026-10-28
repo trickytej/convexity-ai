@@ -1,12 +1,10 @@
 name: intraday
 
-# Keeps the CIO Brain current during US market hours: fresh SEC filings and X
-# posts, then the thesis matcher (only unseen nuggets are evaluated, so each run
-# is cheap). The heavy podcast ingest stays in the daily `ingest` workflow.
+# On-demand catch-up: fresh SEC filings and X posts, then the thesis matcher.
+# No schedule: everything runs once a day in the `ingest` workflow (an hourly
+# cadence exhausted the Turso read quota). Run manually from the Actions tab.
 
 on:
-  schedule:
-    - cron: "15 13-21 * * 1-5" # hourly, 9:15am–5:15pm ET (13:15–21:15 UTC), weekdays
   workflow_dispatch: {}
 
 concurrency:

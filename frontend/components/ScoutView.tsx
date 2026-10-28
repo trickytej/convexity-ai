@@ -298,7 +298,6 @@ function AppearanceCard({ a, onDismiss }: { a: ScoutAppearance; onDismiss: () =>
           setTxState({ phase: "error", message: s.error ?? "Processing failed" });
         } else {
           setTxState({ phase: "processing", episode_id: a.episode_id! });
-          startPoll(a.episode_id!);
         }
       }).catch(() => {});
     }
@@ -306,7 +305,12 @@ function AppearanceCard({ a, onDismiss }: { a: ScoutAppearance; onDismiss: () =>
 
   function startPoll(episodeId: number) {
     if (pollRef.current) clearInterval(pollRef.current);
+    let polls = 0;
     pollRef.current = setInterval(async () => {
+      if (++polls > 150) { // 10 minutes; stop rather than poll forever
+        clearInterval(pollRef.current!);
+        return;
+      }
       try {
         const s = await getEpisodeStatus(episodeId);
         if (s.status === "insights_extracted" || (s.status === "transcribed" && s.nugget_count > 0)) {
@@ -517,13 +521,9 @@ function AppearanceCard({ a, onDismiss }: { a: ScoutAppearance; onDismiss: () =>
 function EpisodeStatusLabel({ episode_id }: { episode_id: number }) {
   const [label, setLabel] = useState("Processing…");
   useEffect(() => {
-    const iv = setInterval(async () => {
-      try {
-        const s = await getEpisodeStatus(episode_id);
-        setLabel(STATUS_LABEL[s.status] ?? "Processing…");
-      } catch { /* ignore */ }
-    }, 4000);
-    return () => clearInterval(iv);
+    getEpisodeStatus(episode_id)
+      .then((s) => setLabel(STATUS_LABEL[s.status] ?? "Processing…"))
+      .catch(() => { /* ignore */ });
   }, [episode_id]);
   return <>{label}</>;
 }

@@ -27,6 +27,7 @@ jobs:
       TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
       ASSEMBLYAI_API_KEY: ${{ secrets.ASSEMBLYAI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -53,6 +54,10 @@ jobs:
         # Best-effort: EDGAR hiccups shouldn't block the thesis sweep.
         continue-on-error: true
         run: digest sec-sync --days 2 -v
+
+      - name: X posts from tracked accounts
+        continue-on-error: true
+        run: digest x-sync --days 1
 
       - name: Match nuggets to theses
         run: digest brief-match --days 2 -v

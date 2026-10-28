@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import type { Brain, BrainSecurity, Position, QuestionStatus, SourceClass } from "@/lib/api";
 import { getBrain, setPosition } from "@/lib/api";
 import { SOURCE_LABEL } from "@/lib/signals";
 
-const REFRESH_MS = 60_000;
 
 const ORB: Record<QuestionStatus, string> = {
   green: "bg-emerald-400 shadow-[0_0_18px_4px] shadow-emerald-400/50",
@@ -209,21 +208,14 @@ function Callout({
 
 export default function CioBrain({ initial }: { initial: Brain }) {
   const [brain, setBrain] = useState(initial);
-  const [updated, setUpdated] = useState(new Date());
 
   const refresh = useCallback(async () => {
     try {
       setBrain(await getBrain({ touch: false }));
-      setUpdated(new Date());
     } catch {
       /* keep the last good screen */
     }
   }, []);
-
-  useEffect(() => {
-    const t = setInterval(refresh, REFRESH_MS);
-    return () => clearInterval(t);
-  }, [refresh]);
 
   async function changePosition(s: BrainSecurity, p: Position) {
     setBrain((b) => ({
@@ -268,15 +260,9 @@ export default function CioBrain({ initial }: { initial: Brain }) {
             </h1>
           </div>
           <div className="text-right">
-            <p className="flex items-center justify-end gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-              </span>
-              Live
-            </p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">Updated daily</p>
             <p className="mt-1 font-[family-name:var(--font-mono)] text-[11px] text-zinc-500">
-              updated {updated.toLocaleTimeString()} · refreshes every minute
+              as of {new Date(brain.generated_at).toLocaleString()}
             </p>
             {since.last_visit && (since.new_signals > 0 || since.flips > 0) && (
               <p className="mt-2 inline-block rounded-full border border-[#00d4ff]/30 bg-[#00d4ff]/10 px-3 py-1 text-[12px] text-[#00d4ff]">
