@@ -6,7 +6,20 @@ export const metadata = { title: "Your research — ConvexityAI" };
 
 // Private research belongs to a signed-in user; demo visitors get an invitation.
 export default async function ResearchPage() {
-  if ((await auth())?.user?.id) return <ResearchUploader />;
+  const user = (await auth())?.user;
+  if (user?.isAdmin) return <ResearchUploader />;
+  // Reading research calls Claude, so it's admin-only until Pro launches.
+  if (user?.id) {
+    return (
+      <SignInCard
+        title="Bring your own research: coming with Pro"
+        text="Soon you'll be able to paste notes, link articles or upload PDFs, kept private to you and weighed against your What Matters questions alongside everything else."
+        callbackUrl="/pro"
+        cta="See what's in Pro"
+        href="/pro"
+      />
+    );
+  }
   return (
     <SignInCard
       title="Bring your own research"

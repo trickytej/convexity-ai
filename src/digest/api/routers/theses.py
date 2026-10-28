@@ -135,14 +135,15 @@ def put_theses(
     rows = repo.save_company_theses(db, user_id, company, ticker, questions)
     sec = resolve(db, company)
     repo.follow_security(db, user_id, company, ticker, sec["category"] if sec else None)
-    if rows:
+    user = repo.get_user(db, user_id)
+    if rows and user and user["is_admin"]:  # matching calls Claude: admins only for now
         since = (datetime.now(timezone.utc) - timedelta(days=_RESEED_DAYS)).isoformat()
         repo.reset_seen_window(db, user_id, since)
         _start_match(background_tasks, user_id, _RESEED_DAYS)
     return {"companies": _grouped_theses(rows)}
 
 
-@router.post("/theses/draft")
+@router.post("/theses/draft", dependencies=[Depends(require_admin)])
 def draft_theses(
     body: DraftIn,
     user_id: int = Depends(current_user_id),
@@ -202,7 +203,7 @@ def _start_match(background_tasks: BackgroundTasks, user_id: int, days: int) -> 
     return True
 
 
-@router.post("/brief/match")
+@router.post("/brief/match", dependencies=[Depends(require_admin)])
 def trigger_brief_match(
     background_tasks: BackgroundTasks,
     days: int = Query(2, ge=1, le=30),

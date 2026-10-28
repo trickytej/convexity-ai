@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import secrets
 import sqlite3
 from datetime import datetime, timezone
@@ -1207,9 +1208,21 @@ def set_hit_decision(
 
 
 def list_users_with_active_theses(conn: sqlite3.Connection) -> list[int]:
-    rows = conn.execute(
-        "SELECT DISTINCT user_id FROM theses WHERE active = 1 AND user_id IS NOT NULL"
-    ).fetchall()
+    """Users whose questions the automatic matcher evaluates (it calls Claude per
+    user). Cost control: only admins and the house book, unless
+    MATCH_ALL_USERS=1 (e.g. once paid plans exist). Followers still get the
+    house evidence copied when they adopt the default questions."""
+    from .db import HOUSE_EMAIL
+
+    if os.environ.get("MATCH_ALL_USERS") == "1":
+        sql = "SELECT DISTINCT user_id FROM theses WHERE active = 1 AND user_id IS NOT NULL"
+        rows = conn.execute(sql).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT DISTINCT t.user_id FROM theses t JOIN users u ON u.id = t.user_id "
+            "WHERE t.active = 1 AND (u.is_admin = 1 OR u.email = ?)",
+            (HOUSE_EMAIL,),
+        ).fetchall()
     return [r["user_id"] for r in rows]
 
 

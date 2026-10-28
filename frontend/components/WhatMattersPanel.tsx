@@ -60,11 +60,18 @@ export default function WhatMattersPanel({ model, isAdmin }: { model: SecurityMo
             ticker={model.ticker}
             initial={house}
             asHouse
+            canDraft={isAdmin}
           />
         </div>
       ) : (
         <div>
-          <QuestionsEditor key="mine" company={model.company} ticker={model.ticker} initial={model.questions} />
+          <QuestionsEditor
+            key="mine"
+            company={model.company}
+            ticker={model.ticker}
+            initial={model.questions}
+            canDraft={isAdmin}
+          />
           {house.length > 0 && !sameAsHouse && (
             <div className="mt-4 text-[12px] text-zinc-500">
               {confirming ? (

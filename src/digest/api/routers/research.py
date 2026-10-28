@@ -18,7 +18,7 @@ from ...config import get_settings
 from ...documents import RESEARCH_SHOW, create_document, paragraphs_from_text, process_document, text_from_pdf
 from ...store import repo
 from ...store.db import connect
-from ..deps import current_user_id, get_db
+from ..deps import current_user_id, get_db, require_admin
 
 router = APIRouter(tags=["research"])
 
@@ -66,7 +66,8 @@ def _store(
     return {"id": episode_id, "status": "processing", "paragraphs": len(paragraphs)}
 
 
-@router.post("/research")
+# Reading research calls Claude (extraction + matching): admin-only for now.
+@router.post("/research", dependencies=[Depends(require_admin)])
 def add_research(
     body: ResearchIn,
     background_tasks: BackgroundTasks,
@@ -87,7 +88,7 @@ def add_research(
     return _store(db, background_tasks, user_id, body.title.strip(), paragraphs, url)
 
 
-@router.post("/research/upload")
+@router.post("/research/upload", dependencies=[Depends(require_admin)])
 async def upload_research(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),

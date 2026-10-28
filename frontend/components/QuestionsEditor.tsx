@@ -59,11 +59,14 @@ export default function QuestionsEditor({
   ticker,
   initial,
   asHouse = false,
+  canDraft = false,
 }: {
   company: string;
   ticker: string | null;
   /** Edit ConvexityAI's default questions (admins) instead of the user's own. */
   asHouse?: boolean;
+  /** AI drafting calls Claude, so it's admin-only for now. */
+  canDraft?: boolean;
   initial: {
     id: number;
     question: string;
@@ -253,16 +256,18 @@ export default function QuestionsEditor({
         >
           + Add question
         </button>
-        <button
-          onClick={handleDraft}
-          disabled={drafting}
-          className="flex items-center gap-2 rounded-full border border-[#00d4ff]/25 bg-[#00d4ff]/5 px-3.5 py-1.5 text-[12px] font-medium text-[#00d4ff] transition hover:bg-[#00d4ff]/10 disabled:opacity-50"
-        >
-          {drafting && (
-            <span className="inline-block h-2.5 w-2.5 animate-spin rounded-full border border-[#00d4ff]/40 border-t-[#00d4ff]" />
-          )}
-          {drafting ? "Drafting…" : "Draft with AI"}
-        </button>
+        {canDraft && (
+          <button
+            onClick={handleDraft}
+            disabled={drafting}
+            className="flex items-center gap-2 rounded-full border border-[#00d4ff]/25 bg-[#00d4ff]/5 px-3.5 py-1.5 text-[12px] font-medium text-[#00d4ff] transition hover:bg-[#00d4ff]/10 disabled:opacity-50"
+          >
+            {drafting && (
+              <span className="inline-block h-2.5 w-2.5 animate-spin rounded-full border border-[#00d4ff]/40 border-t-[#00d4ff]" />
+            )}
+            {drafting ? "Drafting…" : "Draft with AI"}
+          </button>
+        )}
         <button
           onClick={handleSave}
           disabled={saving || !dirty}

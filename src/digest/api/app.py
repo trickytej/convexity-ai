@@ -133,7 +133,12 @@ def create_app() -> FastAPI:
     try:
         from moves.api.routers import market as moves_market
 
-        app.include_router(moves_market.router, prefix="/api/moves")
+        from fastapi import Depends
+
+        from .deps import require_admin
+
+        # Attribution calls Claude and Polygon: admin-only.
+        app.include_router(moves_market.router, prefix="/api/moves", dependencies=[Depends(require_admin)])
     except Exception as exc:  # pragma: no cover
         import logging
 
